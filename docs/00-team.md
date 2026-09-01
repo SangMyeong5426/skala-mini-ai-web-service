@@ -27,7 +27,8 @@
 
 - [ ] `.github/CODEOWNERS`의 주석을 풀고 위 표의 실제 GitHub ID로 교체
 - [ ] 팀원 전원 저장소 Collaborator 초대 (Settings → Collaborators)
-- [ ] 전원 clone 후 `./scripts/setup-git-hooks` 실행
+- [ ] 전원 [README의 "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료
+- [ ] 전원 연습 PR 1회 — 규칙이 실제로 도는지 각자 확인 (온보딩 5단계)
 
 ## 연락
 

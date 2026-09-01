@@ -6,20 +6,13 @@
 
 ## 처음 한 번만
 
-```bash
-git clone https://github.com/SangMyeong5426/skala-mini-ai-web-service.git
-cd skala-mini-ai-web-service
-./scripts/setup-git-hooks
-```
+clone부터 연습 PR까지의 절차는 [`README.md`의 "팀원 온보딩"](README.md#팀원-온보딩)에
+있다. **이 문서를 읽기 전에 거기부터 끝낸다.**
 
-`setup-git-hooks`는 두 가지를 켠다.
+특히 `./scripts/setup-git-hooks`를 실행하지 않으면 `main` 보호와 커밋 템플릿이
+동작하지 않는다. 전원이 clone 직후 한 번 실행한다.
 
-- `main`에 실수로 직접 push하는 것을 막는 훅
-- 커밋 메시지 템플릿
-
-**실행하지 않으면 동작하지 않는다.** 팀원 전원이 clone 직후 한 번 실행한다.
-
-> Windows에서는 Git Bash로 실행한다. PowerShell이면 `sh scripts/setup-git-hooks`.
+이 문서는 그다음, **작업하는 내내 참조할 규칙**을 담는다.
 
 ## 작업 흐름
 
