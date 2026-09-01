@@ -37,8 +37,12 @@ S-01 TBD  ──(TBD 동작)──▶  S-02 TBD
                           결과 표시
 ```
 
-<!-- 위 텍스트 다이어그램은 초안용이다. 확정되면 Figma나 Miro에서
-     그린 이미지를 docs/images/ 에 넣고 여기서 참조한다. -->
+<!-- 위 텍스트 다이어그램은 초안용이다. 확정되면 Figma나 Miro에서 그린
+     이미지를 images/03-userflow.png 로 저장하고 아래처럼 참조한다.
+
+         ![사용자 흐름](images/03-userflow.png)
+
+     파일 이름 규칙과 내보내는 방법은 images/README.md 에 있다. -->
 
 ## 화면별 상세
 

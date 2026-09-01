@@ -8,7 +8,7 @@
 ## ERD 다이어그램
 
 - dbdiagram.io 링크: TBD
-- 이미지: `docs/images/erd.png` (TBD)
+- 이미지: `images/05-erd.png` (TBD) — 내보내는 방법은 [`images/README.md`](images/README.md)
 
 > dbdiagram.io는 아래 DSL을 붙여 넣으면 다이어그램이 즉시 생성되고
 > PNG/PDF로 내보낼 수 있다. 발표 자료에 그대로 넣으면 된다.

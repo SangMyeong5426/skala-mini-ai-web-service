@@ -17,6 +17,7 @@ Mini-project의 산출물은 코드가 아니라 **설계 문서**다. 정량 �
 | [`07-ai-ready.md`](07-ai-ready.md) | AI 확장 지점, 프롬프트, 입출력 JSON 스키마 | API Architect | 기획 30점 |
 | [`adr/`](adr/) | 팀이 내린 기술 결정 기록 | 전원 | 설계 타당성 |
 | [`../database/`](../database/) | 실행 가능한 스키마 SQL (`05-erd.md`와 짝) | Data Architect | 설계 30점 |
+| [`images/`](images/) | 다이어그램 이미지 (ERD·아키텍처·와이어프레임) | 각 담당 | 발표 자료 |
 | [`checklist.md`](checklist.md) | 3일 로드맵 진행 체크리스트 | PM | — |
 
 ## 명세와 코드의 사슬
