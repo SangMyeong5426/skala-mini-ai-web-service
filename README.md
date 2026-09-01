@@ -47,6 +47,9 @@ skala-mini-ai-web-service/
 │   ├── 07-ai-ready.md          프롬프트와 입출력 JSON Schema
 │   ├── adr/                    기술 결정 기록
 │   └── checklist.md            3일 로드맵
+├── CONTRIBUTING.md         협업 규칙 — 사람이 읽는다
+├── AGENTS.md               에이전트 작업 규칙 — Codex·Cursor 등이 읽는다
+├── CLAUDE.md               AGENTS.md와 같은 내용. Claude Code가 읽는다
 ├── .github/                Issue·PR 템플릿, PR 규칙 검사
 ├── .githooks/              main 직접 push 차단
 └── scripts/setup-git-hooks clone 후 한 번 실행
@@ -90,6 +93,11 @@ push하면 되돌리기 번거롭다. 전원이 반드시 한 번 실행한다.
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md)를 한 번 읽는다. 브랜치 이름과 PR 제목에
 규칙이 있고 **CI가 자동으로 검사한다.** 안 맞으면 PR이 빨간불로 막힌다.
+
+AI 코딩 에이전트를 쓴다면 규칙이 이미 저장소에 들어 있어서 따로 설정할 것이
+없다. [`AGENTS.md`](AGENTS.md)를 Codex·Cursor 등이, [`CLAUDE.md`](CLAUDE.md)를
+Claude Code가 읽는다. **두 파일은 같은 내용이고, 한쪽을 고치면 다른 쪽도 함께
+고쳐야 한다** — 안 맞으면 `Docs Sync` 검사가 실패한다.
 
 ### 4. 내 역할 문서 읽기
 

@@ -1,0 +1,53 @@
+name: Docs Sync
+
+# AGENTS.md 와 CLAUDE.md 는 같은 문서를 두 이름으로 둔 것이다.
+# 도구마다 읽는 파일이 다르기 때문인데, 한쪽만 고치면 팀원이 쓰는 도구에 따라
+# 다른 규칙을 보게 된다. 두 파일이 갈라지는 것을 여기서 막는다.
+#
+# 두 파일이 바뀔 때만 돈다. 그 외의 PR에는 영향이 없다.
+on:
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+  push:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  agents-claude-identical:
+    name: AGENTS.md == CLAUDE.md
+    runs-on: ubuntu-latest
+    # 타임아웃이 없으면 GitHub 기본값 360분이 걸린다. 이 검사는 몇 초면 끝난다.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare AGENTS.md and CLAUDE.md
+        shell: bash
+        run: |
+          for f in AGENTS.md CLAUDE.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f 가 없습니다. 두 파일은 항상 함께 존재해야 합니다."
+              exit 1
+            fi
+          done
+
+          if cmp -s AGENTS.md CLAUDE.md; then
+            echo "AGENTS.md 와 CLAUDE.md 가 동일합니다."
+            exit 0
+          fi
+
+          echo "::error::AGENTS.md 와 CLAUDE.md 의 내용이 다릅니다."
+          echo ""
+          echo "두 파일은 같은 문서여야 합니다. 최신 쪽을 기준으로 맞추세요:"
+          echo "  cp CLAUDE.md AGENTS.md   (또는 반대 방향)"
+          echo ""
+          echo "차이 (< AGENTS.md / > CLAUDE.md):"
+          diff AGENTS.md CLAUDE.md || true
+          exit 1
