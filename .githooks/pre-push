@@ -1,0 +1,19 @@
+#!/bin/sh
+# main 브랜치로의 직접 push를 막는다.
+# GitHub Free 플랜의 private 저장소는 브랜치 보호 규칙을 쓸 수 없으므로,
+# 각자 로컬에서 이 훅으로 막는다. scripts/setup-git-hooks 를 실행해야 동작한다.
+
+protected_ref="refs/heads/main"
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+  if [ "$remote_ref" = "$protected_ref" ]; then
+    printf '%s\n' "ERROR: main 브랜치로 직접 push할 수 없습니다." >&2
+    printf '%s\n' "" >&2
+    printf '%s\n' "작업 브랜치를 만들고 Pull Request로 merge하세요:" >&2
+    printf '%s\n' "  git switch -c feat/short-description" >&2
+    exit 1
+  fi
+done
+
+exit 0

@@ -1,0 +1,41 @@
+name: Bug Report
+description: 동작하지 않거나 예상과 다르게 동작하는 것을 등록합니다.
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 증상
+      description: 무엇이 어떻게 잘못됐는지 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 발생 위치
+      options:
+        - Frontend
+        - Backend
+        - Database
+        - Mock API
+        - 문서
+        - 모름
+    validations:
+      required: true

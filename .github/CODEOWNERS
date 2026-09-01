@@ -1,0 +1,29 @@
+# 경로별 리뷰 담당자. PR을 열면 해당 담당자가 자동으로 리뷰어로 지정된다.
+#
+# ┌──────────────────────────────────────────────────────────────────┐
+# │ TODO (1일차): 아래 규칙은 전부 주석 처리돼 있다.                    │
+# │                                                                  │
+# │ 1. docs/00-team.md 의 R&R 분담을 확정한다.                         │
+# │ 2. @github-id 를 팀원 실제 GitHub 아이디로 바꾼다.                  │
+# │ 3. 각 줄 앞의 '# ' 를 지워 활성화한다.                             │
+# │                                                                  │
+# │ 존재하지 않는 아이디를 활성화하면 GitHub가 저장소에                  │
+# │ "Unknown owner" 오류를 표시하므로, 채우기 전에는 주석으로 둔다.      │
+# └──────────────────────────────────────────────────────────────────┘
+
+# 기본 담당자 — DevOps & Integration 역할
+# *                   @github-id
+
+# 프런트엔드 — Frontend Developer
+# /frontend/          @github-id
+
+# 백엔드 — Backend Developer
+# /backend/           @github-id
+
+# 설계 문서 — Product/UX Designer · Data Architect · API Architect
+# /docs/              @github-id
+
+# 저장소 운영 설정 — DevOps & Integration
+# /.github/           @github-id
+# /.githooks/         @github-id
+# /scripts/           @github-id

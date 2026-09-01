@@ -1,0 +1,15 @@
+# <type>(<scope>): <summary>
+#
+# Why:
+#
+# What:
+#
+# 허용 type:
+# feat, fix, refactor, docs, test, chore, ci, build, perf, revert
+#
+# scope 예시:
+# fe, be, db, docs, api, infra
+#
+# 예:
+# feat(fe): 메인 페이지 레이아웃 추가
+# docs(api): Mock API 명세에 분석 엔드포인트 추가
