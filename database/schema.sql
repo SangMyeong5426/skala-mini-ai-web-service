@@ -1,4 +1,4 @@
--- skala-ai-web-service 스키마
+-- skala-mini-ai-web-service 스키마
 --
 -- docs/05-erd.md 의 ERD와 짝이다. 한쪽만 고치지 않는다.
 -- Supabase / Neon 의 SQL Editor에 붙여넣어 실행한다.

@@ -18,10 +18,11 @@
 ### 개발환경 세팅
 
 - [x] 저장소 구조 및 협업 설정 (이 저장소)
-- [ ] GitHub 저장소 생성 및 push
+- [x] GitHub 저장소 생성 및 push
 - [ ] 팀원 전원 Collaborator 초대
-- [ ] 전원 clone 후 `./scripts/setup-git-hooks` 실행
-- [ ] `.github/CODEOWNERS`에 실제 GitHub ID 반영
+- [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료
+- [ ] **전원 연습 PR 1회** — 브랜치·PR 규칙을 1일차에 미리 겪어 둔다
+- [ ] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
 - [ ] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md)
 - [ ] FE 프로젝트 생성 (Vue 3 + Vite)
 - [ ] BE 프로젝트 생성 (ADR 0001 확정 후)
