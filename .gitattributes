@@ -1,0 +1,26 @@
+# 줄바꿈 정규화
+#
+# 저장소에는 항상 LF로 저장한다. 작업 트리는 OS 기본값을 따르되,
+# 아래 예외는 Windows에서도 반드시 LF를 유지한다.
+* text=auto
+
+# ── 셸 스크립트: 반드시 LF ────────────────────────────────
+# Windows의 core.autocrlf=true 가 CRLF로 바꾸면 shebang이
+# '#!/bin/sh\r' 가 되어 "bad interpreter" 오류로 실행되지 않는다.
+# 이 저장소는 clone 직후 scripts/setup-git-hooks 를 실행해야 하므로
+# 이 설정이 없으면 Windows 팀원이 첫 단계부터 막힌다.
+.githooks/**    text eol=lf
+scripts/**      text eol=lf
+*.sh            text eol=lf
+
+# ── SQL: LF 고정 ──────────────────────────────────────────
+# Supabase/Neon SQL Editor에 붙여넣을 때 CR이 섞이지 않게 한다.
+*.sql           text eol=lf
+
+# ── 바이너리: 변환하지 않는다 ─────────────────────────────
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.pdf           binary
+*.ico           binary
