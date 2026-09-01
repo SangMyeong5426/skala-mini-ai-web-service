@@ -1,0 +1,109 @@
+# 협업 규칙
+
+**5명이 3일 동안 함께 작업한다.** 이 문서는 합류할 때 한 번 읽으면 되는
+최소한만 담는다. 규칙을 늘리지 않는다 — 3일짜리 프로젝트에서 규칙이 많으면
+규칙 지키는 데 시간을 다 쓴다.
+
+## 처음 한 번만
+
+```bash
+git clone https://github.com/SangMyeong5426/skala-mini-ai-web-service.git
+cd skala-mini-ai-web-service
+./scripts/setup-git-hooks
+```
+
+`setup-git-hooks`는 두 가지를 켠다.
+
+- `main`에 실수로 직접 push하는 것을 막는 훅
+- 커밋 메시지 템플릿
+
+**실행하지 않으면 동작하지 않는다.** 팀원 전원이 clone 직후 한 번 실행한다.
+
+> Windows에서는 Git Bash로 실행한다. PowerShell이면 `sh scripts/setup-git-hooks`.
+
+## 작업 흐름
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c feat/main-page-layout
+# 작업 → 커밋
+git push -u origin feat/main-page-layout
+# GitHub에서 PR 생성 → Squash merge → 브랜치 삭제
+```
+
+## 브랜치 이름
+
+`<type>/<소문자-kebab-case>` 형식이다.
+
+| type | 언제 |
+| --- | --- |
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `refactor` | 동작 그대로 구조만 변경 |
+| `docs` | 문서만 변경 |
+| `test` | 테스트 |
+| `chore` | 설정·빌드 등 잡일 |
+| `ci` | CI 설정 |
+| `hotfix` | 급한 수정 |
+
+예: `feat/main-page-layout`, `docs/api-spec`, `chore/setup-vue`
+
+## 커밋과 PR 제목
+
+`type(scope): 요약` 형식이다.
+
+```text
+feat(fe): 메인 페이지 레이아웃 추가
+docs(api): Mock API 명세에 AI 작업 엔드포인트 추가
+fix(be): CORS 허용 origin 누락 수정
+```
+
+scope는 `fe` `be` `db` `api` `docs` 중에서 쓴다.
+
+**CI가 검사하는 것은 브랜치 이름과 PR 제목뿐이다.** 개별 커밋 메시지는 검사하지
+않는다 — Squash merge라 `main`에는 PR 제목만 남기 때문이다. 그래도 커밋 메시지를
+알아볼 수 있게 쓰면 리뷰가 쉬워진다.
+
+## 리뷰와 merge
+
+**3일 일정이므로 승인 대기로 작업이 막히지 않게 한다.**
+
+| 상황 | 방법 |
+| --- | --- |
+| 리뷰어를 30분 안에 구할 수 있다 | 1명 승인 후 merge |
+| 문서만 바꿨다 | 바로 merge |
+| 급하고 리뷰어가 없다 | merge하고, **팀 채널에 무엇을 merge했는지 알린다** |
+| FE/BE 계약(`06-api-spec.md`)을 바꿨다 | **반드시 상대 담당자 확인을 받는다** |
+
+마지막 줄만은 예외 없이 지킨다. API 규격이 말없이 바뀌면 상대방 작업이 통째로
+깨지고, 3일 안에 복구할 시간이 없다.
+
+## 반드시 지킬 것
+
+자동 검사가 잡아주지 못해 사람이 지켜야 하는 것들이다.
+
+- **`main`에 직접 push하지 않는다.**
+- **비밀값을 커밋하지 않는다.** DB 비밀번호, API 키, `.env` 실제 값.
+  실수로 올렸다면 즉시 팀에 알리고 해당 키를 폐기·재발급한다.
+  커밋을 지워도 GitHub 기록에는 남는다.
+- **하나의 PR은 하나의 목적만 다룬다.**
+- **코드를 바꾸면 짝이 되는 문서도 같은 PR에서 바꾼다.** PR 템플릿에 확인 항목이 있다.
+- **검증하지 못한 것을 숨기지 않는다.** PR 본문에 적는다.
+
+## Issue
+
+작업은 Issue로 관리한다. 템플릿이 세 종류 있다.
+
+| 템플릿 | 언제 |
+| --- | --- |
+| **Task** | 일반 작업. 일차와 담당 역할(R&R)을 고른다 |
+| **Bug Report** | 동작하지 않는 것 |
+| **Decision** | 팀이 함께 정해야 하는 것. 합의 결과는 `docs/adr/`에 ADR로 남긴다 |
+
+Decision Issue에는 **결정 기한**을 반드시 적는다. 3일짜리 프로젝트에서
+결정이 하루 밀리면 그 뒤 작업이 통째로 밀린다.
+
+## 막혔을 때
+
+혼자 30분 이상 막히면 팀 채널에 올린다. 3일 중 30분은 큰 비중이다.

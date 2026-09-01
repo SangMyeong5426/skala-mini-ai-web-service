@@ -1,0 +1,45 @@
+name: Task
+description: 범위와 완료 조건이 명확한 일반 작업을 등록합니다.
+title: "[Task]: "
+labels: ["type:task"]
+body:
+  - type: dropdown
+    id: day
+    attributes:
+      label: 일차
+      options:
+        - "1일차 - 서비스 기획 & Architecture 정의"
+        - "2일차 - 시스템 설계 및 Scaffolding"
+        - "3일차 - 설계 검증 및 최종 발표"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역 (R&R)
+      options:
+        - PM
+        - Product/UX Designer
+        - Data Architect
+        - API Architect
+        - Frontend Developer
+        - Backend Developer
+        - DevOps & Integration
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표
+      description: 이 작업으로 달성할 결과를 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 조건
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
