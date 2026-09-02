@@ -43,6 +43,18 @@ Use-Case는 [`02-use-case.md`](02-use-case.md)와 짝이다. `S-xx` ↔ `UC-xx`�
 
 ## 사용자 흐름 (User Flow)
 
+![User Flow](images/03-userflow.png)
+
+- 원본: [`images/03-userflow.puml`](images/03-userflow.puml) (PlantUML)
+- 벡터: [`images/03-userflow.svg`](images/03-userflow.svg)
+- **명세서 3절 「전체 서비스 흐름」 9단계**를 그대로 따랐다. ①~⑨ 번호가 대응한다.
+
+> ★ 네 곳이 AI 확장 지점이다. 전부 같은 형태다 —
+> `POST /api/ai-jobs` → `202` → 폴링. **엔드포인트는 하나다.**
+
+<details>
+<summary>텍스트 버전 (다이어그램이 안 보일 때)</summary>
+
 ```text
                         ┌─────────────┐
                         │   [진입]    │
@@ -122,16 +134,12 @@ Use-Case는 [`02-use-case.md`](02-use-case.md)와 짝이다. `S-xx` ↔ `UC-xx`�
   └──────────────────────────────────────────────────────┘
 ```
 
-**★ 표시 네 곳이 AI가 들어올 자리다.** 전부 같은 형태다 —
-`POST /api/ai-jobs` 로 접수하고 `202`를 받은 뒤 `GET`으로 폴링한다.
+</details>
+
 **엔드포인트는 하나이고 `job_type`만 다르다.** ([ADR 0003](adr/0003-ai-job-endpoint.md))
 
-<!-- 확정되면 Figma나 Miro에서 그린 이미지를 images/03-userflow.png 로
-     저장하고 아래처럼 참조한다.
-
-         ![사용자 흐름](images/03-userflow.png)
-
-     파일 이름 규칙과 내보내는 방법은 images/README.md 에 있다. -->
+> 챗봇(S-10)은 이 흐름에 속하지 않고 **어느 화면에서도 열 수 있다.**
+> Use-Case 다이어그램([`02-use-case.md`](02-use-case.md))에 표시돼 있다.
 
 ## 화면별 상세
 
