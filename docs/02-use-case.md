@@ -8,6 +8,18 @@
 출처는 Notion **「기능 정의」** (v2, 2026-09-02)다. 기능 ID `F-xx`는 그 문서의
 4절 상세 기능 표를 따른다.
 
+## Use-Case 다이어그램
+
+![Use-Case 다이어그램](images/02-usecase.png)
+
+- 원본: [`images/02-usecase.puml`](images/02-usecase.puml) (PlantUML)
+- 벡터: [`images/02-usecase.svg`](images/02-usecase.svg) — 발표 슬라이드에는 이쪽이 깨지지 않는다
+- **고치는 법**: `.puml`을 수정하고 <https://www.plantuml.com/plantuml/uml/> 에 붙여넣거나
+  VS Code 확장 `PlantUML`에서 `Alt+D`. **아래 표를 바꾸면 `.puml`도 함께 고친다.**
+
+> 색이 칠해진 넷이 **AI 확장 지점**이다. 오른쪽 외부 Actor 셋 중
+> **AI 서비스**로 향하는 화살표가 곧 "AI가 들어올 자리"다.
+
 ## Actor
 
 **Actor는 사람만이 아니다.** 외부 시스템도 Actor다. 이 서비스는 외부 Actor가
@@ -141,6 +153,22 @@
 | 사후 조건 | 대화 이력과 판정 근거가 저장된다 |
 | 관련 API | `POST /api/ai-jobs` (`job_type: RULE_CHECK`) → `202`<br>`GET /api/ai-jobs/{id}` → `200` |
 | 관련 화면 | `S-10` 챗봇 |
+
+## Use-Case 사이 관계
+
+다이어그램에는 넣지 않았다. `include`·`extend` 화살표를 다 그리면 선이 교차해서
+읽을 수 없다. **관계는 여기서 관리한다.**
+
+| 관계 | 뜻 |
+| --- | --- |
+| UC-03 `include` UC-02 | 체크리스트를 만들려면 여행 정보가 있어야 한다 |
+| UC-06 `include` UC-05 | 물품을 인식하려면 사진이 등록돼 있어야 한다 |
+| UC-07 `include` UC-04 | 비교하려면 확정된 체크리스트가 있어야 한다 |
+| UC-07 `include` UC-06 | 비교하려면 승인된 인식 결과가 있어야 한다 |
+| UC-08 `include` UC-06 | 무게를 재려면 승인된 물품 목록이 있어야 한다 |
+| UC-09 `extend` UC-07 | 검수 중 반입 확인이 필요할 때만 이어진다 |
+| UC-01 `extend` UC-02 | 과거 여행을 복사해 새 여행을 시작할 수 있다 |
+| UC-10 | **어느 화면에서도 독립적으로 호출된다.** 비회원도 쓸 수 있다 |
 
 ## AI 확장 지점 정리
 
