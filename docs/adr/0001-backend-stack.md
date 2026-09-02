@@ -149,7 +149,7 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 
 확정 후 아래를 이어서 한다.
 
-- [ ] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 가장 먼저 한다
+- [x] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 2026-09-02 완료
       (절차는 [README 6단계](../../README.md))
 - [x] `backend/`에 Spring Boot 4.1.1 프로젝트 스캐폴딩
 - [x] `backend/.env.example`의 `PORT`를 `8080`으로 확정
@@ -161,5 +161,8 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 - [ ] `.gitignore`에서 쓰지 않는 언어 항목 정리 (선택 — 남겨 둬도 해가 없다)
 - [x] 이 문서 상태를 `Accepted`로 변경
 
-> **배경에 적은 "개발 PC에 JDK가 설치되어 있지 않다"는 이제 일부 해소됐다.**
-> 스캐폴딩을 검증한 PC에는 Temurin 21이 설치돼 있다. 나머지 팀원은 아직이다.
+> **배경에 적은 "개발 PC에 JDK가 설치되어 있지 않다"는 해소됐다.**
+> 2026-09-02 기준 5명 전원이 Temurin 21을 설치했다.
+>
+> `settings.gradle`의 foojay-resolver는 이제 쓸 일이 없는 안전망이다.
+> 21이 있으면 작동하지 않으므로 빌드에 영향을 주지 않는다.
