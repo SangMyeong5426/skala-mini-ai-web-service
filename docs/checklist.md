@@ -46,9 +46,10 @@
 
 **목표: 데이터 모델·API 명세 확정, 핵심 화면과 데이터 흐름 End-to-End 검증.**
 
-- [ ] 데이터 모델링(ERD) → `05-erd.md`, dbdiagram.io
-- [ ] 스키마 SQL 작성 및 DB에 실행 → `database/schema.sql`
-- [ ] 데모용 시드 데이터 작성 → `database/seed.sql`
+- [x] 데이터 모델링(ERD) → [`05-erd.md`](05-erd.md) — 10테이블 · **N:M 2개**
+- [x] 스키마 SQL 작성 → [`database/schema.sql`](../database/schema.sql) — 로컬 DB에서 실행·제약 검증 완료
+- [ ] 클라우드 DB(Supabase)에 실행
+- [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
 - [ ] REST API 명세 작성 → `06-api-spec.md`
 - [ ] **Mock API 엔드포인트 포함** → `06-api-spec.md`
 - [ ] AI 입출력 JSON Schema 확정 → `07-ai-ready.md`
