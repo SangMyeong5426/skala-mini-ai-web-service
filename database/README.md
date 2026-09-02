@@ -22,6 +22,7 @@ PostgreSQL. **팀 공용 DB는 클라우드에 둔다** — Supabase 또는 Neon
 
 | 스크립트 | 하는 일 |
 | --- | --- |
+| [`scripts/db-password`](../scripts/db-password) | `backend/.env` 의 비밀번호만 안전하게 채운다. 편집기 저장을 깜빡하는 사고를 막는다 |
 | [`scripts/db-apply`](../scripts/db-apply) | `schema.sql` · `seed.sql` 을 순서대로 적용한다 |
 | [`scripts/check-db`](../scripts/check-db) | 접속·테이블·제약·시드를 확인한다 |
 
