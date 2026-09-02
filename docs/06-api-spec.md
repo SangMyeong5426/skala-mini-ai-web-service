@@ -55,8 +55,8 @@
 | # | Method | Path | 설명 | 관련 Use-Case | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `GET` | `/api/TBD` | TBD | UC-01 | TBD |
-| 2 | `POST` | `/api/ai-jobs` | AI 작업 생성 (Mock) | UC-02 | 설계됨 |
-| 3 | `GET` | `/api/ai-jobs/{id}` | AI 작업 상태·결과 조회 (Mock) | UC-02 | 설계됨 |
+| 2 | `POST` | `/api/ai-jobs` | AI 작업 생성 (Mock) | UC-04, UC-05, UC-08, UC-10 | 설계됨 |
+| 3 | `GET` | `/api/ai-jobs/{id}` | AI 작업 상태·결과 조회 (Mock) | UC-04, UC-05, UC-08, UC-10 | 설계됨 |
 
 ---
 

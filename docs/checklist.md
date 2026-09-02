@@ -11,8 +11,8 @@
 - [ ] AI-Ready Web Service 아이디어 선정 → `01-service-plan.md`
 - [ ] 페르소나와 해결할 문제 정의 → `01-service-plan.md`
 - [x] Teaming, R&R 정의 → [`00-team.md`](00-team.md) — 7개 역할 전부 채움
-- [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 5종
-- [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개(+1 부분)
+- [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 4종
+- [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개
 - [ ] AI 입출력 스키마 → `07-ai-ready.md`
 - [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-01~11
 - [ ] **Figma 와이어프레임** — 데모 대상 2개는 정성껏, 나머지는 스케치
