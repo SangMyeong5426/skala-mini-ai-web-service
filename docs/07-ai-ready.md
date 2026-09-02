@@ -15,7 +15,7 @@
 
 | ID | 확장 지점 | 대상 Use-Case | 지금 | 나중 |
 | --- | --- | --- | --- | --- |
-| AI-01 | TBD | UC-02 | Mock이 고정 JSON 반환 | LLM이 같은 스키마 JSON 생성 |
+| AI-01 | TBD | UC-04, UC-05, UC-07(물품명 구조화), UC-08, UC-10 | Mock이 고정 JSON 반환 | LLM이 같은 스키마 JSON 생성 |
 
 ### 왜 여기인가
 
