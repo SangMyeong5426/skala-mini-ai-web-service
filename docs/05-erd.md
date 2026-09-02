@@ -68,7 +68,7 @@ Table checklist_items {
   category      varchar(20) [not null, note: 'DOCUMENT | CLOTHING | ELECTRONIC | TOILETRY | MEDICINE | ETC']
   qty           integer     [not null, default: 1]
   priority      varchar(20) [not null, note: 'REQUIRED | RECOMMENDED']
-  source        varchar(10) [not null, note: 'RULE | AI | USER — 누가 넣었는지']
+  source        varchar(10) [not null, note: 'RULE | PHOTO | AI | USER — 누가 넣었는지']
 
   check_status  varchar(20) [not null, default: 'UNCHECKED',
                  note: 'UNCHECKED | PREPARED | NEEDS_CHECK | NOT_IN_PHOTO']

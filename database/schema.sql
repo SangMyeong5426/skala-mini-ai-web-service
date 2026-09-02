@@ -124,7 +124,9 @@ CREATE TABLE checklist_items (
     qty            INTEGER      NOT NULL DEFAULT 1,
     priority       VARCHAR(20)  NOT NULL,
 
-    -- 누가 넣었는지. 규칙 기반 / AI 추천 / 사용자 직접.
+    -- 누가 넣었는지. 규칙 기반 / 사진 인식 승인 / AI 추천 / 사용자 직접.
+    -- PHOTO 와 AI 를 나누는 이유는 S-05 의 출처 배지 때문이다. 사진에서 확인된 것과
+    -- AI 가 덧붙인 부족분은 사용자에게 다르게 보여야 한다. (docs/03-wireframe.md S-05)
     source         VARCHAR(10)  NOT NULL,
 
     -- 명세의 핵심 원칙: 사진에서 못 찾은 것을 "누락"이라 하지 않는다.
@@ -137,7 +139,7 @@ CREATE TABLE checklist_items (
     CONSTRAINT checklist_items_category_check
         CHECK (category IN ('DOCUMENT','CLOTHING','ELECTRONIC','TOILETRY','MEDICINE','ETC')),
     CONSTRAINT checklist_items_priority_check CHECK (priority IN ('REQUIRED','RECOMMENDED')),
-    CONSTRAINT checklist_items_source_check   CHECK (source   IN ('RULE','AI','USER')),
+    CONSTRAINT checklist_items_source_check   CHECK (source   IN ('RULE','PHOTO','AI','USER')),
     CONSTRAINT checklist_items_status_check
         CHECK (check_status IN ('UNCHECKED','PREPARED','NEEDS_CHECK','NOT_IN_PHOTO'))
 );

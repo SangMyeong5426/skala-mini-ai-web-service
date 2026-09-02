@@ -78,18 +78,21 @@ INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_d
 
 
 -- ── 체크리스트 (AI 추천 + 규칙 보강) ──────────────────────
--- source: RULE = 고정 필수 규칙, AI = 추천, USER = 직접 추가
+-- source: RULE = 고정 필수 규칙, PHOTO = 사진에서 승인, AI = 추천, USER = 직접 추가
+--
+-- PHOTO 인 5개는 item_detections 에서 confirmed_by_user = TRUE 로 연결된 것들이다.
+-- 화장품은 후보(화장품 용기·검정 파우치)만 있고 아직 승인 전이라 AI 로 둔다.
 INSERT INTO checklist_items (trip_id, item_weight_id, name, category, qty, priority, source, check_status) VALUES
-  (1,  1, '여권',        'DOCUMENT',   1, 'REQUIRED',    'RULE', 'NOT_IN_PHOTO'),
-  (1,  2, '상의',        'CLOTHING',   4, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  3, '하의',        'CLOTHING',   2, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  4, '속옷',        'CLOTHING',   4, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  7, '충전기',      'ELECTRONIC', 1, 'REQUIRED',    'AI',   'PREPARED'),
-  (1,  8, '보조배터리',  'ELECTRONIC', 1, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  9, '변환 플러그', 'ELECTRONIC', 1, 'REQUIRED',    'AI',   'NOT_IN_PHOTO'),
-  (1, 11, '화장품',      'TOILETRY',   1, 'RECOMMENDED', 'AI',   'NEEDS_CHECK'),
-  (1, 13, '상비약',      'MEDICINE',   1, 'RECOMMENDED', 'AI',   'NOT_IN_PHOTO'),
-  (1, 14, '우산',        'ETC',        1, 'RECOMMENDED', 'AI',   'NOT_IN_PHOTO');
+  (1,  1, '여권',        'DOCUMENT',   1, 'REQUIRED',    'RULE',  'NOT_IN_PHOTO'),
+  (1,  2, '상의',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  3, '하의',        'CLOTHING',   2, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  4, '속옷',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  7, '충전기',      'ELECTRONIC', 1, 'REQUIRED',    'PHOTO', 'PREPARED'),
+  (1,  8, '보조배터리',  'ELECTRONIC', 1, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  9, '변환 플러그', 'ELECTRONIC', 1, 'REQUIRED',    'AI',    'NOT_IN_PHOTO'),
+  (1, 11, '화장품',      'TOILETRY',   1, 'RECOMMENDED', 'AI',    'NEEDS_CHECK'),
+  (1, 13, '상비약',      'MEDICINE',   1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO'),
+  (1, 14, '우산',        'ETC',        1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO');
 
 
 -- ── 짐 사진 ───────────────────────────────────────────────

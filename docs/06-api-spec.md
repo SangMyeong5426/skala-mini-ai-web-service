@@ -457,7 +457,7 @@ Location: /api/trips/12
 | --- | --- |
 | `category` | `DOCUMENT` `CLOTHING` `ELECTRONIC` `TOILETRY` `MEDICINE` `ETC` |
 | `priority` | `REQUIRED` `RECOMMENDED` |
-| `source` | `RULE` `AI` `USER` — 누가 넣었는지 |
+| `source` | `RULE` `PHOTO` `AI` `USER` — 누가 넣었는지. `PHOTO` 는 사진에서 승인된 것, `AI` 는 AI 가 덧붙인 부족분이다 |
 | `checkStatus` | `UNCHECKED` `PREPARED` `NEEDS_CHECK` **`NOT_IN_PHOTO`** |
 
 ### `POST /api/trips/{tripId}/items` — 항목 추가
