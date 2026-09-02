@@ -2,18 +2,15 @@
 
 **React + TypeScript (Vite).** [ADR 0002](../docs/adr/0002-frontend-stack.md)에서 확정했다.
 
-## 아직 비어 있다
+스캐폴딩은 **끝나 있다.** clone 후 아래만 하면 화면이 뜬다.
 
-1일차 "FE 프로젝트 생성" 단계에서 이 폴더에 스캐폴딩한다.
-**Frontend Developer가 담당한다.**
+| | 버전 |
+| --- | --- |
+| React | 19 |
+| TypeScript | 6 |
+| Vite | 8 |
 
-```bash
-npm create vite@latest . -- --template react-ts
-```
-
-**Node.js 20 이상**이 필요하다. 설치는 [README의 개발 도구](../README.md#7-개발-도구-설치-역할별).
-
-생성 후 이 README를 실행 방법으로 교체한다.
+**Node.js 20 이상**이 필요하다. 설치는 [README의 "7. 개발 도구 설치"](../README.md).
 
 ## 실행
 
@@ -36,6 +33,15 @@ cp .env.example .env
 Vite는 `VITE_` 로 시작하는 변수만 브라우저에 노출한다.
 **따라서 이 폴더의 `.env`에는 비밀값을 절대 넣지 않는다.**
 AI API 키 같은 것은 백엔드에만 둔다.
+
+## 무엇을 언제 만드는가
+
+**라우팅과 화면 컴포넌트는 지금 만들지 않는다.** 기능 명세·유저플로우·
+와이어프레임([`docs/01`](../docs/01-service-plan.md) · [`02`](../docs/02-use-case.md) ·
+[`03`](../docs/03-wireframe.md))이 확정된 뒤에 시작한다. 화면을 모르는 채 구조를
+짜면 두 번 일한다.
+
+지금 이 폴더에 있는 것은 **Vite 기본 화면**이다. 첫 화면을 만들 때 지운다.
 
 ## 개발 시 지킬 것
 
