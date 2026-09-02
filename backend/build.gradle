@@ -1,0 +1,66 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.skala'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	// ADR 0001. 팀원이 다른 JDK를 깔았어도 컴파일은 21 기준으로 돈다.
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// Swagger UI(/swagger-ui/index.html)와 OpenAPI 문서(/v3/api-docs)를 자동 생성한다.
+	// 2일차 산출물인 REST API 명세를 손으로 쓰지 않아도 된다. (ADR 0001)
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// 테스트는 인메모리 H2로 돈다. DB가 아직 없어도 ./gradlew build 가 통과해야
+	// 팀원이 clone 직후 막히지 않는다. src/test/resources/application.properties 참조.
+	testRuntimeOnly 'com.h2database:h2'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+// ── .env 를 bootRun 에 주입한다 ────────────────────────────────
+// Spring Boot 는 .env 를 스스로 읽지 않는다. spring-dotenv 라이브러리는
+// META-INF/spring.factories 로 등록하는데 Boot 4 가 그 방식을 없애서 동작하지 않는다.
+// 그래서 의존성 없이 Gradle 이 직접 읽어 넘긴다. .env 가 없으면 조용히 건너뛴다.
+tasks.named('bootRun') {
+	def envFile = file('.env')
+	if (envFile.exists()) {
+		envFile.readLines().each { rawLine ->
+			def line = rawLine.trim()
+			if (line && !line.startsWith('#') && line.contains('=')) {
+				def idx = line.indexOf('=')
+				environment line.substring(0, idx).trim(), line.substring(idx + 1).trim()
+			}
+		}
+	}
+}
