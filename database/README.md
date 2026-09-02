@@ -20,6 +20,14 @@ PostgreSQL. **팀 공용 DB는 클라우드에 둔다** — Supabase 또는 Neon
 | `schema.sql` | 테이블 정의(DDL). `docs/05-erd.md`의 ERD와 짝이다 |
 | `seed.sql` | 데모용 초기 데이터. **3일차 시연에서 빈 화면을 피하려면 필요하다** |
 
+| 스크립트 | 하는 일 |
+| --- | --- |
+| [`scripts/db-apply`](../scripts/db-apply) | `schema.sql` · `seed.sql` 을 순서대로 적용한다 |
+| [`scripts/check-db`](../scripts/check-db) | 접속·테이블·제약·시드를 확인한다 |
+
+둘 다 `backend/.env` 의 접속 정보를 읽는다. 호스트에 `psql` 을 설치하지 않고
+Docker 컨테이너 안의 `psql` 을 쓴다.
+
 ## DB 생성 (팀 공용)
 
 **여기가 기본이다.** 2일차 FE-BE 연동과 3일차 데모는 이 DB로 한다.
@@ -69,13 +77,32 @@ DATABASE_PASSWORD=대시보드에서_받은_비밀번호
 
 #### 3. 스키마와 시드를 넣는다
 
+```bash
+./scripts/db-apply
+```
+
+`schema.sql` 과 `seed.sql` 을 순서대로 적용한다. 기존 테이블을 지우므로
+`yes` 를 입력해야 진행한다.
+
+**대시보드에 복사·붙여넣기 하지 않는다.** 긴 SQL 을 손으로 옮기다 일부가
+잘리거나 엉뚱한 것을 붙여넣는 사고가 난다. 스크립트는 파일을 그대로 보낸다.
+
+<details>
+<summary>Docker 를 못 쓰는 상황이면 대시보드로 한다</summary>
+
 대시보드 왼쪽 **`SQL Editor`** → `New query` → **두 번** 실행한다.
 
-1. `database/schema.sql` 전체를 붙여넣고 `Run`
-2. `database/seed.sql` 전체를 붙여넣고 `Run`
+1. `database/schema.sql` **파일을 편집기로 열어** 내용 전체를 복사 → 붙여넣고 `Run`
+2. `database/seed.sql` 도 같은 방법으로 → `Run`
 
 **순서를 지킨다.** `seed.sql` 은 `schema.sql` 이 만든 테이블에 넣으므로
 먼저 돌리면 실패한다.
+
+붙여넣는 것은 **파일 내용**이지 파일 경로나 터미널 명령이 아니다.
+`open -e database/schema.sql` 같은 것을 붙여넣으면
+`syntax error at or near "open"` 이 난다.
+
+</details>
 
 #### 4. 확인한다
 
