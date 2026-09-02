@@ -1,0 +1,105 @@
+@startuml 04-architecture
+' ─────────────────────────────────────────────────────────
+'  AI 여행가방 확인 플랫폼 — 시스템 아키텍처
+'  출처: docs/04-architecture.md  (수정하면 양쪽을 함께 고친다)
+'
+'  채점 기준: "FE-BE-DB 전체 시스템 구조 다이어그램의 명확성"
+'  핵심 메시지: AI가 들어올 자리를 미리 비워 뒀고, 그 상자 안만 교체된다
+' ─────────────────────────────────────────────────────────
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 12
+skinparam ArrowColor #46524E
+skinparam componentStyle rectangle
+
+skinparam component {
+  BackgroundColor #F5F7F6
+  BorderColor #8A9A94
+  FontColor #14201C
+  BackgroundColor<<AI>> #D9EAE6
+  BorderColor<<AI>> #0D6455
+  BackgroundColor<<future>> #FBF3E4
+  BorderColor<<future>> #8D5606
+}
+skinparam node {
+  BackgroundColor #FFFFFF
+  BorderColor #46524E
+}
+skinparam database {
+  BackgroundColor #F5F7F6
+  BorderColor #8A9A94
+}
+
+actor "사용자" as USER
+
+node "Frontend  :5173" as FE {
+  component "React 19 + TypeScript\n(Vite 8)" as FEAPP
+  component "라우팅 · 화면 컴포넌트" as FEUI
+  component "API 클라이언트\n**폴링 훅**" as FEAPI
+}
+
+node "Backend  :8080" as BE {
+  component "REST Controller" as CTRL
+  component "Service 로직" as SVC
+  component "Repository (JPA)" as REPO
+  component "**규칙 엔진**\n반입 판정" as RULE
+  component "AiClient (인터페이스)" as IFACE
+}
+
+package "AI 확장 지점 — 이 상자 안만 교체된다" as AIBOX #FEFEFE {
+  component "**MockAiClient**\n고정 JSON 반환" as MOCK <<AI>>
+  component "RealAiClient\nOpenAI / Claude / 비전 모델" as REAL <<future>>
+}
+
+database "PostgreSQL\n(Supabase)" as DB {
+  component "users · trips\nchecklist_items\nai_jobs (jsonb)" as TABLES
+}
+
+node "로컬 파일 저장소" as FILES {
+  component "uploads/\n짐 사진" as UP
+}
+
+cloud "외부 API" as EXT {
+  component "Open-Meteo\n16일 예보 + 계절 예보" as WEATHER
+  component "공식 반입 규정\n인천공항 · 항공정보포털" as RULES
+}
+
+USER --> FEAPP
+FEAPP --> FEUI
+FEUI --> FEAPI
+
+FEAPI -right-> CTRL : **HTTP / JSON**\nPOST → 202 + 작업ID\nGET → 폴링
+CTRL --> SVC
+SVC --> REPO
+SVC --> RULE
+SVC --> IFACE
+REPO -right-> TABLES : SQL
+SVC --> UP : 사진 저장
+
+IFACE ..> MOCK : **지금**
+IFACE ..> REAL : 나중\n<size:10>AI_PROVIDER 만 바꾼다</size>
+
+SVC --> WEATHER
+RULE --> RULES
+
+note bottom of AIBOX
+  **여기만 바뀐다.**
+  프런트엔드 · REST 규격 · DB 스키마는 그대로다.
+  전환은 코드가 아니라 .env 의 AI_PROVIDER 로 한다.
+end note
+
+note right of RULE
+  **최종 반입 판정은 규칙 엔진이 한다.**
+  AI는 물품명을 구조화하고
+  설명을 만들 뿐이다.
+end note
+
+legend bottom
+  |<#D9EAE6>| 지금 동작하는 Mock |
+  |<#FBF3E4>| 나중에 들어올 실제 AI |
+  |<#F5F7F6>| 일반 구성요소 |
+endlegend
+
+@enduml

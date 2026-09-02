@@ -31,8 +31,12 @@
 > 비워 뒀고, 그 상자 안만 교체하면 된다"는 것이 이 프로젝트의 주제다.
 > 발표 때 이 한 장으로 설명할 수 있어야 한다.
 
-> 확정된 다이어그램은 `images/04-architecture.png`로 저장하고 여기서
-> 참조한다. 내보내는 방법은 [`images/README.md`](images/README.md).
+![시스템 아키텍처](images/04-architecture.png)
+
+- 원본: [`images/04-architecture.puml`](images/04-architecture.puml) (PlantUML)
+- 벡터: [`images/04-architecture.svg`](images/04-architecture.svg) — 발표 슬라이드용
+- **고치는 법**: `.puml`을 수정하고 <https://www.plantuml.com/plantuml/uml/> 에 붙여넣거나
+  VS Code 확장 `PlantUML`에서 `Alt+D`. **위 텍스트 다이어그램과 함께 고친다.**
 
 ## 기술 스택
 
@@ -41,7 +45,7 @@
 | Frontend | React + TypeScript (Vite) | 팀원 사전 경험이 여기 있어 학습 시간을 아낀다. TS 타입이 `06-api-spec.md`의 응답 규격과 1:1로 대응해 **Interface First를 코드로 증명**한다. [ADR 0002](adr/0002-frontend-stack.md) |
 | Backend | Java 21 / Spring Boot 4.1.1 | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
 | Database | PostgreSQL (Supabase 또는 Neon) | 로컬 설치 없이 클라우드에서 즉시 생성, 팀원 전원이 같은 DB 공유 |
-| Mock API | TBD (Postman Mock Server 또는 백엔드 내 Mock 응답) | TBD |
+| Mock API | **백엔드 내 Mock 응답** (`MockAiClient`) | 인터넷이 끊겨도 데모가 돌아야 한다. Postman Mock은 네트워크에 묶인다. 또 `AiClient` 인터페이스 하나에 구현 둘을 두면 **교체 지점이 코드로 드러나** 발표에서 보여줄 것이 생긴다 |
 | 형상관리 | GitHub (모노레포) | FE·BE·문서를 한 저장소에서 관리, 초대·클론 1회 |
 
 ## AI-Ready 설계 적용 지점
