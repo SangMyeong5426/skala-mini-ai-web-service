@@ -1,7 +1,13 @@
 #!/bin/sh
-# main 브랜치로의 직접 push를 막는다.
-# GitHub Free 플랜의 private 저장소는 브랜치 보호 규칙을 쓸 수 없으므로,
-# 각자 로컬에서 이 훅으로 막는다. scripts/setup-git-hooks 를 실행해야 동작한다.
+# main 브랜치로의 직접 push를 막는다. 두 관문 중 첫 번째다.
+#
+# GitHub 서버의 브랜치 보호가 두 번째 관문이지만, 그것만으로는 부족하다.
+#   - 브랜치 보호는 "Include administrators"가 꺼져 있어 관리자에게 걸리지 않는다.
+#     관리자에게는 이 훅이 사실상 유일한 관문이다.
+#   - 훅은 push가 GitHub에 닿기 전에 잡으므로 되돌릴 일이 없다.
+#
+# scripts/setup-git-hooks 를 실행해야 동작한다. clone 직후 한 번 실행한다.
+# 자세한 내용은 CLAUDE.md 의 "두 개의 관문".
 
 protected_ref="refs/heads/main"
 
