@@ -58,8 +58,8 @@ docker run -d --name skala-pg \
   -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=skala \
   -p 55432:5432 postgres:17-alpine
 
-# PostgreSQL 이 접속을 받을 때까지 기다린다
-until docker exec skala-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+# PostgreSQL 이 TCP 접속을 받을 때까지 기다린다. -h localhost 가 중요하다.
+until docker exec skala-pg pg_isready -h localhost -U postgres >/dev/null 2>&1; do sleep 1; done
 
 # 스키마 적용 — 컨테이너 안의 psql 을 쓴다
 docker exec -i skala-pg psql -U postgres -d skala < database/schema.sql
@@ -68,6 +68,11 @@ docker exec -i skala-pg psql -U postgres -d skala < database/schema.sql
 > **`docker run`은 컨테이너를 띄울 뿐 DB가 준비됐다는 뜻이 아니다.** 바로 다음 줄을
 > 실행하면 `connection to server ... failed`로 깨진다. 초기화에 1~3초가 걸린다.
 > 그래서 `pg_isready` 로 기다린다.
+>
+> **`-h localhost` 를 빼면 안 된다.** `postgres` 이미지는 초기화 중에 임시 서버를
+> 한 번 띄웠다 끄는데, 그 서버는 `listen_addresses=''` 라 유닉스 소켓만 받는다
+> (엔트리포인트 297행). `-h` 없이 부르면 그 소켓을 보고 통과해 버리고, 다음 줄이
+> 임시 서버가 꺼진 직후에 걸리면 다시 깨진다. TCP 로 물어야 진짜 서버만 기다린다.
 
 > **호스트에 `psql`을 설치하지 않아도 된다.** `postgres` 이미지 안에 이미 들어 있다.
 > 호스트의 `psql`을 쓰려면 별도 설치가 필요해서, Docker만 깐 팀원이 여기서 막힌다.
