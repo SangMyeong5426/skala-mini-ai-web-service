@@ -42,11 +42,20 @@
 
 | 계층 | 기술 | 선택 근거 |
 | --- | --- | --- |
-| Frontend | React + TypeScript (Vite) | 팀원 사전 경험이 여기 있어 학습 시간을 아낀다. TS 타입이 `06-api-spec.md`의 응답 규격과 1:1로 대응해 **Interface First를 코드로 증명**한다. [ADR 0002](adr/0002-frontend-stack.md) |
-| Backend | Java 21 / Spring Boot 4.1.1 | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
-| Database | PostgreSQL (Supabase 또는 Neon) | 로컬 설치 없이 클라우드에서 즉시 생성, 팀원 전원이 같은 DB 공유 |
-| Mock API | **백엔드 내 Mock 응답** (`MockAiClient`) | 인터넷이 끊겨도 데모가 돌아야 한다. Postman Mock은 네트워크에 묶인다. 또 `AiClient` 인터페이스 하나에 구현 둘을 두면 **교체 지점이 코드로 드러나** 발표에서 보여줄 것이 생긴다 |
+| Frontend | **React 19 · TypeScript · Vite 8**<br>React Router 7 | 팀원 사전 경험이 여기 있어 학습 시간을 아낀다. TS 타입이 `06-api-spec.md`의 응답 규격과 1:1로 대응해 **Interface First를 코드로 증명**한다. [ADR 0002](adr/0002-frontend-stack.md) |
+| Backend | **Java 21 · Spring Boot 4.1.1 · Gradle 9.7**<br>Spring Data JPA · Validation · Lombok | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
+| Database | **PostgreSQL 17 (Supabase)**<br>로컬 개발용 Docker | 로컬 설치 없이 클라우드에서 즉시 생성, 팀원 전원이 같은 DB 공유. 스키마 시험용 로컬 DB는 [`database/README.md`](../database/README.md) |
+| API 문서 | **springdoc-openapi (Swagger UI)** | `/swagger-ui.html`이 자동 생성된다. **2일차 산출물인 REST API 명세를 손으로 쓰지 않아도 된다** |
+| AI 확장 지점 | **`AiClient` 인터페이스 + `MockAiClient`** | 인터넷이 끊겨도 데모가 돌아야 해서 Mock을 백엔드 안에 둔다. 인터페이스 하나에 구현 둘을 두면 **교체 지점이 코드로 드러난다.** 엔드포인트는 `POST /api/ai-jobs` 하나이고 `job_type`으로 구분한다 [ADR 0003](adr/0003-ai-job-endpoint.md) |
+| 외부 API | **Open-Meteo** (16일 예보 + 계절 예보 7개월) | **API 키가 필요 없다.** 팀원 5명이 각자 발급받고 활성화를 기다릴 필요가 없다. AI가 아닌 일반 외부 연동이라 AI 확장 지점과 구분한다 |
 | 형상관리 | GitHub (모노레포) | FE·BE·문서를 한 저장소에서 관리, 초대·클론 1회 |
+| 설계 도구 | **PlantUML** (Use-Case · User Flow · 아키텍처)<br>Figma (와이어프레임) | `.puml` 원본이 저장소에 남아 다이어그램도 버전 관리된다 |
+
+> **상태관리 라이브러리는 넣지 않았다.** 화면 11개 규모에서는 `useState` + Context로
+> 충분하다. 필요해지면 그때 넣는다. (`Pinia`는 Vue 전용이라 React에서 동작하지 않는다)
+>
+> **HTTP 클라이언트도 넣지 않았다.** `fetch`로 충분하고, AI 폴링 훅은 직접 짜는 편이
+> 발표에서 설명하기 좋다.
 
 ## AI-Ready 설계 적용 지점
 
