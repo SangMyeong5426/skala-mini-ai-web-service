@@ -66,8 +66,11 @@ skala-mini-ai-web-service/
 
 ## 팀원 온보딩
 
-초대를 받았다면 **1번부터 순서대로** 따라간다. 1~6번은 15분, 7번(도구 설치)은
+초대를 받았다면 **1번부터 순서대로** 따라간다. 1~5번은 10분, 6번(도구 설치)은
 다운로드 시간에 달렸다.
+
+> 첫 PR을 열기 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md)의 브랜치·제목 규칙을
+> 확인한다. **CI가 검사하므로 안 맞으면 PR이 빨간불로 막힌다.**
 
 ### 1. 저장소 받고 훅 켜기
 
@@ -117,29 +120,7 @@ Claude Code가 읽는다. **두 파일은 같은 내용이고, 한쪽을 고치�
 | Backend Developer | [`backend/README.md`](backend/README.md) · [`ADR 0001`](docs/adr/0001-backend-stack.md) | `./gradlew build` 확인 → `02`·`06` 확정 후 API 구현 |
 | DevOps & Integration | [`CONTRIBUTING.md`](CONTRIBUTING.md) · `.github/` | `CODEOWNERS` 채우기 |
 
-### 5. 연습 PR 한 번 (중요)
-
-**첫날에 각자 PR을 한 번 만들어 본다.** 규칙이 실제로 어떻게 도는지 미리
-겪어 보는 것이 목적이다. 2일차에 처음 PR을 열었다가 브랜치 이름 규칙에
-막히면 그때는 고칠 시간이 없다.
-
-연습이지만 버리는 작업은 아니다. **위 표의 "첫 작업"에서 자기 담당 문서의
-`TBD` 한 칸을 채우는 것**으로 한다. 역할마다 파일이 달라 충돌하지 않는다.
-
-```bash
-git switch -c docs/my-first-change
-# 자기 담당 문서 수정
-git add -A
-git commit -m "docs(fe): 담당자 정보 기입"
-git push -u origin docs/my-first-change
-```
-
-GitHub에서 PR을 만들고 **`PR Policy` 검사가 초록불인지** 확인한 뒤 merge한다.
-
-> 브랜치는 `<type>/<소문자-kebab-case>`, 커밋·PR 제목은 `type(scope): 요약`.
-> 자세한 목록은 [`CONTRIBUTING.md`](CONTRIBUTING.md)에 있다.
-
-### 6. 환경 파일 만들기 (전원)
+### 5. 환경 파일 만들기 (전원)
 
 ```bash
 cp frontend/.env.example frontend/.env
@@ -149,7 +130,7 @@ cp backend/.env.example backend/.env
 **`.env`는 커밋되지 않는다.** DB 접속 정보와 API 키는 저장소가 아니라
 **팀 채널로** 받아서 각자 채운다.
 
-### 7. 개발 도구 설치 (전원)
+### 6. 개발 도구 설치 (전원)
 
 **역할과 무관하게 5명 전원이 둘 다 설치한다.**
 
@@ -238,9 +219,9 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 | PR에서 `Invalid branch name` | 브랜치 이름 규칙 위반. 규칙에 맞는 새 브랜치를 만들어 옮긴다 |
 | PR에서 `PR title must follow Conventional Commits` | PR 제목을 `type(scope): 요약`으로 고친다. 제목만 고치면 자동 재검사된다 |
 | FE에서 API 호출이 CORS 오류 | 백엔드 `.env`의 `CORS_ALLOWED_ORIGINS`에 `http://localhost:5173`이 있는지 확인 |
-| 서버가 `.env`가 없다고 뜸 | 6번 단계를 건너뛴 것이다 |
-| `./gradlew`가 `JAVA_HOME` 오류 | JDK 미설치 또는 경로 미설정. 7번 단계 |
-| Gradle이 "Could not find a Java installation" | toolchain이 요구하는 21이 없다. 7번 단계 |
+| 서버가 `.env`가 없다고 뜸 | 5번 단계를 건너뛴 것이다 |
+| `./gradlew`가 `JAVA_HOME` 오류 | JDK 미설치 또는 경로 미설정. 6번 단계 |
+| Gradle이 "Could not find a Java installation" | toolchain이 요구하는 21이 없다. 6번 단계 |
 | 30분 이상 막힘 | **팀 채널에 올린다.** 3일 중 30분은 크다 |
 
 ## 로컬 실행
