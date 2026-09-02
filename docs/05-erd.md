@@ -58,7 +58,7 @@ Table trips {
   created_at      timestamptz [not null, default: `now()`]
 }
 
-// ── 체크리스트 항목 (UC-03·04·07 / F-05·F-06) ─────────────
+// ── 체크리스트 항목 (UC-05·06 / F-05·F-06) ────────────────
 Table checklist_items {
   id            bigserial   [pk]
   trip_id       bigint      [not null, ref: > trips.id]     // 1:N
@@ -78,7 +78,7 @@ Table checklist_items {
   indexes { (trip_id, category) }
 }
 
-// ── 짐 사진 (UC-05 / F-03) ────────────────────────────────
+// ── 짐 사진 (UC-03 / F-03) ────────────────────────────────
 Table trip_photos {
   id            bigserial   [pk]
   trip_id       bigint      [not null, ref: > trips.id]     // 1:N
@@ -87,7 +87,7 @@ Table trip_photos {
   uploaded_at   timestamptz [not null, default: `now()`]
 }
 
-// ── 사진에서 인식된 물품 (UC-06 / F-04) ───────────────────
+// ── 사진에서 인식된 물품 (UC-04 / F-04) ───────────────────
 Table detected_objects {
   id            bigserial   [pk]
   photo_id      bigint      [not null, ref: > trip_photos.id]  // 1:N
@@ -119,7 +119,7 @@ Table item_detections {
   indexes { (checklist_item_id, detected_object_id) [pk] }
 }
 
-// ── 반입 규정 마스터 (UC-09 / F-07) ───────────────────────
+// ── 반입 규정 마스터 (UC-07 / F-07) ───────────────────────
 Table transport_rules {
   id            bigserial   [pk]
   transport     varchar(20) [not null, note: 'FLIGHT | TRAIN | BUS | CAR']
@@ -151,7 +151,7 @@ Table item_rule_checks {
   indexes { (checklist_item_id, rule_id) [pk] }
 }
 
-// ── 품목별 무게 마스터 (UC-08 / F-10) ─────────────────────
+// ── 품목별 무게 마스터 (UC-10 / F-10) ─────────────────────
 Table item_weights {
   id            bigserial   [pk]
   keyword       varchar(100)[not null, unique]
@@ -164,14 +164,14 @@ Table item_weights {
   note          text
 }
 
-// ── AI 작업 (UC-03·06·08·09·10 전부) ──────────────────────
+// ── AI 작업 (UC-04·05·07·08·10 전부) ──────────────────────
 // AI-Ready 원칙 2 (Structured Data).
 // 지금은 Mock 이 채우고, 나중에 LLM·비전 모델이 같은 자리를 채운다.
 Table ai_jobs {
   id            bigserial   [pk]
   user_id       bigint      [not null, ref: > users.id]     // 1:N
   trip_id       bigint      [ref: > trips.id,
-                 note: 'nullable — 반입 규정 확인(UC-09)은 여행 없이도 물어볼 수 있다']
+                 note: 'nullable — 반입 규정 확인(UC-07)은 여행 없이도 물어볼 수 있다']
 
   status        varchar(20) [not null, default: 'PENDING', note: 'PENDING | COMPLETED | FAILED']
   job_type      varchar(30) [not null,
@@ -202,7 +202,7 @@ Table ai_jobs {
 | `users` → `ai_jobs` | 1:N | 사용자 한 명이 여러 AI 작업을 만든다 |
 | `trips` → `checklist_items` | 1:N | 여행 하나에 준비물 여러 개 |
 | `trips` → `trip_photos` | 1:N | 여행 하나에 짐 사진 여러 장 |
-| `trips` → `ai_jobs` | 1:N | 여행 하나에 AI 작업 여러 개 (**nullable** — UC-09 반입 규정 확인은 여행 없이도 물어볼 수 있다) |
+| `trips` → `ai_jobs` | 1:N | 여행 하나에 AI 작업 여러 개 (**nullable** — UC-07 반입 규정 확인은 여행 없이도 물어볼 수 있다) |
 | `trip_photos` → `detected_objects` | 1:N | 사진 한 장에서 물품 여러 개 인식 |
 | `item_weights` → `checklist_items` | 1:N | 무게 마스터 하나가 여러 항목에 쓰인다 |
 | **`checklist_items` ↔ `detected_objects`** | **N:M** | `item_detections` 경유. **아래 참조** |
