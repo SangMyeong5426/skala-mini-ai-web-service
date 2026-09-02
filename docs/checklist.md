@@ -17,6 +17,11 @@
 
 ### 개발환경 세팅
 
+> **순서.** 도구 설치·협업 설정·연습 PR은 위 "기획"과 **병행해도 된다.**
+> 스캐폴딩과 DB 프로젝트 생성도 주제와 무관하므로 먼저 해 둔다.
+> 다만 **`schema.sql`·화면·엔터티처럼 설계에 의존하는 작업은 `01`·`02`·`03`이
+> 나온 뒤에** 시작한다. 화면과 스키마를 모르는 채 만들면 두 번 일한다.
+
 - [x] 저장소 구조 및 협업 설정 (이 저장소)
 - [x] GitHub 저장소 생성 및 push
 - [x] 팀원 전원 Collaborator 초대 — 5명 전원 `write` 권한, 수락 완료
@@ -24,14 +29,15 @@
 - [ ] **전원 연습 PR 1회** — 브랜치·PR 규칙을 1일차에 미리 겪어 둔다
 - [x] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
 - [ ] PM·DevOps 백업 지정 — 3일차에 두 역할이 동시에 피크를 친다 ([`00-team.md`](00-team.md))
-- [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java / Spring Boot 3
+- [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java 21 / Spring Boot 4.1.1
 - [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
 - [x] **React 사용 가능 여부 교수님께 확인** — 사용 가능
-- [ ] **JDK 21 설치** — BE·DevOps 담당과 발표 PC는 필수. 밀리면 BE가 통째로 밀린다
-- [ ] **Node.js 20+ 설치** — FE 담당
-- [ ] FE 프로젝트 생성 (React + TS, Vite)
-- [ ] BE 프로젝트 생성 (Spring Boot 3, start.spring.io)
-- [ ] DB 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)
+- [ ] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 밀리면 BE가 통째로 밀린다
+- [ ] **Node.js 20+ 설치** — **역할과 무관하게 5명 전원**
+- [x] FE 프로젝트 생성 (Vite 8 · React 19 · TS 6) — 검증 완료
+- [x] BE 프로젝트 생성 (Spring Boot 4.1.1 · Java 21) — `./gradlew build` 통과 확인
+- [ ] DB 프로젝트 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)
+- [ ] 전원 `npm run dev` · `./gradlew build` 한 번씩 돌려 보기 — **발표 당일에 처음 받지 않는다**
 
 ---
 

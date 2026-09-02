@@ -9,7 +9,7 @@
 ```text
 ┌─────────────────┐         ┌──────────────────────┐         ┌───────────────┐
 │   Frontend      │  HTTP   │      Backend         │   SQL   │  PostgreSQL   │
-│   React + TS    │ ──────▶ │      Spring Boot 3   │ ──────▶ │  Supabase/Neon│
+│   React + TS    │ ──────▶ │      Spring Boot 4   │ ──────▶ │  Supabase/Neon│
 │                 │  JSON   │                      │         │   (Cloud)     │
 │  - 라우팅        │ ◀────── │  - REST Controller   │ ◀────── │               │
 │  - 화면 컴포넌트  │         │  - 서비스 로직        │         │  - 테이블      │
@@ -39,7 +39,7 @@
 | 계층 | 기술 | 선택 근거 |
 | --- | --- | --- |
 | Frontend | React + TypeScript (Vite) | 팀원 사전 경험이 여기 있어 학습 시간을 아낀다. TS 타입이 `06-api-spec.md`의 응답 규격과 1:1로 대응해 **Interface First를 코드로 증명**한다. [ADR 0002](adr/0002-frontend-stack.md) |
-| Backend | Java 21 / Spring Boot 3 | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
+| Backend | Java 21 / Spring Boot 4.1.1 | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
 | Database | PostgreSQL (Supabase 또는 Neon) | 로컬 설치 없이 클라우드에서 즉시 생성, 팀원 전원이 같은 DB 공유 |
 | Mock API | TBD (Postman Mock Server 또는 백엔드 내 Mock 응답) | TBD |
 | 형상관리 | GitHub (모노레포) | FE·BE·문서를 한 저장소에서 관리, 초대·클론 1회 |

@@ -17,11 +17,15 @@
 | --- | --- | --- | --- |
 | **PM** | 박상명 | 전체 일정·진행 추적, 발표 총괄, 데모 시연 준비 | 최종 발표 슬라이드 |
 | **Product/UX Designer** | 문성도, 박현수 | Use-Case 정의, User Flow 설계, 와이어프레임 | `02-use-case.md`, `03-wireframe.md`, Figma |
-| **Data Architect** | 최인서, 손현아, 박현수 | DB 데이터 모델링, 테이블 관계(1:N, N:M) 정의 | `05-erd.md`, `database/`, DB 구성 |
+| **Data Architect** | 최인서, 손현아, 박현수 | DB 데이터 모델링, 테이블 관계(1:N, N:M) 정의 | `05-erd.md`, `database/`, DB 생성 (`01`~`03` 확정 후) |
 | **API Architect** | 박상명, 최인서, 손현아 | REST API 규격 작성, Mock 서버 세팅, AI 프롬프트·JSON 규격 정의 | `06-api-spec.md`, `07-ai-ready.md`, Postman |
-| **Frontend Developer** | 박상명, 문성도, 박현수 | FE 개발환경 구축, 레이아웃·라우팅, 핵심 화면 1~2개 | `frontend/` |
-| **Backend Developer** | 최인서, 손현아, 문성도 | BE 개발환경 구축, DB 연동, API 일부 실구현 | `backend/` |
+| **Frontend Developer** | 박상명, 문성도, 박현수 | 레이아웃·라우팅, 핵심 화면 1~2개 (`01`~`03` 확정 후) | `frontend/` |
+| **Backend Developer** | 최인서, 손현아, 문성도 | DB 연동, API 일부 실구현 (`02`·`06` 확정 후) | `backend/` |
 | **DevOps & Integration** | 박상명 | GitHub 저장소 관리, E2E 연동 테스트·오류 검증 | 저장소 세팅, E2E 테스트 결과 |
+
+> **JDK 21 · Node.js 20+ 설치는 역할과 무관하게 5명 전원이 한다.**
+> 도구 설치는 위 표의 역할 분담과 별개다. ([README 7단계](../README.md))
+> FE·BE 스캐폴딩은 이미 끝나 있고, 위 표의 구현 작업은 `01`~`03` 확정 후에 시작한다.
 
 ## 사람 기준
 

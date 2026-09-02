@@ -75,7 +75,7 @@
 - [x] `docs/04-architecture.md`의 기술 스택 표와 다이어그램 수정
 - [x] `README.md`의 저장소 구조·역할 표 수정
 - [x] **교수님께 React 사용 가능 여부 확인** — 1일차에 확인, 사용 가능
-- [ ] `frontend/`에 Vite + React + TS 스캐폴딩
+- [x] `frontend/`에 Vite + React + TS 스캐폴딩 — 빌드·dev 서버 확인 완료
 - [ ] `06-api-spec.md`의 응답 규격을 `src/types/api.ts`로 옮기기
 - [ ] `07-ai-ready.md`의 출력 스키마를 타입으로 선언
 

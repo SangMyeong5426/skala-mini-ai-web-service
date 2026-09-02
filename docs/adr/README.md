@@ -36,5 +36,5 @@
 
 ## 기록 목록
 
-- [ADR 0001: 백엔드 스택 선택](0001-backend-stack.md) — `Accepted` · Java / Spring Boot 3
+- [ADR 0001: 백엔드 스택 선택](0001-backend-stack.md) — `Accepted` · Java 21 / Spring Boot 4.1.1
 - [ADR 0002: 프런트엔드 스택 선택](0002-frontend-stack.md) — `Accepted` · React + TypeScript (Vite)
