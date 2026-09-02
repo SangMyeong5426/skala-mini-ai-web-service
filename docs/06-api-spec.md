@@ -144,6 +144,11 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 **`input`·`output`의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema로
 고정한다.** 이 문서는 봉투(HTTP 계약)만 정한다.
 
+> ⚠️ **아래 `output` 예시는 잠정이다.** `07-ai-ready.md`의 출력 Schema가 아직
+> 확정되지 않았다. 확정되면 이 예시를 그쪽에 맞춘다. **그 전까지 프런트엔드는
+> `output` 내부 필드를 확정된 계약으로 취급하지 않는다** — 봉투(`jobId`·`status`·
+> `pollAfterMs`)만 믿고 쓴다.
+
 ### `POST /api/ai-jobs` — AI 작업 생성
 
 작업을 **접수만** 하고 즉시 응답한다. 결과를 기다리지 않는다.
@@ -168,7 +173,7 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 | 필드 | 필수 | 설명 |
 | --- | --- | --- |
 | `jobType` | ✅ | 위 4종 중 하나. 다른 값이면 `400` |
-| `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다** (UC-10 챗봇, 비회원). 나머지는 필수 |
+| `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다.** UC-09(반입 규정 확인)는 여행 등록 전에도 물어볼 수 있다. 나머지는 필수<br>*(챗봇·비회원은 [`01-service-plan.md`](01-service-plan.md)의 "하지 않을 것"이라 근거로 들지 않는다)* |
 | `input` | ✅ | `jobType` 별 스키마는 `07-ai-ready.md` |
 
 **Response — `202 Accepted`**
@@ -283,19 +288,21 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
                        { "detectionId": 8, "name": "검정 파우치", "matchConfidence": 0.31 }
                      ] }],
     "notInPhoto": [{ "itemId": 1, "name": "여권", "priority": "REQUIRED" }],
-    "extra":      [{ "detectionId": 7, "name": "가위", "confidence": 0.91 }],
+    "extra":      [{ "detectionId": 7, "name": "가위", "confidence": 0.91,
+                     "verdict": "NEED_MORE_INFO", "missingInfo": "날 길이(cm)" }],
     "completionRate": 0.5
   },
   "weight": {
-    "minG": 4900, "typicalG": 6100, "maxG": 8300,
+    "minG": 4570, "typicalG": 5410, "maxG": 6890,
     "limitG": 23000,
     "verdict": "ROOM",
     "confidence": "MEDIUM",
-    "confidenceReason": "미식별 항목 2개, 고밀도 물품 1개",
-    "excludedCount": 2,
+    "confidenceReason": "사진에서 미확인 4개, 승인 전 1개",
+    "excludedCount": 5,
     "contributions": [
-      { "name": "겉옷", "typicalG": 600, "qty": 1 },
-      { "name": "하의", "typicalG": 400, "qty": 2 }
+      { "name": "상의", "typicalG": 200, "qty": 4, "subtotalG": 800 },
+      { "name": "하의", "typicalG": 400, "qty": 2, "subtotalG": 800 },
+      { "name": "보조배터리", "typicalG": 280, "qty": 1, "subtotalG": 280 }
     ]
   },
   "customs": [
@@ -305,7 +312,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
       "checkedAt": "2026-09-02" },
     { "itemId": 8, "name": "화장품", "verdict": "NEED_MORE_INFO",
       "missingInfo": "용량(ml)",
-      "reason": "액체류는 100ml 이하 용기여야 기내 반입됩니다.",
+      "reason": "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
       "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
       "checkedAt": "2026-09-02" }
   ],
@@ -329,7 +336,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 ```json
 // Request
-{ "approved": true, "name": "선크림", "qty": 1, "matchedItemId": 8 }
+{ "approved": true, "name": "선크림", "qty": 1, "matchedItemIds": [8] }
 ```
 
 ```json
@@ -340,6 +347,150 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 > `linkedItems` 가 배열인 이유는 **N:M** 이기 때문이다. 인식 결과 하나가 여러
 > 체크리스트 항목에 연결될 수 있다. ([`05-erd.md`](05-erd.md))
+
+**연결 수정 규약 — 전체 교체다.**
+
+| 요청 | 결과 |
+| --- | --- |
+| `matchedItemIds: [8]` | 이 인식 결과의 연결을 **`[8]` 하나로 교체**한다. 기존 연결은 지운다 |
+| `matchedItemIds: [8, 9]` | 두 항목에 연결한다 |
+| `matchedItemIds: []` | **연결을 모두 해제**한다 |
+| 필드 자체를 안 보냄 | 연결을 건드리지 않는다. `approved`·`name`·`qty` 만 바꾼다 |
+
+**추가·삭제가 아니라 배열 전체 교체**로 정한 이유는 화면 때문이다. `S-06`에서
+사용자가 후보 목록의 체크박스를 조작하면 **그 시점의 전체 선택 상태**가 넘어온다.
+증분으로 보내려면 프런트엔드가 이전 상태를 기억해야 하는데, 폴링으로 갱신되는
+화면에서는 그 가정이 깨진다.
+
+```json
+// Request — 필드명이 matchedItemId 가 아니라 matchedItemIds 다
+{ "approved": true, "name": "선크림", "qty": 1, "matchedItemIds": [8] }
+```
+
+## 도메인 API 요청·응답
+
+**필드명이 계약이다.** 여기가 비면 FE와 BE가 같은 엔드포인트를 다른 필드명으로
+구현해도 이 문서로 판별할 수 없다.
+
+### `POST /api/trips` — 여행 등록
+
+```json
+// Request
+{
+  "origin": "서울",
+  "destination": "도쿄",
+  "countryCode": "JP",
+  "startDate": "2026-10-01",
+  "endDate": "2026-10-04",
+  "purpose": "TOUR",
+  "transport": "FLIGHT",
+  "airline": "대한항공",
+  "departureAirport": "ICN",
+  "arrivalAirport": "NRT",
+  "bagType": "CARRY_ON",
+  "bagEmptyG": 3200,
+  "weightLimitG": 23000,
+  "note": "친구 2명, 디즈니랜드"
+}
+```
+
+| 필드 | 필수 | 값 |
+| --- | --- | --- |
+| `origin` `destination` | ✅ | **이동수단과 무관하게 필수** |
+| `startDate` `endDate` | ✅ | `startDate <= endDate` 아니면 `400` |
+| `purpose` | ✅ | `TOUR` `BUSINESS` `REST` `STUDY` |
+| `transport` | ✅ | `FLIGHT` `TRAIN` `BUS` `CAR` |
+| `airline` `departureAirport` `arrivalAirport` | — | 비우면 **일반 기준만 적용**되고 정확도가 낮아진다 |
+| `bagType` | — | `CARRY_ON` `MEDIUM` `LARGE` |
+
+```http
+HTTP/1.1 201 Created
+Location: /api/trips/12
+```
+
+```json
+{ "tripId": 12, "origin": "서울", "destination": "도쿄",
+  "startDate": "2026-10-01", "endDate": "2026-10-04",
+  "transport": "FLIGHT", "status": "DRAFT", "createdAt": "2026-09-02T05:30:00Z" }
+```
+
+### `GET /api/trips` — 목록 (화면 `S-02`)
+
+```json
+{
+  "trips": [
+    { "tripId": 12, "origin": "서울", "destination": "도쿄",
+      "startDate": "2026-10-01", "endDate": "2026-10-04",
+      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 }
+  ]
+}
+```
+
+### `GET /api/trips/{tripId}/items` — 체크리스트 (화면 `S-04`)
+
+```json
+{
+  "items": [
+    { "itemId": 1, "name": "여권", "category": "DOCUMENT", "qty": 1,
+      "priority": "REQUIRED", "source": "RULE", "checkStatus": "NOT_IN_PHOTO" },
+    { "itemId": 5, "name": "충전기", "category": "ELECTRONIC", "qty": 1,
+      "priority": "REQUIRED", "source": "AI", "checkStatus": "PREPARED" }
+  ],
+  "completionRate": 0.5
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `category` | `DOCUMENT` `CLOTHING` `ELECTRONIC` `TOILETRY` `MEDICINE` `ETC` |
+| `priority` | `REQUIRED` `RECOMMENDED` |
+| `source` | `RULE` `AI` `USER` — 누가 넣었는지 |
+| `checkStatus` | `UNCHECKED` `PREPARED` `NEEDS_CHECK` **`NOT_IN_PHOTO`** |
+
+### `POST /api/trips/{tripId}/items` — 항목 추가
+
+```json
+// Request
+{ "name": "우산", "category": "ETC", "qty": 1, "priority": "RECOMMENDED" }
+```
+
+`201 Created` + `Location: /api/trips/12/items/11`. `source` 는 서버가 `USER` 로 채운다.
+
+### `PATCH /api/trips/{tripId}/items/{itemId}` — 수정·완료 처리
+
+```json
+// Request — 보낸 필드만 바꾼다
+{ "checkStatus": "PREPARED", "qty": 2 }
+```
+
+### `POST /api/trips/{tripId}/photos` — 사진 업로드
+
+`multipart/form-data`. 파트 이름은 `files`(복수 가능), `bagKind`(`CABIN`|`CHECKED`).
+
+```json
+// 201 Created
+{ "photos": [{ "photoId": 1, "fileUrl": "/uploads/demo/bag-01.jpg",
+               "bagKind": "CABIN", "uploadedAt": "2026-09-02T05:31:00Z" }] }
+```
+
+### `GET /api/rules?transport=FLIGHT&keyword=보조배터리`
+
+```json
+{
+  "rules": [
+    { "ruleId": 1, "verdict": "CABIN_OK", "conditionNote": "100Wh 이하",
+      "description": "보조배터리는 기내 반입만 가능합니다. 위탁수하물로 부칠 수 없습니다.",
+      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+      "checkedAt": "2026-09-02" }
+  ]
+}
+```
+
+`transport` 는 필수다. 없으면 `400`.
+
+> **필드명은 `camelCase`, DB 컬럼은 `snake_case`다.** 경계에서 변환한다.
+> `origin` · `checkStatus` · `bagEmptyG` 처럼 [`05-erd.md`](05-erd.md)의 컬럼과
+> 1:1로 대응하므로 어느 쪽을 봐도 같은 것을 가리킨다.
 
 ## Mock 서버 운영 방식
 
