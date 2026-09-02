@@ -1,14 +1,38 @@
 # Backend
 
-**스택 미정.** [ADR 0001](../docs/adr/0001-backend-stack.md)에서 결정한다.
+**Java 17+ / Spring Boot 3.** [ADR 0001](../docs/adr/0001-backend-stack.md)에서 확정했다.
 
 ## 아직 비어 있다
 
-1일차에 백엔드 스택을 확정한 뒤 이 폴더에 스캐폴딩한다.
-**Backend Developer가 담당한다.**
+1일차에 이 폴더에 스캐폴딩한다. **Backend Developer가 담당한다.**
 
-확정 후 이 README를 실행 방법으로 교체하고, ADR 0001의 후속 작업 체크리스트를
-따라간다.
+[start.spring.io](https://start.spring.io)에서 아래 구성으로 생성한다.
+
+| 항목 | 값 |
+| --- | --- |
+| Project | Gradle - Groovy |
+| Language | Java |
+| Spring Boot | 3.x |
+| Java | 17 이상 |
+| Dependencies | Spring Web · Spring Data JPA · PostgreSQL Driver · Lombok · Validation |
+
+여기에 Swagger UI용 `springdoc-openapi-starter-webmvc-ui` 를 `build.gradle`에
+추가한다. **API 명세서가 2일차 산출물이므로 이게 있으면 `/swagger-ui.html`이
+공짜로 나온다.**
+
+생성 후 이 README를 실행 방법으로 교체한다.
+
+## ⚠️ 먼저 JDK부터
+
+**개발 PC에 JDK가 설치돼 있지 않다.** (ADR 0001 배경) 팀 전원이 JDK 17+를
+설치해야 하고, **이게 밀리면 뒤가 전부 밀린다.** 1일차에 가장 먼저 끝낸다.
+
+```bash
+java -version   # 17 이상이 나와야 한다
+```
+
+Gradle 첫 빌드가 느리므로 **각자 미리 한 번 돌려 둔다.** 발표 당일에 처음
+받지 않는다.
 
 ## 환경 변수
 
@@ -18,13 +42,27 @@
 cp .env.example .env
 ```
 
+**Spring Boot는 `.env`를 스스로 읽지 않는다.** `me.paulschwarz:spring-dotenv`
+의존성을 넣거나, 실행 구성에서 환경 변수로 주입한다. `application.yml`에서는
+`${PORT}` 처럼 참조한다.
+
 DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한다.**
+
+> JDBC URL 접두사는 `jdbc:postgresql://` 다. Supabase·Neon 대시보드가 주는
+> `postgresql://USER:PASSWORD@HOST/DB` 를 그대로 붙여넣으면 뜨지 않는다.
+> 계정 정보는 `DATABASE_USERNAME` · `DATABASE_PASSWORD`로 분리한다.
 
 ## 구현 시 지킬 것
 
+### 계층을 지킨다
+
+Controller → Service → Repository. **이 스택을 고른 이유가 여기에 있다.**
+5명이 각자 짜도 구조가 흩어지지 않고, 발표 4번 섹션에서 폴더 구조 한 장으로
+설명이 끝난다. Entity를 Controller까지 내보내지 말고 DTO로 변환한다.
+
 ### CORS
 
-프런트엔드가 `http://localhost:5173`에서 뜨고 백엔드는 다른 포트에서 뜬다.
+프런트엔드가 `http://localhost:5173`에서 뜨고 백엔드는 `8080`에서 뜬다.
 개발용 origin을 허용해 두지 않으면 2일차 FE-BE 연동이 브라우저에서 막힌다.
 **연동 실패의 가장 흔한 원인이다.**
 
@@ -37,10 +75,14 @@ DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한�
   그러면 AI-Ready 설계가 무너진다.
 - `POST /api/ai-jobs`는 `202 Accepted`로 즉시 응답하고, 결과는
   `GET /api/ai-jobs/{id}`로 조회하게 한다. Mock이라도 이 구조를 지킨다.
+  **Mock은 즉시 끝나므로 `@Async`나 큐가 없어도 된다.** 구조만 지키면
+  AI-Ready 원칙 3(Asynchronous Pipeline)을 만족한다.
 - `AI_PROVIDER=mock`이면 Mock 응답을, 다른 값이면 실제 API를 호출하도록
-  분기점을 만들어 둔다. 지금은 `mock` 쪽만 구현한다.
+  분기점을 만들어 둔다. 인터페이스 하나에 구현 둘(`MockAiClient`,
+  `RealAiClient`)을 두고 지금은 `mock` 쪽만 구현한다.
+  **이 인터페이스가 아키텍처 다이어그램의 "교체되는 상자"다.**
 
 ### 비밀값
 
-API 키·DB 비밀번호를 코드나 설정 파일에 직접 쓰지 않는다.
+API 키·DB 비밀번호를 코드나 `application.yml`에 직접 쓰지 않는다.
 전부 환경 변수로 읽는다. (AI-Ready 원칙 4: Security & Config Isolation)

@@ -1,6 +1,6 @@
 # Frontend
 
-Vue 3 + Vite.
+**React + TypeScript (Vite).** [ADR 0002](../docs/adr/0002-frontend-stack.md)에서 확정했다.
 
 ## 아직 비어 있다
 
@@ -8,10 +8,15 @@ Vue 3 + Vite.
 **Frontend Developer가 담당한다.**
 
 ```bash
-npm create vue@latest .
+npm create vite@latest . -- --template react-ts
 ```
 
 생성 후 이 README를 실행 방법으로 교체한다.
+
+> ⚠️ 과정 자료(PDF 8쪽)의 프런트엔드 스택 목록에는 **Vue.js와 HTML/CSS/JS만**
+> 있다. React 사용 가능 여부를 **1일차에 교수님께 확인한다.** 불가하면 Vue로
+> 되돌린다 — 화면이 1~2개뿐이라 되돌리는 비용은 낮지만 **2일차 전에** 판단해야
+> 한다. 자세한 내용은 ADR 0002의 "이 결정이 지는 위험".
 
 ## 실행
 
@@ -43,3 +48,16 @@ AI API 키 같은 것은 백엔드에만 둔다.
   마찬가지다. 그래야 나중에 실제 AI를 붙일 때 이 코드를 고치지 않는다.
   (`docs/06-api-spec.md`의 AI 확장 지점 엔드포인트 참조)
 - 로딩·빈 상태·오류 상태 화면을 빠뜨리지 않는다.
+
+### 타입을 규격의 사본으로 둔다
+
+**TypeScript를 고른 이유가 여기에 있다.** ([ADR 0002](../docs/adr/0002-frontend-stack.md))
+
+- `docs/06-api-spec.md`의 응답 규격을 `src/types/api.ts`에 타입으로 옮긴다.
+- `docs/07-ai-ready.md`의 출력 JSON Schema도 같은 파일에 타입으로 선언한다.
+- **명세가 바뀌면 타입도 같은 PR에서 바꾼다.** 문서와 코드가 짝이라는 규칙이
+  여기에도 그대로 적용된다.
+
+이렇게 두면 *"백엔드가 Mock에서 실제 LLM으로 바뀌어도 프런트엔드는 이 타입을
+그대로 쓴다"* 를 발표에서 파일 하나로 보여줄 수 있다. AI-Ready 원칙 1
+(Interface First)의 증거다.

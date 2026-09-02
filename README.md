@@ -26,10 +26,10 @@ TBD — 서비스 한 줄 정의. 확정되면 [`docs/01-service-plan.md`](docs/
 
 ```text
 skala-mini-ai-web-service/
-├── frontend/               Vue 3 + Vite            ← Frontend Developer
+├── frontend/               React + TS (Vite)       ← Frontend Developer
 │   ├── .env.example
 │   └── README.md
-├── backend/                스택 미정 (ADR 0001)     ← Backend Developer
+├── backend/                Java / Spring Boot 3    ← Backend Developer
 │   ├── .env.example
 │   └── README.md
 ├── database/               PostgreSQL 스키마         ← Data Architect
@@ -57,7 +57,7 @@ skala-mini-ai-web-service/
 
 데이터베이스 서버는 클라우드(Supabase 또는 Neon)에 둔다. 저장소에는 스키마
 정의만 두고 데이터 파일은 두지 않는다. `database/`는 백엔드 스택과 무관하므로
-ADR 0001 확정 전에도 작업할 수 있다.
+JDK 설치나 스캐폴딩을 기다리지 않고 바로 작업할 수 있다.
 
 ## 팀원 온보딩
 
@@ -107,8 +107,8 @@ Claude Code가 읽는다. **두 파일은 같은 내용이고, 한쪽을 고치�
 | Product/UX Designer | [`docs/01`](docs/01-service-plan.md) · [`02`](docs/02-use-case.md) · [`03`](docs/03-wireframe.md) | 아이디어·페르소나 정리 |
 | Data Architect | [`docs/05-erd.md`](docs/05-erd.md) · [`database/`](database/) | ERD 초안, `schema.sql` |
 | API Architect | [`docs/06`](docs/06-api-spec.md) · [`07`](docs/07-ai-ready.md) | 엔드포인트 목록 초안 |
-| Frontend Developer | [`frontend/README.md`](frontend/README.md) · [`docs/03`](docs/03-wireframe.md) | Vue 프로젝트 생성 |
-| Backend Developer | [`backend/README.md`](backend/README.md) · [`ADR 0001`](docs/adr/0001-backend-stack.md) | 스택 결정 후 프로젝트 생성 |
+| Frontend Developer | [`frontend/README.md`](frontend/README.md) · [`docs/03`](docs/03-wireframe.md) | React + TS 프로젝트 생성 |
+| Backend Developer | [`backend/README.md`](backend/README.md) · [`ADR 0001`](docs/adr/0001-backend-stack.md) | **JDK 17+ 설치** 후 Spring Boot 프로젝트 생성 |
 | DevOps & Integration | [`CONTRIBUTING.md`](CONTRIBUTING.md) · `.github/` | `CODEOWNERS` 채우기 |
 
 ### 5. 연습 PR 한 번 (중요)
@@ -163,7 +163,7 @@ cp backend/.env.example backend/.env
 | | 실행 | 포트 |
 | --- | --- | --- |
 | Frontend | `cd frontend && npm run dev` | 5173 |
-| Backend | TBD | TBD |
+| Backend | `cd backend && ./gradlew bootRun` | 8080 |
 
 ## 진행 상황
 
@@ -183,6 +183,13 @@ cp backend/.env.example backend/.env
 
 | 항목 | 문서 | 기한 |
 | --- | --- | --- |
-| 백엔드 스택 (FastAPI / Spring Boot) | [ADR 0001](docs/adr/0001-backend-stack.md) | 1일차 |
 | 서비스 아이디어 | [`docs/01-service-plan.md`](docs/01-service-plan.md) | 1일차 |
 | 데이터베이스 (Supabase / Neon) | — | 1일차 |
+| **React 사용 가능 여부 교수님 확인** | [ADR 0002](docs/adr/0002-frontend-stack.md) | 1일차 |
+
+## 확정된 결정
+
+| 항목 | 결정 | 문서 |
+| --- | --- | --- |
+| 백엔드 스택 | Java 17+ / Spring Boot 3 · 포트 `8080` | [ADR 0001](docs/adr/0001-backend-stack.md) |
+| 프런트엔드 스택 | React + TypeScript (Vite) · 포트 `5173` | [ADR 0002](docs/adr/0002-frontend-stack.md) |
