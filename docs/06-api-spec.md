@@ -144,10 +144,9 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 **`input`·`output`의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema로
 고정한다.** 이 문서는 봉투(HTTP 계약)만 정한다.
 
-> ⚠️ **아래 `output` 예시는 잠정이다.** `07-ai-ready.md`의 출력 Schema가 아직
-> 확정되지 않았다. 확정되면 이 예시를 그쪽에 맞춘다. **그 전까지 프런트엔드는
-> `output` 내부 필드를 확정된 계약으로 취급하지 않는다** — 봉투(`jobId`·`status`·
-> `pollAfterMs`)만 믿고 쓴다.
+> **`input`·`output` 의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema 가 정본이다.**
+> 아래 예시는 그 스키마로 검증했다 — 요청 예시의 `input` 과 완료 예시의 `output` 이
+> 그대로 통과한다 (07 "기계 검증"). 이 예시를 고치면 07 의 스키마도 같이 고친다.
 
 ### `POST /api/ai-jobs` — AI 작업 생성
 

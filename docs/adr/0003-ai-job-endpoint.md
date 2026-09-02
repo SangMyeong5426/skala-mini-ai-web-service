@@ -80,7 +80,7 @@ GET  /api/ai-jobs/{id}  →  200 (PENDING | COMPLETED | FAILED)
 
 - [x] `backend/.env.example`·`application.properties`의 AI 설정은 그대로 쓴다
 - [x] `docs/06-api-spec.md`의 엔드포인트 목록에 `job_type` 4종을 명시
-- [ ] `docs/07-ai-ready.md`에 `job_type`별 입출력 JSON Schema 작성 (API Architect)
+- [x] `docs/07-ai-ready.md`에 `job_type`별 입출력 JSON Schema 작성 (API Architect) — 2026-09-03
 - [ ] 기능 명세의 `POST /api/ai/*` 3개와 `GET /api/jobs/{id}`를 이 규격으로 수정
 - [x] `ai_jobs`에 `trip_id`(nullable) 추가 — 규정 질의는 여행 없이도 가능하다 (Data Architect)
 

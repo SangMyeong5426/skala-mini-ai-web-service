@@ -13,7 +13,7 @@
 - [x] Teaming, R&R 정의 → [`00-team.md`](00-team.md) — 7개 역할 전부 채움
 - [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 4종
 - [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개 + UC-07 부분 연동
-- [ ] AI 입출력 스키마 → `07-ai-ready.md`
+- [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema, 기계 검증 39항목
 - [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-01~10
 - [ ] **Figma 와이어프레임** — 데모 대상 2개는 정성껏, 나머지는 스케치
 
@@ -52,8 +52,8 @@
 - [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
 - [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{id}` · `jobType` 4종
-- [ ] AI 입출력 JSON Schema 확정 → `07-ai-ready.md`
-- [ ] 프롬프트 설계 및 Playground 검증 → `07-ai-ready.md`
+- [x] AI 입출력 JSON Schema 확정 → [`07-ai-ready.md`](07-ai-ready.md) — 06 예시·`schema.sql` enum 과 기계 대조
+- [ ] 프롬프트 설계 및 Playground 검증 → [`07-ai-ready.md`](07-ai-ready.md) — 프롬프트는 작성됨, **Playground 실행은 TBD** (10분)
 - [ ] FE ↔ BE API 연동
 - [ ] BE ↔ DB 연결
 - [x] 시스템 아키텍처 다이어그램 완성 → [`04-architecture.md`](04-architecture.md) — PlantUML 원본 + PNG · SVG
