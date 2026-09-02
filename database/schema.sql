@@ -76,6 +76,10 @@ CREATE TABLE trips (
     id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id           BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
+    -- 출발지·도착지는 이동수단과 무관하게 필수다.
+    -- docs/03-wireframe.md S-03 · docs/02-use-case.md UC-02 기본 흐름 1단계.
+    -- departure_airport 는 항공 전용이라 기차·버스·자차 여행의 출발지를 담지 못한다.
+    origin            VARCHAR(100) NOT NULL,
     destination       VARCHAR(100) NOT NULL,
     country_code      CHAR(2),
     start_date        DATE         NOT NULL,
@@ -243,7 +247,8 @@ CREATE TABLE ai_jobs (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id         BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    -- nullable 이다. 반입 규정 질의(UC-10)는 여행을 등록하지 않아도 할 수 있다.
+    -- nullable 이다. 반입 규정 확인(UC-09)은 여행을 등록하지 않아도 물어볼 수 있다.
+    -- (UC-10 챗봇은 01-service-plan.md 의 "하지 않을 것"이므로 근거로 들지 않는다)
     trip_id         BIGINT       REFERENCES trips(id) ON DELETE CASCADE,
 
     -- AI-Ready 원칙 3 (Asynchronous Pipeline): 상태를 DB 에 둬야

@@ -37,6 +37,7 @@ Table trips {
   id              bigserial   [pk]
   user_id         bigint      [not null, ref: > users.id]   // 1:N
 
+  origin          varchar(100)[not null, note: '출발 도시. 이동수단과 무관하게 필수']
   destination     varchar(100)[not null, note: '도착 도시']
   country_code    char(2)     [note: 'ISO 3166-1 alpha-2']
   start_date      date        [not null]
@@ -170,7 +171,7 @@ Table ai_jobs {
   id            bigserial   [pk]
   user_id       bigint      [not null, ref: > users.id]     // 1:N
   trip_id       bigint      [ref: > trips.id,
-                 note: 'nullable — 반입 규정 질의는 여행 없이도 가능하다 (UC-10)']
+                 note: 'nullable — 반입 규정 확인(UC-09)은 여행 없이도 물어볼 수 있다']
 
   status        varchar(20) [not null, default: 'PENDING', note: 'PENDING | COMPLETED | FAILED']
   job_type      varchar(30) [not null,
@@ -201,7 +202,7 @@ Table ai_jobs {
 | `users` → `ai_jobs` | 1:N | 사용자 한 명이 여러 AI 작업을 만든다 |
 | `trips` → `checklist_items` | 1:N | 여행 하나에 준비물 여러 개 |
 | `trips` → `trip_photos` | 1:N | 여행 하나에 짐 사진 여러 장 |
-| `trips` → `ai_jobs` | 1:N | 여행 하나에 AI 작업 여러 개 (**nullable** — UC-10은 여행 없이도 돈다) |
+| `trips` → `ai_jobs` | 1:N | 여행 하나에 AI 작업 여러 개 (**nullable** — UC-09 반입 규정 확인은 여행 없이도 물어볼 수 있다) |
 | `trip_photos` → `detected_objects` | 1:N | 사진 한 장에서 물품 여러 개 인식 |
 | `item_weights` → `checklist_items` | 1:N | 무게 마스터 하나가 여러 항목에 쓰인다 |
 | **`checklist_items` ↔ `detected_objects`** | **N:M** | `item_detections` 경유. **아래 참조** |

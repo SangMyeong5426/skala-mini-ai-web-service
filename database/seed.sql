@@ -43,6 +43,10 @@ INSERT INTO transport_rules (transport, keyword, verdict, condition_note, descri
    '100Wh를 넘으면 항공사 사전 승인이 필요합니다.',
    'https://www.airport.kr/ap_ko/905/subview.do', '2026-09-02'),
 
+  ('FLIGHT', '보조배터리', 'CHECKED_FORBIDDEN', '160Wh 초과',
+   '160Wh를 넘는 보조배터리는 기내·위탁 모두 반입할 수 없습니다.',
+   'https://www.airport.kr/ap_ko/905/subview.do', '2026-09-02'),
+
   ('FLIGHT', '액체',       'CABIN_OK',       '용기당 100ml 이하, 총 1L 이하',
    '액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.',
    'https://www.airport.kr/ap_ko/905/subview.do', '2026-09-02'),
@@ -65,10 +69,10 @@ INSERT INTO transport_rules (transport, keyword, verdict, condition_note, descri
 
 
 -- ── 여행 (김지우 · 도쿄 3박 4일) ──────────────────────────
-INSERT INTO trips (user_id, destination, country_code, start_date, end_date,
+INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_date,
                    purpose, transport, airline, departure_airport, arrival_airport,
                    bag_type, bag_empty_g, weight_limit_g, note, status) VALUES
-  (1, '도쿄', 'JP', '2026-10-01', '2026-10-04',
+  (1, '서울', '도쿄', 'JP', '2026-10-01', '2026-10-04',
    'TOUR', 'FLIGHT', '대한항공', 'ICN', 'NRT',
    'CARRY_ON', 3200, 23000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
 
@@ -137,16 +141,13 @@ INSERT INTO item_rule_checks (checklist_item_id, rule_id, verdict, missing_info)
   (8, 4, 'NEED_MORE_INFO', '용량(ml)');    -- 화장품     ← 액체 100ml 초과 규정
 
 
--- ── AI 작업 이력 ──────────────────────────────────────────
--- 데모에서 "이미 한 번 돌린 결과"를 보여주기 위한 것이다.
-INSERT INTO ai_jobs (user_id, trip_id, status, job_type, input_payload, output_payload,
-                     model_name, completed_at) VALUES
-  (1, 1, 'COMPLETED', 'PACKING_LIST',
-   '{"destination":"도쿄","startDate":"2026-10-01","endDate":"2026-10-04","transport":"FLIGHT","note":"친구 2명, 디즈니랜드"}',
-   '{"items":[{"name":"여권","category":"DOCUMENT","qty":1,"priority":"REQUIRED"}],"tips":["일본 콘센트는 A타입입니다."]}',
-   'mock', now()),
-
-  (1, 1, 'COMPLETED', 'BAG_CHECK',
-   '{"photoIds":[1,2]}',
-   '{"detected":[{"name":"충전기","confidence":0.93}],"notInPhoto":[{"itemId":1,"name":"여권"}]}',
-   'mock', now());
+-- ── AI 작업 이력 ─────────────────────────────────────────
+-- 완료된 output_payload 를 시드에 넣지 않는다.
+--
+-- docs/07-ai-ready.md 의 출력 JSON Schema 가 아직 확정되지 않았고
+-- (properties 가 TBD, additionalProperties: false), 그 전에 완료 결과를 넣으면
+-- AGENTS.md 의 "Mock 응답 JSON 은 07 의 출력 스키마를 정확히 지킨다" 를 어긴다.
+-- 스키마가 확정되면 그때 맞춰 넣는다.
+--
+-- 데모에는 오히려 이 편이 낫다. 화면에서 직접 작업을 만들어야
+-- POST → 202 → 폴링 → 렌더링 이 눈에 보인다.
