@@ -1,0 +1,73 @@
+#!/bin/sh
+# backend/.env 의 접속 정보로 schema.sql 과 seed.sql 을 적용한다.
+#
+# Supabase SQL Editor 에 복사·붙여넣기 하지 않아도 된다. 붙여넣다 일부가
+# 잘리거나 엉뚱한 것을 붙여넣는 사고를 막는다.
+#
+# 호스트에 psql 을 설치하지 않는다. Docker 컨테이너 안의 psql 을 쓴다.
+# 비밀번호는 절대 출력하지 않고, 명령줄 인자로도 넘기지 않는다.
+
+set -e
+
+ENV_FILE="backend/.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+  printf '%s\n' "ERROR: $ENV_FILE 이 없습니다." >&2
+  printf '%s\n' "  cp backend/.env.example backend/.env  후 접속 정보를 채웁니다." >&2
+  exit 1
+fi
+
+get() {
+  sed -n "s/^$1=//p" "$ENV_FILE" | head -1 | sed 's/^["'\'']//; s/["'\'']$//'
+}
+
+URL=$(get DATABASE_URL)
+USER=$(get DATABASE_USERNAME)
+PASS=$(get DATABASE_PASSWORD)
+
+miss=""
+[ -z "$URL" ]  && miss="$miss DATABASE_URL"
+[ -z "$USER" ] && miss="$miss DATABASE_USERNAME"
+[ -z "$PASS" ] && miss="$miss DATABASE_PASSWORD"
+if [ -n "$miss" ]; then
+  printf '%s\n' "ERROR: $ENV_FILE 에 비어 있는 값이 있습니다:$miss" >&2
+  exit 1
+fi
+
+case "$URL" in
+  jdbc:postgresql://*) ;;
+  *) printf '%s\n' "ERROR: DATABASE_URL 은 jdbc:postgresql:// 로 시작해야 합니다." >&2; exit 1 ;;
+esac
+
+HOSTPART=${URL#jdbc:postgresql://}
+HOSTPART=${HOSTPART%%\?*}
+HOST=${HOSTPART%%:*}
+REST=${HOSTPART#*:}
+PORT=${REST%%/*}
+DB=${REST#*/}
+
+command -v docker >/dev/null 2>&1 || {
+  printf '%s\n' "ERROR: docker 가 필요합니다. Docker Desktop 을 실행하세요." >&2; exit 1; }
+
+printf '%s\n' "대상: $HOST:$PORT/$DB  (사용자 $USER)"
+printf '%s\n' ""
+printf '%s\n' "schema.sql 은 기존 테이블을 DROP 하고 다시 만듭니다."
+printf '%s\n' "이 DB 의 데이터가 사라집니다. 계속하려면 yes 를 입력하세요."
+printf '%s' "> "
+read -r answer
+[ "$answer" = "yes" ] || { printf '%s\n' "취소했습니다."; exit 0; }
+
+apply() {
+  printf '%s\n' ""
+  printf '%s\n' "── $1 적용 ──"
+  docker run --rm -i -e PGPASSWORD="$PASS" postgres:17-alpine \
+    psql -h "$HOST" -p "$PORT" -U "$USER" -d "$DB" -q -v ON_ERROR_STOP=1 < "$1" \
+    2>&1 | grep -v '^NOTICE:' || true
+  printf '%s\n' "  완료"
+}
+
+apply database/schema.sql
+apply database/seed.sql
+
+printf '%s\n' ""
+printf '%s\n' "확인하려면:  ./scripts/check-db"
