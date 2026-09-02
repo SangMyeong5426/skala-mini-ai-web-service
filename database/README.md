@@ -26,15 +26,78 @@ PostgreSQL. **팀 공용 DB는 클라우드에 둔다** — Supabase 또는 Neon
 
 ### Supabase
 
-1. supabase.com 가입 → New project
-2. `Project Settings → Database → Connection string → URI` 복사
-3. `SQL Editor`에 `schema.sql` 붙여넣고 실행
+#### 1. 프로젝트를 만들고 접속 정보를 받는다
+
+supabase.com 가입 → New project → 대시보드 상단 **`Connect`**.
+
+접속 방식이 셋 나온다. **Session pooler 를 쓴다.**
+
+| 방식 | 쓰나 | 이유 |
+| --- | --- | --- |
+| Direct connection | ❌ | IPv6 전용이다. 학교·회사 망에서 자주 막힌다 |
+| **Session pooler** | ✅ | IPv4 로 붙는다. JPA·HikariCP 와 맞는다 |
+| Transaction pooler | ❌ | 포트 6543. prepared statement 를 못 써 JPA 가 깨진다 |
+
+이런 모양의 문자열을 준다.
+
+```text
+postgresql://postgres.abcdefghijk:[YOUR-PASSWORD]@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
+```
+
+#### 2. `backend/.env` 를 만든다
+
+**받은 문자열을 그대로 넣으면 뜨지 않는다.** JDBC 는 형식이 다르다.
+세 조각으로 쪼개고 앞에 `jdbc:` 를 붙인다.
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+```dotenv
+DATABASE_URL=jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
+DATABASE_USERNAME=postgres.abcdefghijk
+DATABASE_PASSWORD=대시보드에서_받은_비밀번호
+```
+
+세 가지를 자주 틀린다.
+
+- **`jdbc:` 접두사를 빠뜨린다.** 이게 없으면 드라이버가 URL 을 못 읽는다.
+- **아이디에 점이 들어간다.** `postgres` 가 아니라 `postgres.<프로젝트ID>` 다.
+  Session pooler 는 아이디로 프로젝트를 구분한다.
+- **비밀번호에 특수문자가 있으면** URL 인코딩 문제가 생긴다. `.env` 에서는
+  값을 따로 넣으므로 괜찮지만, 헷갈리면 대시보드에서 영문·숫자로 재설정한다.
+
+#### 3. 스키마와 시드를 넣는다
+
+대시보드 왼쪽 **`SQL Editor`** → `New query` → **두 번** 실행한다.
+
+1. `database/schema.sql` 전체를 붙여넣고 `Run`
+2. `database/seed.sql` 전체를 붙여넣고 `Run`
+
+**순서를 지킨다.** `seed.sql` 은 `schema.sql` 이 만든 테이블에 넣으므로
+먼저 돌리면 실패한다.
+
+#### 4. 확인한다
+
+```bash
+./scripts/check-db
+```
+
+접속·테이블 수·시드 행 수를 한 번에 확인한다. `psql` 없이 돈다.
+
+애플리케이션까지 확인하려면:
+
+```bash
+cd backend && ./gradlew bootRun
+```
+
+`Started MiniAiWebServiceApplication` 이 뜨면 성공이다.
 
 ### Neon
 
 1. neon.tech 가입 → Create project
 2. `Dashboard → Connection Details`에서 연결 문자열 복사
-3. `SQL Editor`에 `schema.sql` 붙여넣고 실행
+3. 위 Supabase 2~4단계와 같다. JDBC 변환과 실행 순서를 똑같이 지킨다
 
 ## 접속 정보 공유
 
