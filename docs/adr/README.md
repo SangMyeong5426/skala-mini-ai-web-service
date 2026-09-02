@@ -38,3 +38,4 @@
 
 - [ADR 0001: 백엔드 스택 선택](0001-backend-stack.md) — `Accepted` · Java 21 / Spring Boot 4.1.1
 - [ADR 0002: 프런트엔드 스택 선택](0002-frontend-stack.md) — `Accepted` · React + TypeScript (Vite)
+- [ADR 0003: AI 작업 엔드포인트를 하나로 둔다](0003-ai-job-endpoint.md) — `Accepted` · `POST /api/ai-jobs` + `job_type`
