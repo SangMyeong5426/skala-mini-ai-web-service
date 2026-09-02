@@ -30,14 +30,13 @@
 | 이름 | GitHub ID | 맡은 역할 |
 | --- | --- | --- |
 | 박상명 | `@SangMyeong5426` | PM · DevOps & Integration · API Architect · Frontend Developer |
-| 최인서 | `@boboinhaco` ⚠️ | Data Architect · API Architect · Backend Developer |
-| 손현아 | `@hyun5555` ⚠️ | Data Architect · API Architect · Backend Developer |
-| 문성도 | `@seogdo` ⚠️ | Product/UX Designer · Frontend Developer · Backend Developer |
+| 최인서 | `@boboinhaco` | Data Architect · API Architect · Backend Developer |
+| 손현아 | `@hyun5555` | Data Architect · API Architect · Backend Developer |
+| 문성도 | `@seogdo` | Product/UX Designer · Frontend Developer · Backend Developer |
 | 박현수 | `@gustnxoddl51-bot` | Data Architect · Frontend Developer · Product/UX Designer |
 
-> ⚠️ 표시한 세 ID는 **아직 본인 확인 전이다.** Collaborator 목록에서 남은 계정을
-> 이름과 대조해 추정한 것이다. `CODEOWNERS`에 잘못 넣으면 리뷰가 엉뚱한 사람에게
-> 가므로, **본인 확인 후에 활성화한다.**
+> 위 ID는 본인 확인을 마쳤고, [`.github/CODEOWNERS`](../.github/CODEOWNERS)에
+> 그대로 반영돼 있다. **역할이 바뀌면 이 표와 `CODEOWNERS`를 같은 PR에서 고친다.**
 
 ## 운영 방식
 
@@ -76,7 +75,7 @@
 
 ## 분담 확정 후 할 일
 
-- [ ] `.github/CODEOWNERS`의 주석을 풀고 위 표의 GitHub ID로 교체 (**ID 확인 후**)
+- [x] `.github/CODEOWNERS`의 주석을 풀고 위 표의 GitHub ID로 교체
 - [x] 팀원 전원 저장소 Collaborator 초대 — 5명 전원 `write` 권한, 수락 완료
 - [ ] 전원 [README의 "팀원 온보딩"](../README.md#팀원-온보딩) 1~7단계 완료
 - [ ] 전원 연습 PR 1회 — 규칙이 실제로 도는지 각자 확인 (온보딩 5단계)

@@ -22,7 +22,7 @@
 - [x] 팀원 전원 Collaborator 초대 — 5명 전원 `write` 권한, 수락 완료
 - [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~7단계 완료
 - [ ] **전원 연습 PR 1회** — 브랜치·PR 규칙을 1일차에 미리 겪어 둔다
-- [ ] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영 (**ID 3건 본인 확인 후**)
+- [x] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
 - [ ] PM·DevOps 백업 지정 — 3일차에 두 역할이 동시에 피크를 친다 ([`00-team.md`](00-team.md))
 - [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java / Spring Boot 3
 - [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
