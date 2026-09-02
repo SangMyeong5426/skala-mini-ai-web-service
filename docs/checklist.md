@@ -50,8 +50,8 @@
 - [x] 스키마 SQL 작성 → [`database/schema.sql`](../database/schema.sql) — 로컬 DB에서 실행·제약 검증 완료
 - [ ] 클라우드 DB(Supabase)에 실행
 - [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
-- [ ] REST API 명세 작성 → `06-api-spec.md`
-- [ ] **Mock API 엔드포인트 포함** → `06-api-spec.md`
+- [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
+- [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{id}` · `jobType` 4종
 - [ ] AI 입출력 JSON Schema 확정 → `07-ai-ready.md`
 - [ ] 프롬프트 설계 및 Playground 검증 → `07-ai-ready.md`
 - [ ] FE ↔ BE API 연동
