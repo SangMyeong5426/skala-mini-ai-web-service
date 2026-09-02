@@ -10,7 +10,9 @@
 | TypeScript | 6 |
 | Vite | 8 |
 
-**Node.js 20 이상**이 필요하다. 설치는 [README의 "7. 개발 도구 설치"](../README.md).
+**Node.js 20.19 이상 또는 22.12 이상**이 필요하다. Vite 8 · oxlint · plugin-react 의
+`engines` 가 `^20.19.0 || >=22.12.0` 이라 20.18 이하와 21.x 에서는 돌지 않는다.
+설치는 [README의 "6. 개발 도구 설치"](../README.md).
 
 ## 실행
 

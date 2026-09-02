@@ -1,1 +1,8 @@
+// JDK 21 이 없는 PC 에서도 ./gradlew 가 돌게 한다.
+// 이게 없으면 "Toolchain download repositories have not been configured" 로
+// 빌드가 멈춘다. ADR 0001 이 약속한 자동 내려받기가 이 플러그인이다.
+plugins {
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'mini-ai-web-service'

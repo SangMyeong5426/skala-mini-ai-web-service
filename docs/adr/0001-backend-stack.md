@@ -121,7 +121,7 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 이미 JDK 17만 설치된 팀원이 있어도 손으로 맞출 필요 없다. `build.gradle`의
 `java.toolchain`이 컴파일을 21로 고정하므로 **전원이 같은 바이트코드로 돌고**,
 21이 없으면 foojay 플러그인이 받아 온다. (절차는
-[README 7단계](../../README.md))
+[README 6단계](../../README.md))
 
 ### 이 선택이 지불하는 비용
 
@@ -150,7 +150,7 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 확정 후 아래를 이어서 한다.
 
 - [ ] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 가장 먼저 한다
-      (절차는 [README 7단계](../../README.md))
+      (절차는 [README 6단계](../../README.md))
 - [x] `backend/`에 Spring Boot 4.1.1 프로젝트 스캐폴딩
 - [x] `backend/.env.example`의 `PORT`를 `8080`으로 확정
 - [x] `docs/04-architecture.md`의 기술 스택 표와 포트 채우기
