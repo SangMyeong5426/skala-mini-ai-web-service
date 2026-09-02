@@ -219,12 +219,12 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 | `./scripts/setup-git-hooks: Permission denied` | Git Bash에서 `sh scripts/setup-git-hooks` |
 | `bad interpreter: /bin/sh^M` | 줄바꿈 문제. 다시 clone하면 `.gitattributes`가 잡아 준다 |
 | push할 때 `main 브랜치로 직접 push할 수 없습니다` | **정상 동작이다.** 작업 브랜치를 만들고 PR로 올린다 |
-| PR에서 `Invalid branch name` | 브랜치 이름 규칙 위반. 규칙에 맞는 새 브랜치를 만들어 옮긴다 |
-| PR에서 `PR title must follow Conventional Commits` | PR 제목을 `type(scope): 요약`으로 고친다. 제목만 고치면 자동 재검사된다 |
+| PR에서 `브랜치 이름 규칙 위반` | 규칙에 맞는 새 브랜치를 만들어 옮긴다 |
+| PR에서 `PR 제목은 Conventional Commits 형식이어야 합니다` | 제목을 `type(scope): 요약`으로 고친다. 제목만 고쳐도 자동 재검사된다 |
 | FE에서 API 호출이 CORS 오류 | 백엔드 `.env`의 `CORS_ALLOWED_ORIGINS`에 `http://localhost:5173`이 있는지 확인 |
 | 서버가 `.env`가 없다고 뜸 | 5번 단계를 건너뛴 것이다 |
 | `./gradlew`가 `JAVA_HOME` 오류 | JDK 미설치 또는 경로 미설정. 6번 단계 |
-| Gradle이 "Could not find a Java installation" | toolchain이 요구하는 21이 없다. 6번 단계 |
+| Gradle이 `Could not find a Java installation` | JDK 21이 없다. `settings.gradle`의 foojay가 받아 오지만, 오래 걸리면 6번 단계로 직접 설치한다 |
 | 30분 이상 막힘 | **팀 채널에 올린다.** 3일 중 30분은 크다 |
 
 ## 로컬 실행
