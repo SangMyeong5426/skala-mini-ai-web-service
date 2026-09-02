@@ -275,6 +275,7 @@ Swagger UI는 <http://localhost:8080/swagger-ui.html>.
 | --- | --- | --- |
 | 서비스 아이디어 | [`docs/01-service-plan.md`](docs/01-service-plan.md) | 1일차 |
 | 데이터베이스 (Supabase / Neon) | — | 1일차 |
+| OpenWeather API 키 발급 | `backend/.env.example` | **활성화에 최대 2시간** — 미리 받아 둘 것 |
 
 ## 확정된 결정
 
@@ -282,5 +283,9 @@ Swagger UI는 <http://localhost:8080/swagger-ui.html>.
 | --- | --- | --- |
 | 백엔드 스택 | Java 21 / Spring Boot 4.1.1 · 포트 `8080` | [ADR 0001](docs/adr/0001-backend-stack.md) |
 | 프런트엔드 스택 | React + TypeScript (Vite) · 포트 `5173` | [ADR 0002](docs/adr/0002-frontend-stack.md) |
+| AI 작업 엔드포인트 | `POST /api/ai-jobs` 하나 + `job_type` | [ADR 0003](docs/adr/0003-ai-job-endpoint.md) |
+| 사진 저장 | 로컬 디렉터리 (`UPLOAD_DIR`) — 데모가 네트워크에 묶이지 않게 | `backend/.env.example` |
+| 날씨 | OpenWeather 무료 플랜 · **예보는 5일까지** | `backend/.env.example` |
+| 인증 | 구현하지 않음. 시드 사용자 1명 고정 (채점 항목 아님) | — |
 
 > React 사용 가능 여부는 1일차에 확인했다. 사용해도 된다.
