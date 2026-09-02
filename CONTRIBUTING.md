@@ -6,7 +6,7 @@
 
 ## 처음 한 번만
 
-clone부터 연습 PR까지의 절차는 [`README.md`의 "팀원 온보딩"](README.md#팀원-온보딩)에
+clone부터 개발 도구 설치까지의 절차는 [`README.md`의 "팀원 온보딩"](README.md#팀원-온보딩)에
 있다. **이 문서를 읽기 전에 거기부터 끝낸다.**
 
 특히 `./scripts/setup-git-hooks`를 실행하지 않으면 `main` 보호와 커밋 템플릿이
