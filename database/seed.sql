@@ -74,7 +74,7 @@ INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_d
                    bag_type, bag_empty_g, weight_limit_g, note, status) VALUES
   (1, '서울', '도쿄', 'JP', '2026-10-01', '2026-10-04',
    'TOUR', 'FLIGHT', '대한항공', 'ICN', 'NRT',
-   'CARRY_ON', 3200, 23000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
+   'CARRY_ON', 3200, 10000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
 
 
 -- ── 체크리스트 (AI 추천 + 규칙 보강) ──────────────────────
@@ -134,11 +134,15 @@ INSERT INTO item_detections (checklist_item_id, detected_object_id, match_confid
 --  ★ N:M 2 — 체크리스트 항목 ↔ 반입 규정
 --  "화장품" 하나가 규정 둘에 걸리는 경우를 넣었다.
 -- ══════════════════════════════════════════════════════════
+-- rule_id 는 transport_rules 의 삽입 순서다. 값을 바꾸면 근거 문구가 통째로 달라진다.
+--   1~3  보조배터리 (100Wh 이하 / 100~160Wh / 160Wh 초과)
+--   4~5  액체 (100ml 이하 / 100ml 초과)
+--   6    가위
 INSERT INTO item_rule_checks (checklist_item_id, rule_id, verdict, missing_info) VALUES
   (6, 1, 'CABIN_OK',       NULL),          -- 보조배터리 ← 100Wh 이하 규정
   (6, 2, 'NEED_MORE_INFO', '배터리 정격(Wh)'),  -- 보조배터리 ← 100Wh 초과 규정
-  (8, 3, 'NEED_MORE_INFO', '용량(ml)'),    -- 화장품     ← 액체 100ml 이하 규정
-  (8, 4, 'NEED_MORE_INFO', '용량(ml)');    -- 화장품     ← 액체 100ml 초과 규정
+  (8, 4, 'NEED_MORE_INFO', '용량(ml)'),    -- 화장품     ← 액체 100ml 이하 규정
+  (8, 5, 'NEED_MORE_INFO', '용량(ml)');    -- 화장품     ← 액체 100ml 초과 규정
 
 
 -- ── AI 작업 이력 ─────────────────────────────────────────
