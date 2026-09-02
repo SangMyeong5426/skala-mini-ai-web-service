@@ -2,7 +2,10 @@
 
 > SKALA Full-Stack Engineering — **AI 웹 서비스 설계 Mini-project** (3일)
 
-TBD — 서비스 한 줄 정의. 확정되면 [`docs/01-service-plan.md`](docs/01-service-plan.md)에서 옮겨 온다.
+**짐을 다 싸고도 뭘 빠뜨렸는지 확신하지 못하는 여행자가, 가방 사진 한 장으로
+준비 상태·예상 무게·기내 반입 가능 여부를 한 번에 확인하는 서비스.**
+
+자세한 기획은 [`docs/01-service-plan.md`](docs/01-service-plan.md).
 
 ## 이 프로젝트가 무엇인가
 
@@ -136,7 +139,7 @@ cp backend/.env.example backend/.env
 
 | 도구 | 버전 | 확인 |
 | --- | --- | --- |
-| Node.js | 20 이상 | `node -v` |
+| Node.js | **20.19+ 또는 22.12+** | `node -v` |
 | JDK (Temurin) | **21** | `java -version` |
 
 역할로 나누지 않는 이유는 셋이다. 2일차 FE↔BE 연동은 **양쪽을 동시에 띄워야**
@@ -164,7 +167,7 @@ java -version   # 21이 나와야 한다
 
 ```bash
 # macOS
-brew install node@20
+brew install node
 
 # Windows (PowerShell)
 winget install OpenJS.NodeJS.LTS
@@ -173,7 +176,7 @@ winget install OpenJS.NodeJS.LTS
 직접 받으려면 [nodejs.org](https://nodejs.org). 설치 후 확인한다.
 
 ```bash
-node -v   # v20 이상
+node -v   # v20.19 이상 또는 v22.12 이상. v21.x 는 안 된다
 ```
 
 #### JDK를 프로젝트 폴더 안에 넣을 수는 없다
@@ -226,7 +229,7 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 
 ## 로컬 실행
 
-**스캐폴딩은 끝나 있다.** clone하고 7단계(도구 설치)까지 마치면 둘 다 뜬다.
+**스캐폴딩은 끝나 있다.** clone하고 6단계(도구 설치)까지 마치면 둘 다 뜬다.
 
 | | 실행 | 포트 | 비고 |
 | --- | --- | --- | --- |
