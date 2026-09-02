@@ -1623,7 +1623,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 `sourceUrl` 과 `checkedAt` 은 **항상 함께** 있거나 함께 `null` 이다 — 명세 9절 *"규정 최신성"*.
 서버가 둘을 같이 채우므로 어긋날 수 없다.
 
-### 예시 1 — S-06 · 시드 체크리스트 — 06 customs[] 와 비교 (보조배터리만 NEED_MORE_INFO 로 다름)
+### 예시 1 — S-06 · 시드 체크리스트 — 06 customs[] · extra[] 와 같은 판정
 
 ```json
 {
@@ -1741,9 +1741,9 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 ```
 
 `itemId: null` 인 가위는 체크리스트에 없는 **추가 물품**(승인된 인식 결과, `detectionId: 7`)이다.
-화장품·가위는 06의 `customs[]` · `extra[]` 와 같다. **보조배터리는 다르다** — 06은 `CABIN_OK` 인데 여기는
-`NEED_MORE_INFO` 다. 160Wh 초과는 기내·위탁 모두 금지라 Wh 를 모른 채 기내 반입을 확정할 수 없다
-(원칙 ②). 06의 그 한 줄을 맞출지는 TBD — 작성자 결정.
+세 판정은 06의 `customs[]` · `extra[]` 와 같다. 보조배터리가 `NEED_MORE_INFO` 인 이유 — 160Wh 초과는 기내·위탁
+모두 금지라 Wh 를 모른 채 기내 반입을 확정할 수 없다(원칙 ②). 시드 `item_rule_checks` 는 이 항목에 두 행
+(`CABIN_OK`·`NEED_MORE_INFO`)을 갖고, `inspection` 은 항목별로 엄격한 쪽을 보인다.
 
 ### 예시 2 — S-09 챗봇 · 여행 없이 질문 (tripId null)
 
@@ -1933,8 +1933,6 @@ B. 설명 (2차 호출)
 - **`detected_objects` 에 `missing_info` · `label_text` 컬럼이 없다.** `BAG_CHECK` 출력의 두 필드를 저장할
   곳이 없어 `S-04` 재진입 시 「확인 필요」 묶음을 `ai_jobs` 재조회로 그려야 한다. 컬럼 추가(`schema.sql`·05·06·seed)는
   작성자 결정 — TBD.
-- **06 예시 넉 줄이 이 문서와 어긋난다.** `customs[]` 보조배터리 `CABIN_OK`, 완료 예시의 `weatherSource: FORECAST` 와
-  `여권`, `GET /items` 의 충전기 `source: AI`(시드는 `PHOTO`). 06 을 맞출지는 작성자 결정 — TBD.
 - **체크리스트에 없는 승인 물품(추가 물품)은 무게 계산에 들어가지 않는다.** 시드의 가위가
   그렇다. `WEIGHT_ESTIMATE` 는 `check_status = PREPARED` 인 항목만 받는다. 승인 시 체크리스트
   항목으로 등록하면 포함된다 — 그 흐름을 화면에 넣을지는 TBD.
