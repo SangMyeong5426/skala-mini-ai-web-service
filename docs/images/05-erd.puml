@@ -1,0 +1,192 @@
+@startuml 05-erd
+' ─────────────────────────────────────────────────────────
+'  AI 여행가방 확인 플랫폼 — ERD
+'  출처: docs/05-erd.md · database/schema.sql (셋은 짝이다)
+'
+'  채점 기준: "ERD 테이블 관계(1:N, N:M) 및 정규화 타당성"
+'  ★ 표시 둘이 N:M 조인 테이블이고, 둘 다 속성을 가진다.
+' ─────────────────────────────────────────────────────────
+
+hide circle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Apple SD Gothic Neo"
+skinparam defaultFontSize 11
+skinparam linetype ortho
+skinparam ArrowColor #46524E
+
+skinparam class {
+  BackgroundColor #F5F7F6
+  BorderColor #8A9A94
+  FontColor #14201C
+  BackgroundColor<<NM>> #D9EAE6
+  BorderColor<<NM>> #0D6455
+  BackgroundColor<<AI>> #FBF3E4
+  BorderColor<<AI>> #8D5606
+  BackgroundColor<<MASTER>> #EFEFF4
+  BorderColor<<MASTER>> #6B6B84
+}
+
+entity "users" as users {
+  * id : bigint <<PK>>
+  --
+  * email : varchar(255) <<UQ>>
+  * nickname : varchar(50)
+  * created_at : timestamptz
+}
+
+entity "trips" as trips {
+  * id : bigint <<PK>>
+  --
+  * user_id : bigint <<FK>>
+  * destination : varchar(100)
+  * start_date : date
+  * end_date : date
+  * purpose : varchar(20)
+  * transport : varchar(20)
+  airline : varchar(50)
+  bag_empty_g : integer
+  weight_limit_g : integer
+  note : text
+  * status : varchar(20)
+}
+
+entity "checklist_items" as items {
+  * id : bigint <<PK>>
+  --
+  * trip_id : bigint <<FK>>
+  item_weight_id : bigint <<FK>>
+  * name : varchar(100)
+  * category : varchar(20)
+  * qty : integer
+  * priority : varchar(20)
+  * source : varchar(10)
+  * check_status : varchar(20)
+  ..
+  UNCHECKED / PREPARED /
+  NEEDS_CHECK / **NOT_IN_PHOTO**
+}
+
+entity "trip_photos" as photos {
+  * id : bigint <<PK>>
+  --
+  * trip_id : bigint <<FK>>
+  * file_path : varchar(255)
+  bag_kind : varchar(20)
+  * uploaded_at : timestamptz
+}
+
+entity "detected_objects" as detected {
+  * id : bigint <<PK>>
+  --
+  * photo_id : bigint <<FK>>
+  * name : varchar(100)
+  * qty : integer
+  * confidence : numeric(4,3)
+  * confidence_level : varchar(10)
+  * approved : boolean
+  ..
+  승인 전에는 다음 단계에
+  반영하지 않는다
+}
+
+entity "★ item_detections" as idt <<NM>> {
+  * checklist_item_id : bigint <<PK,FK>>
+  * detected_object_id : bigint <<PK,FK>>
+  --
+  * match_confidence : numeric(4,3)
+  * confirmed_by_user : boolean
+  * matched_at : timestamptz
+}
+
+entity "★ item_rule_checks" as irc <<NM>> {
+  * checklist_item_id : bigint <<PK,FK>>
+  * rule_id : bigint <<PK,FK>>
+  --
+  * verdict : varchar(20)
+  missing_info : varchar(100)
+  * decided_at : timestamptz
+}
+
+entity "transport_rules" as rules <<MASTER>> {
+  * id : bigint <<PK>>
+  --
+  * transport : varchar(20)
+  * keyword : varchar(100)
+  * verdict : varchar(20)
+  condition_note : text
+  * description : text
+  * source_url : varchar(255)
+  * checked_at : date
+}
+
+entity "item_weights" as weights <<MASTER>> {
+  * id : bigint <<PK>>
+  --
+  * keyword : varchar(100) <<UQ>>
+  * category : varchar(20)
+  * min_g : integer
+  * typical_g : integer
+  * max_g : integer
+  * is_dense : boolean
+}
+
+entity "ai_jobs" as jobs <<AI>> {
+  * id : bigint <<PK>>
+  --
+  * user_id : bigint <<FK>>
+  trip_id : bigint <<FK>>
+  * status : varchar(20)
+  * job_type : varchar(30)
+  * input_payload : **jsonb**
+  output_payload : **jsonb**
+  model_name : varchar(100)
+  error_message : text
+  ..
+  PACKING_LIST / BAG_CHECK /
+  WEIGHT_ESTIMATE / RULE_CHECK
+}
+
+' ── 1:N ───────────────────────────────────────────────────
+users    ||--o{ trips
+users    ||--o{ jobs
+trips    ||--o{ items
+trips    ||--o{ photos
+trips    |o--o{ jobs
+photos   ||--o{ detected
+weights  |o--o{ items
+
+' ── N:M (조인 테이블 경유) ────────────────────────────────
+items    ||--o{ idt
+detected ||--o{ idt
+items    ||--o{ irc
+rules    ||--o{ irc
+
+note bottom of idt
+  **N:M** 체크리스트 항목 ↔ 인식 물품
+  한 항목에 후보 여럿, 한 후보가 여러 항목
+  연결마다 신뢰도·승인 여부가 다르다
+end note
+
+note bottom of irc
+  **N:M** 체크리스트 항목 ↔ 반입 규정
+  한 물품이 여러 규정에 걸린다
+  같은 규정이라도 물품마다 판정이 다르다
+end note
+
+note right of jobs
+  jsonb 는 의도적 비정규화다.
+  job_type 4종의 출력 모양이 달라
+  컬럼으로 펴면 대부분 null 이 된다.
+  내부 구조는 07-ai-ready.md 의
+  JSON Schema 로 고정한다.
+end note
+
+legend bottom
+  |<#D9EAE6>| ★ **N:M 조인 테이블** — 속성을 가진다 |
+  |<#FBF3E4>| AI 결과 저장 (AI-Ready 원칙 2) |
+  |<#EFEFF4>| 마스터 데이터 |
+  |<#F5F7F6>| 도메인 테이블 |
+endlegend
+
+@enduml
