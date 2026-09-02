@@ -13,7 +13,7 @@
 
 | 항목 | 규칙 |
 | --- | --- |
-| Base URL (로컬) | `http://localhost:TBD/api` — 포트는 백엔드 스택에 따라 다르다. [ADR 0001](adr/0001-backend-stack.md) 확정 후 채운다 (FastAPI 8000 / Spring Boot 8080) |
+| Base URL (로컬) | `http://localhost:8080/api` — Spring Boot 기본 포트. [ADR 0001](adr/0001-backend-stack.md)에서 확정 |
 | 요청·응답 형식 | `application/json; charset=utf-8` |
 | 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X) |
 | 시각 형식 | ISO 8601 UTC (`2026-09-02T05:30:00Z`) |
@@ -181,5 +181,6 @@ Base URL만 `.env`에서 바꾸면 되므로 FE 코드는 그대로다.
 
 TBD — Swagger Editor(`editor-next.swagger.io`)로 작성 시 `docs/openapi.yaml`에 둔다.
 
-> 백엔드로 FastAPI를 고르면 Swagger UI가 `/docs`에 자동 생성되므로
-> 이 파일을 따로 쓰지 않아도 된다. ADR 0001 참조.
+> 백엔드에 `springdoc-openapi-starter-webmvc-ui` 의존성을 넣으면 Swagger UI가
+> `/swagger-ui.html`에 자동 생성되고 OpenAPI 문서도 `/v3/api-docs`로 나온다.
+> **그러면 이 파일을 손으로 쓰지 않아도 된다.** ADR 0001 참조.
