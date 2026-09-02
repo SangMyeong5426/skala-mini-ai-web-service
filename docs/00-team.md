@@ -7,7 +7,7 @@
 
 ## 팀 정보
 
-- 조: TBD
+- 조: **5조** (Notion 「SKALA 5조 MINI PROJECT」)
 - 인원: 5명
 - 저장소: <https://github.com/SangMyeong5426/skala-mini-ai-web-service>
 
