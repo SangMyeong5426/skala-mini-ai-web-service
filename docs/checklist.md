@@ -27,18 +27,18 @@
 - [x] 저장소 구조 및 협업 설정 (이 저장소)
 - [x] GitHub 저장소 생성 및 push
 - [x] 팀원 전원 Collaborator 초대 — 5명 전원 `write` 권한, 수락 완료
-- [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료
+- [x] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료 — 2026-09-03
 - [x] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
-- [ ] PM·DevOps 백업 지정 — 3일차에 두 역할이 동시에 피크를 친다 ([`00-team.md`](00-team.md))
+- [x] ~~PM·DevOps 백업 지정~~ — **하지 않기로** (2026-09-03). 3일차 피크는 PM 이 그대로 맡는다
 - [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java 21 / Spring Boot 4.1.1
 - [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
 - [x] **React 사용 가능 여부 교수님께 확인** — 사용 가능
 - [x] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 2026-09-02 완료
-- [ ] **Node.js 20.19+ 또는 22.12+ 설치** — **역할과 무관하게 5명 전원**
+- [x] **Node.js 20.19+ 또는 22.12+ 설치** — **역할과 무관하게 5명 전원.** 2026-09-03 완료
 - [x] FE 프로젝트 생성 (Vite 8 · React 19 · TS 6) — 검증 완료
 - [x] BE 프로젝트 생성 (Spring Boot 4.1.1 · Java 21) — `./gradlew build` 통과 확인
 - [ ] DB 프로젝트 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)
-- [ ] 전원 `npm run dev` · `./gradlew build` 한 번씩 돌려 보기 — **발표 당일에 처음 받지 않는다**
+- [x] 전원 `npm run dev` · `./gradlew build` 한 번씩 돌려 보기 — 2026-09-03 완료
 
 ---
 
@@ -48,7 +48,7 @@
 
 - [x] 데이터 모델링(ERD) → [`05-erd.md`](05-erd.md) — 10테이블 · **N:M 2개**
 - [x] 스키마 SQL 작성 → [`database/schema.sql`](../database/schema.sql) — 로컬 DB에서 실행·제약 검증 완료
-- [ ] 클라우드 DB(Supabase)에 실행
+- [ ] 클라우드 DB(Supabase)에 실행 — **`schema.sql`·`seed.sql` 이 #27 에서 바뀌었다. 강의장에서 `./scripts/db-apply`**
 - [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
 - [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{id}` · `jobType` 4종
