@@ -33,8 +33,8 @@
 - [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java 21 / Spring Boot 4.1.1
 - [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
 - [x] **React 사용 가능 여부 교수님께 확인** — 사용 가능
-- [ ] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 밀리면 BE가 통째로 밀린다
-- [ ] **Node.js 20+ 설치** — **역할과 무관하게 5명 전원**
+- [x] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 2026-09-02 완료
+- [ ] **Node.js 20.19+ 또는 22.12+ 설치** — **역할과 무관하게 5명 전원**
 - [x] FE 프로젝트 생성 (Vite 8 · React 19 · TS 6) — 검증 완료
 - [x] BE 프로젝트 생성 (Spring Boot 4.1.1 · Java 21) — `./gradlew build` 통과 확인
 - [ ] DB 프로젝트 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)

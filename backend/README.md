@@ -17,7 +17,7 @@
 | Swagger UI | <http://localhost:8080/swagger-ui.html> |
 | OpenAPI 문서 | <http://localhost:8080/v3/api-docs> |
 
-**Java 21이 필요하다.** 설치는 [README의 "7. 개발 도구 설치"](../README.md).
+**Java 21이 필요하다.** 설치는 [README의 "6. 개발 도구 설치"](../README.md).
 `build.gradle`의 `java.toolchain`이 컴파일을 21로 고정하므로, 다른 버전을 깔았어도
 전원이 같은 바이트코드로 돈다.
 

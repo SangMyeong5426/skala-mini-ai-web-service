@@ -63,6 +63,7 @@ GET  /api/ai-jobs/{id}  →  200 (PENDING | COMPLETED | FAILED)
 | `POST /api/ai/packing-list` | `PACKING_LIST` |
 | `POST /api/ai/bag-check` | `BAG_CHECK` |
 | `POST /api/ai/rule-chat` | `RULE_CHECK` |
+| *(초안에 없음 — UC-10 예상 무게 산정)* | `WEIGHT_ESTIMATE` |
 
 **고른 이유는 채점이다.** 이 프로젝트의 평가는 완성도가 아니라 설계 타당성이고,
 발표에서 증명해야 하는 명제는 *"AI가 들어올 자리를 미리 비워 뒀다"* 다.
@@ -78,10 +79,10 @@ GET  /api/ai-jobs/{id}  →  200 (PENDING | COMPLETED | FAILED)
 ## 영향
 
 - [x] `backend/.env.example`·`application.properties`의 AI 설정은 그대로 쓴다
-- [ ] `docs/06-api-spec.md`의 엔드포인트 목록에 `job_type` 3종을 명시
+- [x] `docs/06-api-spec.md`의 엔드포인트 목록에 `job_type` 4종을 명시
 - [ ] `docs/07-ai-ready.md`에 `job_type`별 입출력 JSON Schema 작성 (API Architect)
 - [ ] 기능 명세의 `POST /api/ai/*` 3개와 `GET /api/jobs/{id}`를 이 규격으로 수정
-- [ ] `ai_jobs`에 `trip_id`(nullable) 추가 — 규정 질의는 여행 없이도 가능하다 (Data Architect)
+- [x] `ai_jobs`에 `trip_id`(nullable) 추가 — 규정 질의는 여행 없이도 가능하다 (Data Architect)
 
 > `trip_id`를 **nullable**로 두는 이유는 `RULE_CHECK` 때문이다. 반입 규정 질의는
 > 여행을 등록하지 않은 상태에서도 할 수 있어야 한다.
