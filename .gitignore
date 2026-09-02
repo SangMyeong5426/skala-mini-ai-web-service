@@ -25,10 +25,22 @@ venv/
 .mypy_cache/
 
 # ── 백엔드: Java / Gradle ─────────────────────────────────
+# gradle-wrapper.jar 는 반드시 커밋한다. 없으면 ./gradlew 가 돌지 않는다.
 build/
 .gradle/
 target/
+out/
+bin/
 *.class
+
+# Eclipse / STS
+.classpath
+.project
+.settings/
+.apt_generated
+.factorypath
+.springBeans
+.sts4-cache
 
 # ── 에디터 · OS ───────────────────────────────────────────
 .idea/
