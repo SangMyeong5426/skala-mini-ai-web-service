@@ -64,16 +64,16 @@
 **과정 자료는 자바 버전을 정해 주지 않았다.** PDF 8쪽에 `Java / Spring Boot`라고만
 있다. 팀이 정한 것이므로 근거를 남긴다.
 
-하한은 기술적으로 정해져 있다. **Spring Boot 3은 Java 17이 최소 요구사항이다** —
-3.x에서 Java 8·11 지원이 끊겼다. 그래서 실제 선택지는 **17과 21(둘 다 LTS)** 이었다.
+하한은 기술적으로 정해져 있다. **Spring Boot는 Java 17이 최소 요구사항이다** —
+Boot 3에서 Java 8·11 지원이 끊겼다. 그래서 실제 선택지는 **17과 21(둘 다 LTS)** 이었다.
 
 **21을 고른 이유는 가상 스레드(Virtual Threads)가 이 프로젝트의 주제와 맞닿아
 있기 때문이다.**
 
 이 프로젝트가 비동기 구조를 세우는 이유는 **AI 호출이 느리기 때문**이다
 (AI-Ready 원칙 3: Asynchronous Pipeline). 지금은 Mock이라 즉시 끝나지만, 실제
-LLM을 붙이면 요청 하나가 수 초씩 스레드를 붙잡는다. Java 21 + Spring Boot 3.2
-이상에서는 설정 한 줄로 이 비용이 크게 낮아진다.
+LLM을 붙이면 요청 하나가 수 초씩 스레드를 붙잡는다. Java 21 + Spring Boot에서는
+설정 한 줄로 이 비용이 크게 낮아진다. **`application.properties`에 이미 켜 뒀다.**
 
 ```properties
 spring.threads.virtual.enabled=true
@@ -85,17 +85,43 @@ spring.threads.virtual.enabled=true
 
 부차적으로 21이 더 오래 지원되고, 실무도 21로 옮겨 가는 중이다.
 
+### Spring Boot 버전은 4.1.1이다 — 고른 것이 아니라 강제된 것이다
+
+**이 결정을 내릴 때는 Spring Boot 3을 쓸 생각이었다.** 문서에도 그렇게 적혀 있었다.
+그런데 스캐폴딩 단계에서 `start.spring.io`가 3.x를 **거부한다**는 것이 드러났다.
+
+```text
+Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
+```
+
+생성기가 주는 것은 4.0.8과 4.1.1뿐이다. 3.x는 목록에 없다. 그래서 **4.1.1**로 간다.
+`build.gradle`을 손으로 고쳐 3.x를 박을 수는 있지만, 생성기가 지원하지 않는 조합을
+3일짜리 프로젝트에서 떠안는 것은 이득이 없다고 봤다.
+
+**Boot 4가 Boot 3과 다른 점 중 우리에게 걸린 것**은 아래 셋이고, 전부 확인해서
+해결했다. 자세한 내용은 [`backend/README.md`](../../backend/README.md)의
+"이 스택에서 밟기 쉬운 함정".
+
+| 다른 점 | 결과 |
+| --- | --- |
+| `spring-boot-starter-web` → **`-webmvc`** 로 개명 | 의존성 이름을 바꿔 반영 |
+| `META-INF/spring.factories` 지원 제거 | `spring-dotenv`가 조용히 무효가 된다. Gradle이 `.env`를 직접 읽게 바꿈 |
+| — | springdoc 2.8.6은 Boot 3용이지만 **실제 요청으로 동작을 확인했다.** `/v3/api-docs`와 Swagger UI 모두 정상 |
+
+> 이 절은 결정을 뒤집는 것이 아니라 **같은 결정(Java + Spring Boot)의 버전이
+> 외부 사정으로 정해졌다는 기록**이다. 그래서 새 ADR을 만들지 않고 여기에 남긴다.
+
 ### 21이 지불하는 비용
 
 | 비용 | 대응 |
 | --- | --- |
 | 검색해서 나오는 예제가 17 기준이 더 많다 | 우리가 쓰는 범위(Web·JPA·REST)에서는 17과 21의 코드가 다르지 않다. 실제로 막히는 일은 거의 없다 |
-| Spring Boot **3.2 이상**을 골라야 한다 | `start.spring.io` 기본값이 이미 3.5.x라 신경 쓸 일이 없다 |
+| 가상 스레드는 Boot 3.2 이상이 필요하다 | 우리가 쓰는 Boot 4.1.1은 이 조건을 넘는다 |
 
 이미 JDK 17만 설치된 팀원이 있어도 손으로 맞출 필요 없다. `build.gradle`의
 `java.toolchain`이 컴파일을 21로 고정하므로 **전원이 같은 바이트코드로 돌고**,
 21이 없으면 foojay 플러그인이 받아 온다. (절차는
-[README 7단계](../../README.md#7-개발-도구-설치-역할별))
+[README 7단계](../../README.md))
 
 ### 이 선택이 지불하는 비용
 
@@ -123,13 +149,17 @@ spring.threads.virtual.enabled=true
 
 확정 후 아래를 이어서 한다.
 
-- [ ] **JDK 21 설치** — BE·DevOps 담당과 발표 PC는 필수. 가장 먼저 한다
-      (절차는 [README 7단계](../../README.md#7-개발-도구-설치-역할별))
-- [ ] `backend/`에 Spring Boot 3 프로젝트 스캐폴딩 (start.spring.io)
+- [ ] **JDK 21 설치** — **역할과 무관하게 5명 전원.** 가장 먼저 한다
+      (절차는 [README 7단계](../../README.md))
+- [x] `backend/`에 Spring Boot 4.1.1 프로젝트 스캐폴딩
 - [x] `backend/.env.example`의 `PORT`를 `8080`으로 확정
 - [x] `docs/04-architecture.md`의 기술 스택 표와 포트 채우기
 - [x] `docs/06-api-spec.md`의 Base URL 포트 채우기
-- [ ] CORS에 `http://localhost:5173` 허용
-- [ ] `springdoc-openapi` 의존성 추가 (Swagger UI)
+- [x] CORS에 `http://localhost:5173` 허용 — `config/CorsConfig.java`
+- [x] `springdoc-openapi` 의존성 추가 (Swagger UI) — 동작 확인 완료
+- [x] 가상 스레드 활성화 (`spring.threads.virtual.enabled=true`)
 - [ ] `.gitignore`에서 쓰지 않는 언어 항목 정리 (선택 — 남겨 둬도 해가 없다)
 - [x] 이 문서 상태를 `Accepted`로 변경
+
+> **배경에 적은 "개발 PC에 JDK가 설치되어 있지 않다"는 이제 일부 해소됐다.**
+> 스캐폴딩을 검증한 PC에는 Temurin 21이 설치돼 있다. 나머지 팀원은 아직이다.

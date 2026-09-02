@@ -29,7 +29,7 @@ skala-mini-ai-web-service/
 ├── frontend/               React + TS (Vite)       ← Frontend Developer
 │   ├── .env.example
 │   └── README.md
-├── backend/                Java / Spring Boot 3    ← Backend Developer
+├── backend/                Java 21 / Spring Boot 4  ← Backend Developer
 │   ├── .env.example
 │   └── README.md
 ├── database/               PostgreSQL 스키마         ← Data Architect
@@ -56,8 +56,13 @@ skala-mini-ai-web-service/
 ```
 
 데이터베이스 서버는 클라우드(Supabase 또는 Neon)에 둔다. 저장소에는 스키마
-정의만 두고 데이터 파일은 두지 않는다. `database/`는 백엔드 스택과 무관하므로
-JDK 설치나 스캐폴딩을 기다리지 않고 바로 작업할 수 있다.
+정의만 두고 데이터 파일은 두지 않는다.
+
+> **DB 프로젝트 생성은 지금 해도 되지만, `schema.sql` 작성·실행은
+> 기능 명세·유저플로우·와이어프레임([`docs/01`](docs/01-service-plan.md) ·
+> [`02`](docs/02-use-case.md) · [`03`](docs/03-wireframe.md)) 확정 후에 한다.**
+> 계정 만들고 연결 문자열을 받는 것은 주제와 무관하지만, 테이블은 화면과
+> 유스케이스를 따라가야 하기 때문이다.
 
 ## 팀원 온보딩
 
@@ -106,10 +111,10 @@ Claude Code가 읽는다. **두 파일은 같은 내용이고, 한쪽을 고치�
 | --- | --- | --- |
 | PM | [`docs/checklist.md`](docs/checklist.md) | 3일 일정 점검, Issue 생성 |
 | Product/UX Designer | [`docs/01`](docs/01-service-plan.md) · [`02`](docs/02-use-case.md) · [`03`](docs/03-wireframe.md) | 아이디어·페르소나 정리 |
-| Data Architect | [`docs/05-erd.md`](docs/05-erd.md) · [`database/`](database/) | ERD 초안, `schema.sql` |
+| Data Architect | [`docs/05-erd.md`](docs/05-erd.md) · [`database/`](database/) | `01`~`03` 확정 후 ERD 초안 → `schema.sql` |
 | API Architect | [`docs/06`](docs/06-api-spec.md) · [`07`](docs/07-ai-ready.md) | 엔드포인트 목록 초안 |
-| Frontend Developer | [`frontend/README.md`](frontend/README.md) · [`docs/03`](docs/03-wireframe.md) | React + TS 프로젝트 생성 |
-| Backend Developer | [`backend/README.md`](backend/README.md) · [`ADR 0001`](docs/adr/0001-backend-stack.md) | **JDK 21 설치** 후 Spring Boot 프로젝트 생성 |
+| Frontend Developer | [`frontend/README.md`](frontend/README.md) · [`docs/03`](docs/03-wireframe.md) | 와이어프레임 작성 → 확정 후 화면·라우팅 |
+| Backend Developer | [`backend/README.md`](backend/README.md) · [`ADR 0001`](docs/adr/0001-backend-stack.md) | `./gradlew build` 확인 → `02`·`06` 확정 후 API 구현 |
 | DevOps & Integration | [`CONTRIBUTING.md`](CONTRIBUTING.md) · `.github/` | `CODEOWNERS` 채우기 |
 
 ### 5. 연습 PR 한 번 (중요)
@@ -134,7 +139,7 @@ GitHub에서 PR을 만들고 **`PR Policy` 검사가 초록불인지** 확인한
 > 브랜치는 `<type>/<소문자-kebab-case>`, 커밋·PR 제목은 `type(scope): 요약`.
 > 자세한 목록은 [`CONTRIBUTING.md`](CONTRIBUTING.md)에 있다.
 
-### 6. 환경 파일 만들기 (Frontend·Backend 담당자만)
+### 6. 환경 파일 만들기 (전원)
 
 ```bash
 cp frontend/.env.example frontend/.env
@@ -144,16 +149,18 @@ cp backend/.env.example backend/.env
 **`.env`는 커밋되지 않는다.** DB 접속 정보와 API 키는 저장소가 아니라
 **팀 채널로** 받아서 각자 채운다.
 
-### 7. 개발 도구 설치 (역할별)
+### 7. 개발 도구 설치 (전원)
 
-| 도구 | 버전 | 누가 필요한가 | 확인 |
-| --- | --- | --- | --- |
-| Node.js | 20 이상 | FE 담당, 화면을 띄울 사람 | `node -v` |
-| JDK (Temurin) | **21** | BE·DevOps 담당, **발표 PC** | `java -version` |
+**역할과 무관하게 5명 전원이 둘 다 설치한다.**
 
-FE 담당자는 JDK 없이도 Postman Mock으로 화면 작업을 시작할 수 있다. 하지만
-2일차 FE↔BE 연동부터는 백엔드를 로컬에 띄우는 편이 빠르다. **결국 전원 설치가
-속 편하다 — 15분이면 끝난다.**
+| 도구 | 버전 | 확인 |
+| --- | --- | --- |
+| Node.js | 20 이상 | `node -v` |
+| JDK (Temurin) | **21** | `java -version` |
+
+역할로 나누지 않는 이유는 셋이다. 2일차 FE↔BE 연동은 **양쪽을 동시에 띄워야**
+확인이 되고, BE·FE는 [서로 지원하기로](docs/00-team.md) 했으며, 3일차 데모는
+누구 PC에서든 돌아가야 한다. 둘 다 합쳐 15분이면 끝난다.
 
 #### JDK 설치
 
@@ -170,6 +177,22 @@ winget install EclipseAdoptium.Temurin.21.JDK
 
 ```bash
 java -version   # 21이 나와야 한다
+```
+
+#### Node.js 설치
+
+```bash
+# macOS
+brew install node@20
+
+# Windows (PowerShell)
+winget install OpenJS.NodeJS.LTS
+```
+
+직접 받으려면 [nodejs.org](https://nodejs.org). 설치 후 확인한다.
+
+```bash
+node -v   # v20 이상
 ```
 
 #### JDK를 프로젝트 폴더 안에 넣을 수는 없다
@@ -222,12 +245,15 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 
 ## 로컬 실행
 
-각 워크스페이스가 아직 비어 있다. 스캐폴딩 후 아래를 채운다.
+**스캐폴딩은 끝나 있다.** clone하고 7단계(도구 설치)까지 마치면 둘 다 뜬다.
 
-| | 실행 | 포트 |
-| --- | --- | --- |
-| Frontend | `cd frontend && npm run dev` | 5173 |
-| Backend | `cd backend && ./gradlew bootRun` | 8080 |
+| | 실행 | 포트 | 비고 |
+| --- | --- | --- | --- |
+| Frontend | `cd frontend && npm install && npm run dev` | 5173 | Vite 8 · React 19 · TS 6 |
+| Backend | `cd backend && ./gradlew bootRun` | 8080 | `.env`의 `DATABASE_URL`이 있어야 뜬다 |
+
+`cd backend && ./gradlew build`는 **DB가 없어도 통과한다** (테스트는 인메모리 H2로 돈다).
+Swagger UI는 <http://localhost:8080/swagger-ui.html>.
 
 ## 진행 상황
 
@@ -254,7 +280,7 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 
 | 항목 | 결정 | 문서 |
 | --- | --- | --- |
-| 백엔드 스택 | Java 21 / Spring Boot 3 · 포트 `8080` | [ADR 0001](docs/adr/0001-backend-stack.md) |
+| 백엔드 스택 | Java 21 / Spring Boot 4.1.1 · 포트 `8080` | [ADR 0001](docs/adr/0001-backend-stack.md) |
 | 프런트엔드 스택 | React + TypeScript (Vite) · 포트 `5173` | [ADR 0002](docs/adr/0002-frontend-stack.md) |
 
 > React 사용 가능 여부는 1일차에 확인했다. 사용해도 된다.
