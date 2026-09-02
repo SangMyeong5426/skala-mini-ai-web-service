@@ -98,6 +98,8 @@ Table detected_objects {
   qty           integer     [not null, default: 1]
   confidence    numeric(4,3)[not null, note: '0.000 ~ 1.000']
   confidence_level varchar(10)[not null, note: 'HIGH | MEDIUM | LOW — 화면 표시용']
+  missing_info  varchar(100) [note: '보이지 않아 못 정한 속성. 예: 용량(ml). BAG_CHECK output.missingInfo']
+  label_text    varchar(200) [note: '라벨 OCR 원문. BAG_CHECK output.labelText']
   approved      boolean     [not null, default: false,
                  note: '사용자 승인 전에는 다음 단계에 반영하지 않는다']
   created_at    timestamptz [not null, default: `now()`]

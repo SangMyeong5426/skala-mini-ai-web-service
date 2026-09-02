@@ -344,6 +344,27 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 `weight.verdict`: `ROOM`(여유) · `NEAR`(근접) · `OVER_RISK`(초과 가능성) · `UNKNOWN`(정보 부족)
 
+### `GET /api/trips/{tripId}/detections` — 인식 결과 (화면 `S-04`)
+
+```json
+{
+  "detections": [
+    { "detectionId": 2, "photoId": 1, "name": "보조배터리", "qty": 1,
+      "confidence": 0.880, "confidenceLevel": "HIGH", "approved": true,
+      "missingInfo": "배터리 정격(Wh)", "labelText": null },
+    { "detectionId": 6, "photoId": 2, "name": "화장품 용기", "qty": 1,
+      "confidence": 0.640, "confidenceLevel": "MEDIUM", "approved": false,
+      "missingInfo": "용량(ml)", "labelText": null },
+    { "detectionId": 8, "photoId": 2, "name": "검정 파우치", "qty": 1,
+      "confidence": 0.430, "confidenceLevel": "LOW", "approved": false,
+      "missingInfo": null, "labelText": null }
+  ]
+}
+```
+
+> `missingInfo` · `labelText` 는 `BAG_CHECK` 출력([`07-ai-ready.md`](07-ai-ready.md))에서 그대로 온다.
+> `S-04` 「확인 필요」 묶음 = `missingInfo ≠ null` 또는 `confidenceLevel = LOW`.
+
 ### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 승인
 
 ```json

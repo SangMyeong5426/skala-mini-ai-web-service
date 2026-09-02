@@ -78,7 +78,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 | `jobType` | `COMPLETED` 때 서버가 하는 일 · 도메인 API 가 읽는 곳 |
 | --- | --- |
-| `BAG_CHECK` | detections[] 를 detected_objects 에 approved = false 로 넣는다(confidence_level 포함). 같은 photoId 에 이미 approved = false 행이 있으면 지우고 다시 넣고, approved = true 행은 건드리지 않는다. S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다. missingInfo·labelText 는 컬럼이 아직 없다 — 사용자 결정 전까지 S-04 는 GET /api/ai-jobs/{jobId} 를 함께 읽는다. |
+| `BAG_CHECK` | detections[] 를 detected_objects 에 approved = false 로 넣는다(confidence_level 포함). 같은 photoId 에 이미 approved = false 행이 있으면 지우고 다시 넣고, approved = true 행은 건드리지 않는다. S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다. |
 | `PACKING_LIST` | items[] 를 checklist_items 에 source = AI, check_status = UNCHECKED 로 넣는다. 같은 여행에 이름이 같은 항목이 이미 있으면(시드·재실행·alreadyPacked) 넣지 않는다. S-05 는 GET /api/trips/{tripId}/items 로 다시 읽는다. |
 | `WEIGHT_ESTIMATE` | output_payload 에만 저장한다. 테이블에 쓰지 않는다. GET /api/trips/{tripId}/inspection 의 weight 는 그 여행의 가장 최근 COMPLETED 된 WEIGHT_ESTIMATE 의 output 을 투영한다 (excluded 제외, contributions 위 3개). S-07 은 GET /api/ai-jobs/{jobId} 로 전체를 읽는다. |
 | `RULE_CHECK` | results[] 중 itemId 가 있는 것을 item_rule_checks 에 (checklist_item_id, rule_id, verdict, missing_info) 로 넣는다 — 같은 (item, rule) 이 있으면 덮어쓴다. ruleId 가 null 인 결과(ASK_AIRLINE)는 output_payload 에만 남는다. inspection 의 customs 는 item_rule_checks 를 **항목별로 모아 가장 엄격한 verdict 하나**를 보여준다 (NEED_MORE_INFO 가 있으면 그것 — 시드의 보조배터리가 그 예다). 챗봇(tripId null)은 아무 테이블에도 쓰지 않는다. |
@@ -113,8 +113,8 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 ## AI-01 `BAG_CHECK` — 사진 속 물품 인식
 
 **UC-04 · `S-04`.** 사진에서 물품 후보를 뽑는다. **승인 전에는 아무 데도 반영되지 않는다.**
-`output.detections[]` 한 항목이 `detected_objects` 한 행이다 — 단 `missingInfo` · `labelText` 는
-아직 컬럼이 없다 (아래 한계). `S-04` 「확인 필요」 묶음은 `missingInfo ≠ null` 또는 `LOW` 다.
+`output.detections[]` 한 항목이 `detected_objects` 한 행이다 — `missingInfo` · `labelText` 도
+`missing_info` · `label_text` 컬럼에 그대로 들어간다. `S-04` 「확인 필요」 묶음은 `missingInfo ≠ null` 또는 `LOW` 다.
 
 ### 입력 Schema
 
@@ -157,7 +157,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
     "detections": {
       "type": "array",
       "maxItems": 100,
-      "description": "detected_objects 한 행과 1:1(missingInfo·labelText 는 컬럼 미정). 사진이 다르면 항목도 다르다. output 에 detectionId 는 없다 — COMPLETED 시 서버가 approved = false 로 넣고, S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다.",
+      "description": "detected_objects 한 행과 1:1 (missingInfo · labelText 는 missing_info · label_text 컬럼). 사진이 다르면 항목도 다르다. output 에 detectionId 는 없다 — COMPLETED 시 서버가 approved = false 로 넣고, S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다.",
       "items": {
         "type": "object",
         "properties": {
@@ -1930,9 +1930,6 @@ B. 설명 (2차 호출)
 솔직하게 적는다. 발표 5번 섹션(회고)에서 그대로 쓴다.
 
 - **Playground 검증을 하지 않았다.** 프롬프트가 스키마를 지키는지는 돌려 봐야 안다. TBD.
-- **`detected_objects` 에 `missing_info` · `label_text` 컬럼이 없다.** `BAG_CHECK` 출력의 두 필드를 저장할
-  곳이 없어 `S-04` 재진입 시 「확인 필요」 묶음을 `ai_jobs` 재조회로 그려야 한다. 컬럼 추가(`schema.sql`·05·06·seed)는
-  작성자 결정 — TBD.
 - **체크리스트에 없는 승인 물품(추가 물품)은 무게 계산에 들어가지 않는다.** 시드의 가위가
   그렇다. `WEIGHT_ESTIMATE` 는 `check_status = PREPARED` 인 항목만 받는다. 승인 시 체크리스트
   항목으로 등록하면 포함된다 — 그 흐름을 화면에 넣을지는 TBD.

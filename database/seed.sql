@@ -104,15 +104,16 @@ INSERT INTO trip_photos (trip_id, file_path, bag_kind) VALUES
 -- ── 사진에서 인식된 물품 ──────────────────────────────────
 -- approved = false 인 것은 아직 사용자 승인 전이다.
 -- 명세 9.2: "승인 전에는 최종 준비 상태에 반영되지 않아야 한다"
-INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level, approved) VALUES
-  (1, '충전기',      1, 0.930, 'HIGH',   TRUE),
-  (1, '보조배터리',  1, 0.880, 'HIGH',   TRUE),
-  (1, '상의',        4, 0.810, 'HIGH',   TRUE),
-  (1, '하의',        2, 0.790, 'MEDIUM', TRUE),
-  (1, '속옷',        4, 0.720, 'MEDIUM', TRUE),
-  (2, '화장품 용기', 1, 0.640, 'MEDIUM', FALSE),   -- 확인 필요
-  (2, '가위',        1, 0.910, 'HIGH',   TRUE),    -- 체크리스트에 없던 추가 물품
-  (2, '검정 파우치', 1, 0.430, 'LOW',    FALSE);   -- 무엇인지 불분명
+-- missing_info · label_text 는 docs/07-ai-ready.md BAG_CHECK 예시 output 과 같다.
+INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level, approved, missing_info, label_text) VALUES
+  (1, '충전기',      1, 0.930, 'HIGH',   TRUE,  NULL,              NULL),
+  (1, '보조배터리',  1, 0.880, 'HIGH',   TRUE,  '배터리 정격(Wh)', NULL),
+  (1, '상의',        4, 0.810, 'HIGH',   TRUE,  NULL,              NULL),
+  (1, '하의',        2, 0.790, 'MEDIUM', TRUE,  NULL,              NULL),
+  (1, '속옷',        4, 0.720, 'MEDIUM', TRUE,  NULL,              NULL),
+  (2, '화장품 용기', 1, 0.640, 'MEDIUM', FALSE, '용량(ml)',        NULL),   -- 확인 필요
+  (2, '가위',        1, 0.910, 'HIGH',   TRUE,  '날 길이(cm)',     NULL),   -- 체크리스트에 없던 추가 물품
+  (2, '검정 파우치', 1, 0.430, 'LOW',    FALSE, NULL,              NULL);   -- 무엇인지 불분명
 
 
 -- ══════════════════════════════════════════════════════════

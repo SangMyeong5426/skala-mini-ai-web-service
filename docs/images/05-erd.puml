@@ -89,6 +89,8 @@ entity "detected_objects" as detected {
   * qty : integer
   * confidence : numeric(4,3)
   * confidence_level : varchar(10)
+  missing_info : varchar(100)
+  label_text : varchar(200)
   * approved : boolean
   ..
   승인 전에는 다음 단계에

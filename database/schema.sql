@@ -178,6 +178,12 @@ CREATE TABLE detected_objects (
     -- 근거는 docs/05-erd.md "confidence_level 을 따로 두는 근거".
     confidence_level VARCHAR(10)  NOT NULL,
 
+    -- BAG_CHECK output 의 missingInfo / labelText (docs/07-ai-ready.md).
+    -- 원칙 ②: 보이지 않는 속성은 추정하지 않고 묻는다 — 무엇을 물을지가 행에 남아야
+    -- S-04 를 나갔다 들어와도 "확인 필요" 묶음을 그릴 수 있다.
+    missing_info     VARCHAR(100),
+    label_text       VARCHAR(200),
+
     -- 명세 9.2 수용 기준:
     -- "사진 분석 결과는 사용자가 승인하기 전 최종 준비 상태에 반영되지 않아야 한다"
     approved         BOOLEAN      NOT NULL DEFAULT FALSE,
