@@ -236,11 +236,11 @@ Location: /api/ai-jobs/1041
   "status": "COMPLETED",
   "output": {
     "items": [
-      { "name": "여권", "category": "DOCUMENT", "qty": 1, "priority": "REQUIRED" },
-      { "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1, "priority": "REQUIRED" }
+      { "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1, "priority": "REQUIRED" },
+      { "name": "상비약", "category": "MEDICINE", "qty": 1, "priority": "RECOMMENDED" }
     ],
-    "tips": ["일본 콘센트는 A타입입니다.", "10월 초 도쿄는 낮 24도, 얇은 겉옷을 권합니다."],
-    "weatherSource": "FORECAST"
+    "tips": ["일본 콘센트는 A타입, 100V입니다.", "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다."],
+    "weatherSource": "SEASONAL"
   },
   "modelName": "mock",
   "createdAt": "2026-09-02T05:30:00Z",
@@ -318,8 +318,9 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
     ]
   },
   "customs": [
-    { "itemId": 6, "name": "보조배터리", "verdict": "CABIN_OK",
-      "reason": "보조배터리는 기내 반입만 가능합니다. 위탁수하물로 부칠 수 없습니다.",
+    { "itemId": 6, "name": "보조배터리", "verdict": "NEED_MORE_INFO",
+      "missingInfo": "배터리 정격(Wh)",
+      "reason": "보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.",
       "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
       "checkedAt": "2026-09-02" },
     { "itemId": 8, "name": "화장품", "verdict": "NEED_MORE_INFO",
@@ -446,7 +447,7 @@ Location: /api/trips/12
     { "itemId": 1, "name": "여권", "category": "DOCUMENT", "qty": 1,
       "priority": "REQUIRED", "source": "RULE", "checkStatus": "NOT_IN_PHOTO" },
     { "itemId": 5, "name": "충전기", "category": "ELECTRONIC", "qty": 1,
-      "priority": "REQUIRED", "source": "AI", "checkStatus": "PREPARED" }
+      "priority": "REQUIRED", "source": "PHOTO", "checkStatus": "PREPARED" }
   ],
   "completionRate": 0.5
 }
