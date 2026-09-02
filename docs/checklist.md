@@ -10,7 +10,7 @@
 
 - [ ] AI-Ready Web Service 아이디어 선정 → `01-service-plan.md`
 - [ ] 페르소나와 해결할 문제 정의 → `01-service-plan.md`
-- [ ] Teaming, R&R 정의 → `00-team.md`
+- [x] Teaming, R&R 정의 → [`00-team.md`](00-team.md) — 7개 역할 전부 채움
 - [ ] Actor 중심 Use-Case 정의 → `02-use-case.md`
 - [ ] **AI 확장 지점 정의** → `02-use-case.md`, `07-ai-ready.md`
 - [ ] UI/UX 화면 흐름도(Wireframe) 작성 → Figma, `03-wireframe.md`
@@ -19,10 +19,11 @@
 
 - [x] 저장소 구조 및 협업 설정 (이 저장소)
 - [x] GitHub 저장소 생성 및 push
-- [ ] 팀원 전원 Collaborator 초대
-- [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료
+- [x] 팀원 전원 Collaborator 초대 — 5명 전원 `write` 권한, 수락 완료
+- [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~7단계 완료
 - [ ] **전원 연습 PR 1회** — 브랜치·PR 규칙을 1일차에 미리 겪어 둔다
-- [ ] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
+- [ ] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영 (**ID 3건 본인 확인 후**)
+- [ ] PM·DevOps 백업 지정 — 3일차에 두 역할이 동시에 피크를 친다 ([`00-team.md`](00-team.md))
 - [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java / Spring Boot 3
 - [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
 - [x] **React 사용 가능 여부 교수님께 확인** — 사용 가능
