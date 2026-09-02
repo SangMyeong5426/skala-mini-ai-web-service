@@ -1,6 +1,6 @@
 # Backend
 
-**Java 17+ / Spring Boot 3.** [ADR 0001](../docs/adr/0001-backend-stack.md)에서 확정했다.
+**Java 21 / Spring Boot 3.** [ADR 0001](../docs/adr/0001-backend-stack.md)에서 확정했다.
 
 ## 아직 비어 있다
 
@@ -12,8 +12,8 @@
 | --- | --- |
 | Project | Gradle - Groovy |
 | Language | Java |
-| Spring Boot | 3.x |
-| Java | 17 이상 |
+| Spring Boot | 3.2 이상 (기본값 그대로) |
+| Java | **21** |
 | Dependencies | Spring Web · Spring Data JPA · PostgreSQL Driver · Lombok · Validation |
 
 여기에 Swagger UI용 `springdoc-openapi-starter-webmvc-ui` 를 `build.gradle`에
@@ -28,11 +28,11 @@
 밀린다.** 1일차에 가장 먼저 끝낸다.
 
 설치 방법은 [README의 7. 개발 도구 설치](../README.md#7-개발-도구-설치-역할별)에
-있다. 요약하면 **Temurin 17 이상을 각자 PC에 설치**하고, 버전은
-`build.gradle`의 `java.toolchain`이 17로 고정한다.
+있다. 요약하면 **Temurin 21을 각자 PC에 설치**하고, 버전은
+`build.gradle`의 `java.toolchain`이 21로 고정한다.
 
 ```bash
-java -version   # 17 이상이 나와야 한다
+java -version   # 21이 나와야 한다
 ```
 
 Gradle 첫 빌드가 느리므로 **각자 미리 한 번 돌려 둔다.** 발표 당일에 처음
@@ -85,6 +85,16 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
   `GET /api/ai-jobs/{id}`로 조회하게 한다. Mock이라도 이 구조를 지킨다.
   **Mock은 즉시 끝나므로 `@Async`나 큐가 없어도 된다.** 구조만 지키면
   AI-Ready 원칙 3(Asynchronous Pipeline)을 만족한다.
+
+  > 나중에 실제 LLM을 붙이면 요청 하나가 수 초씩 스레드를 붙잡는다. 그때는
+  > `application.yml`에 아래 한 줄이면 가상 스레드로 돈다.
+  > **Java 21을 고른 이유가 이것이다.** ([ADR 0001](../docs/adr/0001-backend-stack.md))
+  >
+  > ```properties
+  > spring.threads.virtual.enabled=true
+  > ```
+  >
+  > 지금 켜 둬도 손해는 없다. 발표 5번 섹션(향후 로드맵)에서 쓸 수 있다.
 - `AI_PROVIDER=mock`이면 Mock 응답을, 다른 값이면 실제 API를 호출하도록
   분기점을 만들어 둔다. 인터페이스 하나에 구현 둘(`MockAiClient`,
   `RealAiClient`)을 두고 지금은 `mock` 쪽만 구현한다.
