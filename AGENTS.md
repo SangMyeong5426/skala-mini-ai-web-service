@@ -67,6 +67,30 @@ SKALA Full-Stack Engineering의 **3일짜리 Mini-project**다. 운영 서비스
 - 커밋·PR 제목: `type(scope): 요약` — scope는 `fe` `be` `db` `api` `docs`
 - 상세는 `CONTRIBUTING.md`.
 
+### PR 본문·리뷰를 올릴 때
+
+**`gh`에 본문을 셸 인자로 넘기지 않는다.** 큰따옴표 안의 백틱은 셸이 명령으로
+실행하고, 그 자리는 출력으로 바뀐다. 출력이 비면 내용이 통째로 사라진다.
+
+```bash
+# 하지 않는다 — `psql` 이 실행되고 사라진다
+gh pr review 15 --body "호스트의 `psql` 클라이언트가 필요합니다"
+
+# 이렇게 한다
+gh pr review 15 --body-file review.md
+gh pr comment 15 --body-file - <<'EOF'
+호스트의 `psql` 클라이언트가 필요합니다
+EOF
+```
+
+heredoc은 **구분자를 따옴표로 감싼다**(`<<'EOF'`). 감싸지 않으면 안쪽이 그대로
+해석된다.
+
+> 실제로 겪은 일이다. PR #15에서 리뷰 본문의 `` `psql` ``과
+> `` `docker exec … < database/schema.sql` ``이 사라져 문장이 *"호스트의  클라이언트가"* 로
+> 올라갔다. **리다이렉션이 포함된 명령이 리뷰어 PC에서 실행됐을 수도 있다.**
+> 마크다운을 쓰는 리뷰일수록 백틱이 많아 위험하다.
+
 ## 안전
 
 - **비밀값을 파일에 쓰지 않는다.** DB 비밀번호, API 키. `.env.example`에는
