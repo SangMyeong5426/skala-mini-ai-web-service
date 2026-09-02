@@ -167,8 +167,8 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
     "purpose": "TOUR",
     "note": "친구 2명, 디즈니랜드, 사진 많이 찍을 예정",
     "alreadyPacked": [
-      { "name": "여권", "category": "DOCUMENT", "qty": 1 },
-      { "name": "충전기", "category": "ELECTRONIC", "qty": 2 },
+      { "name": "충전기", "category": "ELECTRONIC", "qty": 1 },
+      { "name": "보조배터리", "category": "ELECTRONIC", "qty": 1 },
       { "name": "상의", "category": "CLOTHING", "qty": 4 }
     ]
   }
@@ -307,7 +307,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
   },
   "weight": {
     "minG": 4570, "typicalG": 5410, "maxG": 6890,
-    "limitG": 23000,
+    "limitG": 10000,
     "verdict": "ROOM",
     "confidence": "MEDIUM",
     "confidenceReason": "사진에서 미확인 4개, 승인 전 1개",
@@ -402,7 +402,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
   "arrivalAirport": "NRT",
   "bagType": "CARRY_ON",
   "bagEmptyG": 3200,
-  "weightLimitG": 23000,
+  "weightLimitG": 10000,
   "note": "친구 2명, 디즈니랜드"
 }
 ```
