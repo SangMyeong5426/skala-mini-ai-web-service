@@ -99,7 +99,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 15 | `GET` | `/api/trips/{tripId}/inspection` | **준비 상태 + 예상 무게 + 반입 판정 통합** | `200` | `404` |
 
-> 화면 `S-07` 하나가 세 영역을 함께 그린다. 세 번 호출하지 않고 한 번에 받는다.
+> 화면 `S-06` 하나가 세 영역을 함께 그린다. 세 번 호출하지 않고 한 번에 받는다.
 > 영역별로 아직 계산되지 않았으면 해당 키가 `null` 이고, 프런트엔드는 그 영역만
 > 로딩 상태로 그린다.
 
@@ -136,10 +136,10 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 
 | `jobType` | Use-Case | 화면 | 지금 | 나중 |
 | --- | --- | --- | --- | --- |
-| `PACKING_LIST` | UC-05 체크리스트 생성 | `S-04` | Mock 고정 JSON | LLM |
-| `BAG_CHECK` | UC-04 사진 물품 인식 | `S-06` | Mock 고정 인식 결과 | 비전 모델 |
-| `WEIGHT_ESTIMATE` | UC-10 예상 무게 산정 | `S-07` `S-08` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
-| `RULE_CHECK` | UC-07 · UC-08 반입 규정 | `S-07` `S-09` `S-10` | Mock 고정 판정 | LLM 구조화 + 규칙 엔진 |
+| `PACKING_LIST` | UC-05 체크리스트 생성 | `S-05` | Mock 고정 JSON | LLM |
+| `BAG_CHECK` | UC-04 사진 물품 인식 | `S-04` | Mock 고정 인식 결과 | 비전 모델 |
+| `WEIGHT_ESTIMATE` | UC-10 예상 무게 산정 | `S-06` `S-07` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
+| `RULE_CHECK` | UC-07 · UC-08 반입 규정 | `S-06` `S-08` `S-09` | Mock 고정 판정 | LLM 구조화 + 규칙 엔진 |
 
 **`input`·`output`의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema로
 고정한다.** 이 문서는 봉투(HTTP 계약)만 정한다.
@@ -165,15 +165,28 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
     "endDate": "2026-10-04",
     "transport": "FLIGHT",
     "purpose": "TOUR",
-    "note": "친구 2명, 디즈니랜드, 사진 많이 찍을 예정"
+    "note": "친구 2명, 디즈니랜드, 사진 많이 찍을 예정",
+    "alreadyPacked": [
+      { "name": "여권", "category": "DOCUMENT", "qty": 1 },
+      { "name": "충전기", "category": "ELECTRONIC", "qty": 2 },
+      { "name": "상의", "category": "CLOTHING", "qty": 4 }
+    ]
   }
 }
 ```
 
+> **`alreadyPacked` 가 이 서비스의 핵심이다.** 사진에서 인식돼 사용자가 승인한
+> 물품(`detected_objects.approved = true`)을 그대로 넣는다. AI 는 이 목록을 빼고
+> **부족한 것만** 돌려준다. 이미 가방에 있는 것을 다시 추천하지 않기 위해서다.
+>
+> 사진 없이 시작한 경우 빈 배열 `[]` 을 보낸다. 그러면 여행 조건만으로
+> 전체 목록을 추천한다. **필드를 생략하지 않는다** — 빈 배열과 미전송을
+> 구분하지 않으면 Mock 과 실제 LLM 의 동작이 갈린다.
+
 | 필드 | 필수 | 설명 |
 | --- | --- | --- |
 | `jobType` | ✅ | 위 4종 중 하나. 다른 값이면 `400` |
-| `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다.** UC-07(반입 규정 확인)는 여행 등록 전에도 물어볼 수 있다. 나머지는 필수<br>*(챗봇·비회원은 [`01-service-plan.md`](01-service-plan.md)의 "하지 않을 것"이라 근거로 들지 않는다)* |
+| `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다.** 챗봇(UC-08 · 화면 `S-09`)은 여행을 등록하지 않아도 쓸 수 있는 보조 흐름이다. 나머지 `jobType` 은 필수 |
 | `input` | ✅ | `jobType` 별 스키마는 `07-ai-ready.md` |
 
 **Response — `202 Accepted`**
@@ -273,7 +286,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 ## 주요 응답 예시
 
-### `GET /api/trips/{tripId}/inspection` — 검수 결과 (화면 `S-07`)
+### `GET /api/trips/{tripId}/inspection` — 검수 결과 (화면 `S-06`)
 
 **이 서비스의 차별점 셋이 한 응답에 있다.**
 
@@ -357,7 +370,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 | `matchedItemIds: []` | **연결을 모두 해제**한다 |
 | 필드 자체를 안 보냄 | 연결을 건드리지 않는다. `approved`·`name`·`qty` 만 바꾼다 |
 
-**추가·삭제가 아니라 배열 전체 교체**로 정한 이유는 화면 때문이다. `S-06`에서
+**추가·삭제가 아니라 배열 전체 교체**로 정한 이유는 화면 때문이다. `S-04`에서
 사용자가 후보 목록의 체크박스를 조작하면 **그 시점의 전체 선택 상태**가 넘어온다.
 증분으로 보내려면 프런트엔드가 이전 상태를 기억해야 하는데, 폴링으로 갱신되는
 화면에서는 그 가정이 깨진다.
@@ -414,7 +427,7 @@ Location: /api/trips/12
   "transport": "FLIGHT", "status": "DRAFT", "createdAt": "2026-09-02T05:30:00Z" }
 ```
 
-### `GET /api/trips` — 목록 (화면 `S-02`)
+### `GET /api/trips` — 목록 (화면 `S-01`)
 
 ```json
 {
@@ -426,7 +439,7 @@ Location: /api/trips/12
 }
 ```
 
-### `GET /api/trips/{tripId}/items` — 체크리스트 (화면 `S-04`)
+### `GET /api/trips/{tripId}/items` — 체크리스트 (화면 `S-05`)
 
 ```json
 {
