@@ -18,7 +18,37 @@ PostgreSQL. **클라우드에 둔다** — Supabase 또는 Neon.
 | `schema.sql` | 테이블 정의(DDL). `docs/05-erd.md`의 ERD와 짝이다 |
 | `seed.sql` | 데모용 초기 데이터. **3일차 시연에서 빈 화면을 피하려면 필요하다** |
 
-## DB 생성
+## 개발용 로컬 DB (선택)
+
+클라우드 DB가 아직 없거나, 스키마를 마음껏 부수며 시험하고 싶을 때 쓴다.
+**팀 공용 DB를 대체하지 않는다** — 2일차 연동과 3일차 데모는 클라우드로 한다.
+
+```bash
+docker run -d --name skala-pg   -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=skala   -p 55432:5432 postgres:17-alpine
+
+# 스키마 적용
+PGPASSWORD=devpass psql -h localhost -p 55432 -U postgres -d skala -f database/schema.sql
+```
+
+`backend/.env`를 아래처럼 두면 백엔드가 바로 붙는다.
+
+```bash
+DATABASE_URL=jdbc:postgresql://localhost:55432/skala
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=devpass
+```
+
+**포트를 5432가 아니라 55432로 쓰는 이유**는 로컬에 PostgreSQL이 이미 깔려 있는
+사람과 충돌하지 않게 하려는 것이다.
+
+> 이 구성으로 `schema.sql` 실행, `ai_jobs_status_check` 제약 동작, 백엔드
+> HikariPool 연결까지 확인했다. 클라우드로 옮길 때 **바꾸는 것은 `.env` 세 줄뿐이고
+> 코드는 고치지 않는다** — AI-Ready 원칙 4(Security & Config Isolation)가
+> DB에도 그대로 적용된다.
+
+정리할 때는 `docker rm -f skala-pg`.
+
+## DB 생성 (팀 공용)
 
 ### Supabase
 
