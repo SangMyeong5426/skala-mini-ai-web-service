@@ -23,9 +23,13 @@
 - [ ] 전원 [README "팀원 온보딩"](../README.md#팀원-온보딩) 1~6단계 완료
 - [ ] **전원 연습 PR 1회** — 브랜치·PR 규칙을 1일차에 미리 겪어 둔다
 - [ ] `.github/CODEOWNERS` 주석 해제 및 실제 GitHub ID 반영
-- [ ] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md)
-- [ ] FE 프로젝트 생성 (Vue 3 + Vite)
-- [ ] BE 프로젝트 생성 (ADR 0001 확정 후)
+- [x] **백엔드 스택 결정** → [ADR 0001](adr/0001-backend-stack.md) · Java / Spring Boot 3
+- [x] **프런트엔드 스택 결정** → [ADR 0002](adr/0002-frontend-stack.md) · React + TypeScript
+- [x] **React 사용 가능 여부 교수님께 확인** — 사용 가능
+- [ ] **JDK 21 설치** — BE·DevOps 담당과 발표 PC는 필수. 밀리면 BE가 통째로 밀린다
+- [ ] **Node.js 20+ 설치** — FE 담당
+- [ ] FE 프로젝트 생성 (React + TS, Vite)
+- [ ] BE 프로젝트 생성 (Spring Boot 3, start.spring.io)
 - [ ] DB 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)
 
 ---
