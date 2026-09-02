@@ -66,7 +66,7 @@
 
 | 비용 | 대응 |
 | --- | --- |
-| 팀 전원 JDK 17+ 설치 필요 | 1일차에 **가장 먼저** 끝낸다. 이게 밀리면 전부 밀린다 |
+| JDK 17+ 설치 필요 | 1일차에 **가장 먼저** 끝낸다. 이게 밀리면 전부 밀린다. 버전은 `build.gradle`의 `java.toolchain`으로 17에 고정한다 |
 | Gradle 초기 빌드가 느리다 | 첫 빌드를 각자 미리 돌려 둔다. 발표 당일에 처음 받지 않는다 |
 | Swagger가 기본 제공되지 않는다 | `springdoc-openapi-starter-webmvc-ui` 의존성을 추가한다 |
 | 비동기 구조에 설정이 필요하다 | AI 확장 지점은 Mock이므로 `@Async` 없이도 된다. `202 Accepted` 즉시 반환 + 상태 조회 **구조**만 지키면 원칙 3을 만족한다 |
@@ -85,7 +85,8 @@
 
 확정 후 아래를 이어서 한다.
 
-- [ ] **팀 전원 JDK 17+ 설치** — 가장 먼저 한다
+- [ ] **JDK 17+ 설치** — BE·DevOps 담당과 발표 PC는 필수. 가장 먼저 한다
+      (절차는 [README 7단계](../../README.md#7-개발-도구-설치-역할별))
 - [ ] `backend/`에 Spring Boot 3 프로젝트 스캐폴딩 (start.spring.io)
 - [x] `backend/.env.example`의 `PORT`를 `8080`으로 확정
 - [x] `docs/04-architecture.md`의 기술 스택 표와 포트 채우기

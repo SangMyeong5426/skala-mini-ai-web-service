@@ -61,7 +61,8 @@ JDK 설치나 스캐폴딩을 기다리지 않고 바로 작업할 수 있다.
 
 ## 팀원 온보딩
 
-초대를 받았다면 **1번부터 순서대로** 따라간다. 전부 15분이면 끝난다.
+초대를 받았다면 **1번부터 순서대로** 따라간다. 1~6번은 15분, 7번(도구 설치)은
+다운로드 시간에 달렸다.
 
 ### 1. 저장소 받고 훅 켜기
 
@@ -143,6 +144,67 @@ cp backend/.env.example backend/.env
 **`.env`는 커밋되지 않는다.** DB 접속 정보와 API 키는 저장소가 아니라
 **팀 채널로** 받아서 각자 채운다.
 
+### 7. 개발 도구 설치 (역할별)
+
+| 도구 | 버전 | 누가 필요한가 | 확인 |
+| --- | --- | --- | --- |
+| Node.js | 20 이상 | FE 담당, 화면을 띄울 사람 | `node -v` |
+| JDK (Temurin) | 17 이상 | BE·DevOps 담당, **발표 PC** | `java -version` |
+
+FE 담당자는 JDK 없이도 Postman Mock으로 화면 작업을 시작할 수 있다. 하지만
+2일차 FE↔BE 연동부터는 백엔드를 로컬에 띄우는 편이 빠르다. **결국 전원 설치가
+속 편하다 — 15분이면 끝난다.**
+
+#### JDK 설치
+
+```bash
+# macOS
+brew install --cask temurin@17
+
+# Windows (PowerShell)
+winget install EclipseAdoptium.Temurin.17.JDK
+```
+
+설치 프로그램을 직접 받으려면 [adoptium.net](https://adoptium.net)에서 받는다.
+설치 후 확인한다.
+
+```bash
+java -version   # 17 이상이 나와야 한다
+```
+
+#### JDK를 프로젝트 폴더 안에 넣을 수는 없다
+
+`node_modules`처럼 저장소 안에 두는 방식은 **없다.** 각자 PC에 설치해야 한다.
+대신 **버전을 프로젝트가 강제하게** 만들 수는 있고, 그렇게 해 둔다.
+
+`start.spring.io`가 만들어 주는 `build.gradle`에 아래가 이미 들어 있다. **지우지 않는다.**
+
+```gradle
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+```
+
+이러면 누가 JDK 21을 깔았어도 **컴파일은 17 기준으로** 돈다. 팀원 간 버전이
+어긋나서 나는 오류가 사라진다.
+
+`settings.gradle`에 아래를 더하면, 맞는 버전이 없을 때 Gradle이 자동으로 받아 온다.
+
+```gradle
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+```
+
+> **그래도 JDK 설치를 건너뛸 수는 없다.** `./gradlew` 자체가 자바로 돌기 때문에
+> Gradle을 띄울 JVM이 먼저 있어야 한다. toolchain은 *컴파일 버전을 맞춰 주는 것*이지
+> *설치를 대신해 주는 것*이 아니다.
+
+IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK`로 IDE가
+받아 주게 할 수도 있다. 단 터미널에서 `./gradlew`를 쓰려면 시스템에도 있어야 한다.
+
 ### 막혔을 때
 
 | 증상 | 해결 |
@@ -154,6 +216,8 @@ cp backend/.env.example backend/.env
 | PR에서 `PR title must follow Conventional Commits` | PR 제목을 `type(scope): 요약`으로 고친다. 제목만 고치면 자동 재검사된다 |
 | FE에서 API 호출이 CORS 오류 | 백엔드 `.env`의 `CORS_ALLOWED_ORIGINS`에 `http://localhost:5173`이 있는지 확인 |
 | 서버가 `.env`가 없다고 뜸 | 6번 단계를 건너뛴 것이다 |
+| `./gradlew`가 `JAVA_HOME` 오류 | JDK 미설치 또는 경로 미설정. 7번 단계 |
+| Gradle이 "Could not find a Java installation" | toolchain이 요구하는 17이 없다. 7번 단계 |
 | 30분 이상 막힘 | **팀 채널에 올린다.** 3일 중 30분은 크다 |
 
 ## 로컬 실행
@@ -185,7 +249,6 @@ cp backend/.env.example backend/.env
 | --- | --- | --- |
 | 서비스 아이디어 | [`docs/01-service-plan.md`](docs/01-service-plan.md) | 1일차 |
 | 데이터베이스 (Supabase / Neon) | — | 1일차 |
-| **React 사용 가능 여부 교수님 확인** | [ADR 0002](docs/adr/0002-frontend-stack.md) | 1일차 |
 
 ## 확정된 결정
 
@@ -193,3 +256,5 @@ cp backend/.env.example backend/.env
 | --- | --- | --- |
 | 백엔드 스택 | Java 17+ / Spring Boot 3 · 포트 `8080` | [ADR 0001](docs/adr/0001-backend-stack.md) |
 | 프런트엔드 스택 | React + TypeScript (Vite) · 포트 `5173` | [ADR 0002](docs/adr/0002-frontend-stack.md) |
+
+> React 사용 가능 여부는 1일차에 확인했다. 사용해도 된다.
