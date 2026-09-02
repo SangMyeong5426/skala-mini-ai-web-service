@@ -15,7 +15,7 @@
 | --- | --- |
 | Base URL (로컬) | `http://localhost:8080/api` — Spring Boot 기본 포트. [ADR 0001](adr/0001-backend-stack.md)에서 확정 |
 | 요청·응답 형식 | `application/json; charset=utf-8` |
-| 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X) |
+| 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X). 예외: `/inspection` 은 자원 목록이 아니라 여행 하나의 **집계 결과**라 단수다 |
 | 시각 형식 | ISO 8601 UTC (`2026-09-02T05:30:00Z`) |
 | 인증 | **구현하지 않는다.** 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
 
@@ -30,8 +30,7 @@
 | `202 Accepted` | **비동기 작업을 접수했고 아직 끝나지 않았다.** AI 호출이 여기 해당 |
 | `204 No Content` | 삭제 성공. 본문 없음 |
 | `400 Bad Request` | 요청 형식·값이 잘못됨 |
-| `401 Unauthorized` | 인증 안 됨 |
-| `403 Forbidden` | 인증됐지만 권한 없음 |
+| `413 Payload Too Large` | 요청 전체 크기 초과 — 사진 여러 장 (`spring.servlet.multipart.max-request-size`) |
 | `404 Not Found` | 리소스 없음 |
 | `409 Conflict` | 중복 등 상태 충돌 |
 | `500 Internal Server Error` | 서버 오류 |
@@ -124,7 +123,7 @@
 | 상황 | 코드 | 왜 |
 | --- | --- | --- |
 | `POST /api/ai-jobs` 로 작업 접수 | **`202`** | 접수만 했고 **아직 안 끝났다**. `200` 이 아니다 |
-| `GET /api/ai-jobs/{id}` 인데 아직 `PENDING` | **`200`** | **조회 자체는 성공했다.** `202` 가 아니다. 본문의 `status` 로 구분한다 |
+| `GET /api/ai-jobs/{jobId}` 인데 아직 `PENDING` | **`200`** | **조회 자체는 성공했다.** `202` 가 아니다. 본문의 `status` 로 구분한다 |
 
 ## AI 확장 지점 엔드포인트 (Mock)
 

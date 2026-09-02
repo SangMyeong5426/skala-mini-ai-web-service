@@ -78,9 +78,9 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 | `jobType` | `COMPLETED` 때 서버가 하는 일 · 도메인 API 가 읽는 곳 |
 | --- | --- |
-| `BAG_CHECK` | detections[] 를 detected_objects 에 approved = false 로 넣는다(confidence_level 포함). 같은 photoId 에 이미 approved = false 행이 있으면 지우고 다시 넣고, approved = true 행은 건드리지 않는다. S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다. missingInfo·labelText 는 컬럼이 아직 없다 — 사용자 결정 전까지 S-04 는 GET /api/ai-jobs/{id} 를 함께 읽는다. |
+| `BAG_CHECK` | detections[] 를 detected_objects 에 approved = false 로 넣는다(confidence_level 포함). 같은 photoId 에 이미 approved = false 행이 있으면 지우고 다시 넣고, approved = true 행은 건드리지 않는다. S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다. missingInfo·labelText 는 컬럼이 아직 없다 — 사용자 결정 전까지 S-04 는 GET /api/ai-jobs/{jobId} 를 함께 읽는다. |
 | `PACKING_LIST` | items[] 를 checklist_items 에 source = AI, check_status = UNCHECKED 로 넣는다. 같은 여행에 이름이 같은 항목이 이미 있으면(시드·재실행·alreadyPacked) 넣지 않는다. S-05 는 GET /api/trips/{tripId}/items 로 다시 읽는다. |
-| `WEIGHT_ESTIMATE` | output_payload 에만 저장한다. 테이블에 쓰지 않는다. GET /api/trips/{tripId}/inspection 의 weight 는 그 여행의 가장 최근 COMPLETED 된 WEIGHT_ESTIMATE 의 output 을 투영한다 (excluded 제외, contributions 위 3개). S-07 은 GET /api/ai-jobs/{id} 로 전체를 읽는다. |
+| `WEIGHT_ESTIMATE` | output_payload 에만 저장한다. 테이블에 쓰지 않는다. GET /api/trips/{tripId}/inspection 의 weight 는 그 여행의 가장 최근 COMPLETED 된 WEIGHT_ESTIMATE 의 output 을 투영한다 (excluded 제외, contributions 위 3개). S-07 은 GET /api/ai-jobs/{jobId} 로 전체를 읽는다. |
 | `RULE_CHECK` | results[] 중 itemId 가 있는 것을 item_rule_checks 에 (checklist_item_id, rule_id, verdict, missing_info) 로 넣는다 — 같은 (item, rule) 이 있으면 덮어쓴다. ruleId 가 null 인 결과(ASK_AIRLINE)는 output_payload 에만 남는다. inspection 의 customs 는 item_rule_checks 를 **항목별로 모아 가장 엄격한 verdict 하나**를 보여준다 (NEED_MORE_INFO 가 있으면 그것 — 시드의 보조배터리가 그 예다). 챗봇(tripId null)은 아무 테이블에도 쓰지 않는다. |
 
 ### 템플릿 표기
@@ -711,7 +711,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 `GET /api/trips/{tripId}/inspection` 의 `weight` 는 이 출력의 **투영**이다 —
 `excluded[]` 를 빼고 `contributions[]` 를 위 3개로 자른 것. `S-06` 은 개수만, `S-07` 은
-이 작업 결과 전체를 `GET /api/ai-jobs/{id}` 로 받아 이유까지 그린다.
+이 작업 결과 전체를 `GET /api/ai-jobs/{jobId}` 로 받아 이유까지 그린다.
 
 ### 입력 Schema
 

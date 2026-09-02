@@ -39,12 +39,17 @@ entity "trips" as trips {
   * id : bigint <<PK>>
   --
   * user_id : bigint <<FK>>
+  * origin : varchar(100)
   * destination : varchar(100)
+  country_code : char(2)
   * start_date : date
   * end_date : date
   * purpose : varchar(20)
   * transport : varchar(20)
   airline : varchar(50)
+  departure_airport : char(3)
+  arrival_airport : char(3)
+  bag_type : varchar(20)
   bag_empty_g : integer
   weight_limit_g : integer
   note : text

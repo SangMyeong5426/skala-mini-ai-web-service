@@ -11,6 +11,8 @@
 
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
+- **PNG·SVG 는 재렌더 전이다 (TBD).** `.puml` 에 `trips` 의 `origin` · `country_code` · `departure_airport` ·
+  `arrival_airport` · `bag_type` 을 2026-09-03 에 추가했다. 아래 DSL 과 `schema.sql` 이 정본이다
 - dbdiagram.io 링크: TBD — 아래 DSL을 붙여 넣으면 즉시 생성된다
 
 > 다이어그램은 **PlantUML로 그렸다.** Use-Case·User Flow·아키텍처와 같은 도구라
