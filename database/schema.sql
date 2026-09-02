@@ -27,7 +27,7 @@ CREATE TABLE users (
 );
 
 
--- ── 품목별 무게 마스터 (UC-08 예상 무게 산정) ─────────────
+-- ── 품목별 무게 마스터 (UC-10 예상 무게 산정) ─────────────
 -- 카테고리 평균이 아니라 최소·대표·최대 범위를 둔다.
 -- 명세 F-10: "결과를 실측값처럼 표현하지 않는다"
 CREATE TABLE item_weights (
@@ -47,7 +47,7 @@ CREATE TABLE item_weights (
 );
 
 
--- ── 반입 규정 마스터 (UC-09 항공 반입 규정 확인) ──────────
+-- ── 반입 규정 마스터 (UC-07 항공 반입 규정 확인) ──────────
 -- 최종 판정은 이 테이블을 보는 규칙 엔진이 한다. AI가 아니다.
 CREATE TABLE transport_rules (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -111,7 +111,7 @@ CREATE TABLE trips (
 CREATE INDEX idx_trips_user_created ON trips (user_id, created_at DESC);
 
 
--- ── 체크리스트 항목 (UC-03·04·07) ─────────────────────────
+-- ── 체크리스트 항목 (UC-05·06) ────────────────────────────
 CREATE TABLE checklist_items (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     trip_id        BIGINT       NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -145,7 +145,7 @@ CREATE TABLE checklist_items (
 CREATE INDEX idx_checklist_items_trip ON checklist_items (trip_id, category);
 
 
--- ── 짐 사진 (UC-05) ───────────────────────────────────────
+-- ── 짐 사진 (UC-03) ───────────────────────────────────────
 CREATE TABLE trip_photos (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     trip_id     BIGINT       NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -162,7 +162,7 @@ CREATE TABLE trip_photos (
 CREATE INDEX idx_trip_photos_trip ON trip_photos (trip_id);
 
 
--- ── 사진에서 인식된 물품 (UC-06) ──────────────────────────
+-- ── 사진에서 인식된 물품 (UC-04) ──────────────────────────
 CREATE TABLE detected_objects (
     id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     photo_id         BIGINT       NOT NULL REFERENCES trip_photos(id) ON DELETE CASCADE,
@@ -247,8 +247,8 @@ CREATE TABLE ai_jobs (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id         BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    -- nullable 이다. 반입 규정 확인(UC-09)은 여행을 등록하지 않아도 물어볼 수 있다.
-    -- (UC-10 챗봇은 01-service-plan.md 의 "하지 않을 것"이므로 근거로 들지 않는다)
+    -- nullable 이다. 반입 규정 확인(UC-07)은 여행을 등록하지 않아도 물어볼 수 있다.
+    -- (UC-08 챗봇은 01-service-plan.md 의 "하지 않을 것"이므로 근거로 들지 않는다)
     trip_id         BIGINT       REFERENCES trips(id) ON DELETE CASCADE,
 
     -- AI-Ready 원칙 3 (Asynchronous Pipeline): 상태를 DB 에 둬야

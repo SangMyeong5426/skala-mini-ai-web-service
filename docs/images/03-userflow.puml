@@ -1,129 +1,151 @@
-@startuml 03-userflow
-' ─────────────────────────────────────────────────────────
-'  AI 여행가방 확인 플랫폼 — User Flow
-'  출처: Notion「기능 정의」v2 3절 전체 서비스 흐름 (9단계)
-'        → docs/03-wireframe.md
-'
-'  명세서 9단계 대조
-'    1 시작·인증        → S-01, S-02
-'    2 여행 등록        → S-03
-'    3 체크리스트 생성   → S-04   [AI]
-'    4 짐 사진 등록     → S-05
-'    5 물품 인식        → S-06   [AI]
-'    6 예상 무게 산정   → S-07/S-08 [AI]
-'    7 준비물 비교      → S-07
-'    8 반입 규정 확인   → S-07/S-09 [AI 부분]
-'    9 최종 확정·저장   → S-07
-' ─────────────────────────────────────────────────────────
+@startdot
+digraph UserFlow {
+  graph [
+    rankdir=TB,
+    splines=ortho,
+    nodesep=0.55,
+    ranksep=0.62,
+    pad=0.25,
+    bgcolor="#FFFFFF",
+    fontname="Apple SD Gothic Neo",
+    fontsize=18,
+    label="사용자 흐름 — 여행가방 검수 완료까지",
+    labelloc=t
+  ]
 
-skinparam backgroundColor #FFFFFF
-skinparam shadowing false
-skinparam defaultFontName "Apple SD Gothic Neo"
-skinparam defaultFontSize 12
-skinparam ArrowColor #46524E
+  node [
+    shape=box,
+    style="rounded,filled",
+    margin="0.16,0.10",
+    color="#8A9A94",
+    fillcolor="#F5F7F6",
+    fontcolor="#14201C",
+    fontname="Apple SD Gothic Neo",
+    fontsize=11,
+    penwidth=1
+  ]
 
-skinparam activity {
-  BackgroundColor #F5F7F6
-  BorderColor #8A9A94
-  FontColor #14201C
-  DiamondBackgroundColor #FBF3E4
-  DiamondBorderColor #8D5606
-  BackgroundColor<<AI>> #D9EAE6
-  BorderColor<<AI>> #0D6455
-}
+  edge [
+    color="#606B67",
+    fontcolor="#34403B",
+    fontname="Apple SD Gothic Neo",
+    fontsize=10,
+    arrowsize=0.7,
+    penwidth=1
+  ]
 
-title User Flow — 명세서 3절 전체 서비스 흐름 9단계
+  start [shape=circle, label="", width=0.20, fixedsize=true, fillcolor="#2B302E", color="#2B302E"]
+  entry [label="S-01 로그인\n로그인 또는 비회원 이용 선택", fillcolor="#E9E1D5", color="#8B7B65"]
+  member_choice [shape=diamond, label="회원으로\n이용할까?", style=filled, fillcolor="#F3F1EA"]
+  login_check [shape=diamond, label="로그인\n성공?", style=filled, fillcolor="#F3F1EA"]
 
-start
+  start -> entry [xlabel="서비스 접속"]
+  entry -> member_choice
+  member_choice -> login_check [xlabel="회원"]
+  login_check -> entry [xlabel="실패 · 다시 입력", constraint=false]
 
-:**① 시작·인증**\n<size:10>S-01 로그인</size>;
-if (로그인?) then (회원)
-  :**S-02 홈**\n진행 중 여행 / 과거 기록;
-  if (과거 여행 재사용?) then (예)
-    :**S-11 기록 상세**\n체크리스트 복사;
-  else (아니오)
-  endif
-else (비회원 임시 모드)
-  note right
-    비회원은 반입 규정 확인
-    (⑧·챗봇)만 이용한다
-  end note
-endif
+  subgraph cluster_member {
+    label="회원 · 여행가방 검수";
+    labelloc=t;
+    color="#C7D0C7";
+    fontcolor="#516059";
+    fontname="Apple SD Gothic Neo";
+    fontsize=13;
+    style="rounded";
+    margin=20;
 
-:**② 여행 등록**\n<size:10>S-03 · 일정·지역·목적·이동수단·항공사·가방</size>;
-note right: 항공사·경유지를 비우면\n일반 기준만 적용된다
+    home [label="S-02 홈\n진행 중 여행·과거 기록 확인"]
+    trip_route [shape=diamond, label="여행을 어떻게\n시작할까?", style=filled, fillcolor="#F3F1EA"]
+    trip [label="S-03 여행 등록\n일정·지역·목적·이동수단 입력"]
+    history [label="S-11 여행 기록 상세\n과거 체크리스트 확인·복사"]
+    resume [label="진행 중 여행\nS-04~S-07의 마지막 저장 화면부터 재개", peripheries=2]
+    trip_valid [shape=diamond, label="필수 입력이\n올바른가?", style=filled, fillcolor="#F3F1EA"]
 
-if (날짜·필수값 정상?) then (예)
-else (아니오)
-  :오류 표시 후\n해당 입력칸으로;
-  stop
-endif
+    list_loading [label="S-04 체크리스트\n‘AI가 준비물을 고르는 중’", fillcolor="#DDEEE9", color="#75A89C"]
+    list [label="S-04 체크리스트\n추천 항목 확인·추가·수정·삭제"]
+    list_done [shape=diamond, label="체크리스트를\n확정할까?", style=filled, fillcolor="#F3F1EA"]
 
-partition "★ AI 확장 지점 ①  job_type = PACKING_LIST" {
-  :**③ 체크리스트 생성**\n<size:10>S-04</size>; <<AI>>
-  :POST /api/ai-jobs → **202 Accepted**;
-  :"생성 중" 표시 → **폴링**\nGET /api/ai-jobs/{id};
-  note right
-    출발일이 **16일**을 넘으면
-    예보가 없다 → 계절 평균
-  end note
-}
+    photo [label="S-05 짐 사진 등록\n사진 선택·미리보기·가방 구분"]
+    photo_valid [shape=diamond, label="분석할 수 있는\n사진인가?", style=filled, fillcolor="#F3F1EA"]
+    item_loading [label="S-06 인식 결과·승인\n‘사진을 분석하는 중’", fillcolor="#DDEEE9", color="#75A89C"]
+    item_review [label="S-06 인식 결과·승인\n물품 후보·수량·신뢰도 확인"]
+    item_action [shape=diamond, label="인식 결과를\n승인할까?", style=filled, fillcolor="#F3F1EA"]
 
-:**S-04** 카테고리별 목록 표시\n사용자가 추가·수정·삭제 후 확정;
+    result_loading [label="S-07 검수 결과\n준비 상태·무게·반입 판정 처리 중", fillcolor="#DDEEE9", color="#75A89C"]
+    result [label="S-07 검수 결과\n세 결과와 안내 문구 확인"]
+    result_action [shape=diamond, label="최종 저장할까?", style=filled, fillcolor="#F3F1EA"]
+    follow_up [label="상세 확인 또는 결과 수정\nS-08 무게 상세 · S-09 반입 규정 상세\nS-04/S-06 목록·인식 결과 수정"]
+    saved [label="S-07 최종 저장\n검수 결과 저장 완료", fillcolor="#E9F0B6", color="#7D8B3F", penwidth=1.3]
 
-:**④ 짐 사진 등록**\n<size:10>S-05 · 다중 업로드</size>;
+    home -> trip_route [xlabel="여행 선택"]
+    trip_route -> trip [xlabel="새 여행"]
+    trip_route -> history [xlabel="과거 여행"]
+    trip_route -> resume [xlabel="진행 중 여행"]
+    history -> trip
 
-partition "★ AI 확장 지점 ②  job_type = BAG_CHECK" {
-  :**⑤ 물품 인식**\n<size:10>S-06</size>; <<AI>>
-  :POST /api/ai-jobs → **202 Accepted**;
-  :"분석 중" 표시 → **폴링**;
-}
+    trip -> trip_valid [xlabel="저장"]
+    trip_valid -> trip [xlabel="아니오 · 오류 항목 수정", constraint=false]
+    trip_valid -> list_loading [xlabel="예"]
+    list_loading -> list [xlabel="추천 완료 또는 기본 목록"]
+    list -> list_done
+    list_done -> list [xlabel="아니오 · 계속 수정", constraint=false]
+    list_done -> photo [xlabel="예 · 짐 검사하기"]
 
-:**S-06** 물품 후보·수량·신뢰도 표시;
-if (사용자 승인?) then (승인)
-else (수정·직접 입력)
-  :이름·수량 수정;
-endif
+    photo -> photo_valid [xlabel="분석 시작"]
+    photo_valid -> photo [xlabel="아니오 · 해당 사진만 다시 선택", constraint=false]
+    photo_valid -> item_loading [xlabel="예"]
+    item_loading -> item_review [xlabel="인식 결과 표시"]
+    item_review -> item_action
+    item_action -> item_review [xlabel="아니오 · 수정·제외·직접 입력", constraint=false]
+    item_action -> photo [xlabel="다시 촬영", constraint=false]
+    item_action -> result_loading [xlabel="예 · 승인"]
 
-note right
-  **승인된 물품만** 다음 단계로 넘어간다.
-  보이지 않는 속성(용량·Wh·날 길이)은
-  AI가 추정하지 않는다
-end note
+    result_loading -> result [xlabel="결과 영역별 표시"]
+    result -> result_action
+    result_action -> saved [xlabel="예"]
+    result_action -> follow_up [xlabel="아니오"]
+    follow_up -> result [xlabel="확인·수정 후 돌아가기", constraint=false]
+    resume -> saved [xlabel="남은 단계 완료"]
 
-fork
-  partition "★ AI 확장 지점 ③  WEIGHT_ESTIMATE" {
-    :**⑥ 예상 무게 산정**\n<size:10>S-07 · S-08</size>; <<AI>>
-    :최소–대표–최대 범위\n신뢰도 · 품목별 기여도\n한도 대비 여유·근접·초과;
+    { rank=same; trip; history; resume }
   }
-fork again
-  :**⑦ 준비물 비교**\n<size:10>S-07</size>;
-  :준비 완료 / 확인 필요 /\n**사진에서 미확인** / 추가 물품;
-  note right
-    사진에서 못 찾은 것을
-    **"누락"으로 단정하지 않는다**
-  end note
-fork again
-  partition "★ AI 확장 지점 ④  RULE_CHECK" {
-    :**⑧ 반입 규정 확인**\n<size:10>S-07 · S-09</size>; <<AI>>
-    :AI가 물품명 구조화\n→ **규칙 엔진이 최종 판정**;
-    if (세부정보 충분?) then (예)
-      :기내 / 위탁 / 금지 / 제한;
-    else (아니오)
-      :**추가정보 필요**\n라벨 촬영 또는 직접 입력;
-    endif
+
+  subgraph cluster_guest {
+    label="비회원 · 반입 규정 확인";
+    labelloc=t;
+    color="#E6B9C5";
+    fontcolor="#9B5669";
+    fontname="Apple SD Gothic Neo";
+    fontsize=13;
+    style="rounded";
+    margin=20;
+
+    chat [label="S-10 챗봇\n질문 입력 또는 사진 첨부", fillcolor="#FAE3E9", color="#D997AA"]
+    chat_loading [label="S-10 챗봇\n‘답변을 만드는 중’", fillcolor="#F4CED9", color="#D997AA"]
+    chat_info [shape=diamond, label="판정 정보가\n충분한가?", style=filled, fillcolor="#FAE3E9", color="#D997AA"]
+    add_info [label="추가 질문에 답하기", fillcolor="#FAE3E9", color="#D997AA"]
+    chat_result [label="S-10 챗봇\n판정·근거·출처 확인", fillcolor="#FAE3E9", color="#D997AA"]
+    guest_detail [shape=diamond, label="근거 상세를\n볼까?", style=filled, fillcolor="#FAE3E9", color="#D997AA"]
+    guest_rule [label="S-09 반입 규정 상세\n공식 근거 확인", fillcolor="#FAE3E9", color="#D997AA"]
+    guest_done [label="반입 규정 확인 완료", fillcolor="#EFA1B5", color="#B85F78", fontcolor="#5E2636", penwidth=1.3]
+
+    chat -> chat_loading [xlabel="질문 보내기"]
+    chat_loading -> chat_info
+    chat_info -> add_info [xlabel="아니오"]
+    add_info -> chat [xlabel="정보 보완", constraint=false]
+    chat_info -> chat_result [xlabel="예"]
+    chat_result -> guest_detail
+    guest_detail -> guest_rule [xlabel="예"]
+    guest_detail -> guest_done [xlabel="아니오"]
+    guest_rule -> guest_done [xlabel="확인 완료"]
   }
-end fork
 
-:**⑨ 최종 확정·저장**\n<size:10>S-07</size>\n고정 안내 문구 표시;
+  member_choice -> chat [xlabel="비회원"]
+  login_check -> home [xlabel="성공"]
 
-stop
-
-legend bottom
-  |<#D9EAE6>| **AI 확장 지점** — 지금 Mock, 나중에 실제 AI |
-  |<#F5F7F6>| 일반 처리 |
-  |<#FBF3E4>| 분기 |
-  ★ 네 곳 모두 `POST /api/ai-jobs` → 202 → 폴링. 엔드포인트는 하나다 (ADR 0003)
-endlegend
-
-@enduml
+  member_done [shape=doublecircle, label="", width=0.22, fixedsize=true, fillcolor="#2B302E", color="#2B302E"]
+  guest_end [shape=doublecircle, label="", width=0.22, fixedsize=true, fillcolor="#B85F78", color="#B85F78"]
+  saved -> member_done [xlabel="목표 달성"]
+  guest_done -> guest_end
+}
+@enddot
