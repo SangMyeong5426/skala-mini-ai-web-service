@@ -126,12 +126,35 @@ Claude Code가 읽는다. **두 파일은 같은 내용이고, 한쪽을 고치�
 ### 5. 환경 파일 만들기 (전원)
 
 ```bash
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
+cp -n frontend/.env.example frontend/.env
+cp -n backend/.env.example backend/.env
 ```
 
-**`.env`는 커밋되지 않는다.** DB 접속 정보와 API 키는 저장소가 아니라
-**팀 채널로** 받아서 각자 채운다.
+**`-n` 을 빼지 않는다.** 그냥 `cp` 는 이미 있는 `.env` 를 **말없이 덮어쓴다.**
+접속 정보를 채워 둔 뒤에 이 명령을 다시 실행하면 값이 통째로 사라진다.
+`-n` 은 파일이 이미 있으면 아무것도 하지 않는다.
+
+**`.env` 는 커밋되지 않는다.** DB 접속 정보는 저장소가 아니라 **팀 채널로**
+받아서 각자 채운다. **프런트·백엔드 둘 다 만든다** — 프런트는
+`VITE_API_BASE_URL` 하나뿐이라 예시값 그대로 두면 되고, 백엔드만 채우면 된다.
+
+**복사만 하면 백엔드는 뜨지 않는다.** `.env.example` 의 `DATABASE_URL` 은
+`jdbc:postgresql://HOST:5432/DBNAME` 이라는 **형식 예시**라 실제 호스트가 아니다.
+이대로 `./gradlew bootRun` 을 하면 자바 스택트레이스가 길게 나온다.
+
+팀 채널에서 받은 값으로 세 줄을 채운다. 앞의 두 줄은 비밀이 아니라 그대로 붙여넣고,
+비밀번호는 아래 스크립트로 넣는다 — **화면에 보이지 않고 셸 기록에도 남지 않는다.**
+
+```bash
+./scripts/db-password   # DATABASE_PASSWORD 입력
+./scripts/check-db      # 접속·테이블·시드 확인
+```
+
+`./scripts/check-db` 가 테이블 10개와 시드를 보여주면 준비가 끝난 것이다.
+
+> **`./scripts/db-apply` 는 실행하지 않는다.** 팀 공용 DB의 테이블을 지우고 다시
+> 만들기 때문에 **다른 사람 작업이 사라진다.** 스키마를 처음 넣을 때 한 번만
+> 쓰고, 그 뒤로는 `schema.sql` 이 바뀌었을 때 팀에 알리고 한 사람이 실행한다.
 
 ### 6. 개발 도구 설치 (전원)
 
@@ -197,11 +220,12 @@ java {
 이러면 누가 JDK 17이나 25를 깔았어도 **컴파일은 21 기준으로** 돈다. 팀원 간 버전이
 어긋나서 나는 오류가 사라진다.
 
-`settings.gradle`에 아래를 더하면, 맞는 버전이 없을 때 Gradle이 자동으로 받아 온다.
+맞는 버전이 없을 때 Gradle이 자동으로 받아 오게 하는 플러그인도 **이미 넣어 뒀다.**
+`backend/settings.gradle` 에 들어 있다. **지우지 않는다.**
 
 ```gradle
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 ```
 
@@ -223,6 +247,9 @@ IntelliJ IDEA를 쓴다면 `File → Project Structure → SDKs → Download JDK
 | PR에서 `PR 제목은 Conventional Commits 형식이어야 합니다` | 제목을 `type(scope): 요약`으로 고친다. 제목만 고쳐도 자동 재검사된다 |
 | FE에서 API 호출이 CORS 오류 | 백엔드 `.env`의 `CORS_ALLOWED_ORIGINS`에 `http://localhost:5173`이 있는지 확인 |
 | 서버가 `.env`가 없다고 뜸 | 5번 단계를 건너뛴 것이다 |
+| `bootRun` 이 `PSQLException: 연결 시도가 실패했습니다` | `.env` 의 `DATABASE_URL` 이 예시값(`HOST:5432/DBNAME`) 그대로다. 팀 채널의 실제 값으로 채운다. 5번 단계 |
+| `./scripts/check-db` 가 `jdbc: 접두사가 없습니다` | 접속 문자열을 그대로 붙여넣은 것이다. 앞에 `jdbc:` 를 붙인다 |
+| `./scripts/check-db` 가 `테이블 0 개` | 스키마가 아직 안 들어갔다. **혼자 `db-apply` 하지 말고 팀에 알린다** |
 | `./gradlew`가 `JAVA_HOME` 오류 | JDK 미설치 또는 경로 미설정. 6번 단계 |
 | Gradle이 `Could not find a Java installation` | JDK 21이 없다. `settings.gradle`의 foojay가 받아 오지만, 오래 걸리면 6번 단계로 직접 설치한다 |
 | 30분 이상 막힘 | **팀 채널에 올린다.** 3일 중 30분은 크다 |
