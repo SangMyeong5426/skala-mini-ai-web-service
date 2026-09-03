@@ -10,9 +10,10 @@ import type { SignupRequest, User } from '../types/api'
  */
 export interface AuthState {
   user: User | null
-  /** 첫 확인이 끝나기 전 — 이때 판단하면 로그인한 사람도 튕겨 나간다 */
+  /** 첫 세션 조회가 끝나기 전 — 이때 판단하면 로그인한 사람도 튕겨 나간다 */
   loading: boolean
   login: (loginId: string, password: string) => Promise<void>
+  /** 06: 가입만으로 세션을 만들지 않는다. 끝나면 로그인 화면으로 보낸다 */
   signup: (input: SignupRequest) => Promise<void>
   logout: () => Promise<void>
 }

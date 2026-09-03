@@ -31,9 +31,10 @@ export default function Signup() {
     setField(null)
     setBusy(true)
     try {
-      await signup({ loginId, password, nickname, email })
-      // 가입하면 바로 로그인 상태다. 다시 로그인시키지 않는다.
-      nav('/trips/new', { replace: true })
+      await signup({ nickname, loginId, password, email })
+      // 06: "가입만으로 인증 세션을 만들지 않으며 S-00 로그인 모드로 이동한다".
+      // 아이디를 넘겨서 다시 입력하지 않게 한다.
+      nav('/login', { replace: true, state: { justSignedUp: true, loginId } })
     } catch (err) {
       setError(err instanceof Error ? err.message : '가입하지 못했습니다.')
       if (err instanceof ApiFailure && err.field) setField(err.field)
@@ -47,25 +48,25 @@ export default function Signup() {
   return (
     <AuthShell
       title="계정을 만들어 주세요"
-      sub="여행 준비는 계정에 저장돼서, 다음 여행에 다시 쓸 수 있어요."
+      sub="아이디·비밀번호·닉네임·이메일만 받아요."
       foot={<>이미 계정이 있나요? <Link to="/login">로그인</Link></>}
     >
       <form className="auth-form" onSubmit={submit} noValidate>
-        <Field label="아이디" htmlFor="loginId" hint={msgFor('loginId') ?? '로그인할 때 쓰는 이름이에요.'}>
+        <Field label="아이디" htmlFor="loginId" hint={msgFor('loginId') ?? '영문 소문자·숫자·밑줄 4~30자.'}>
           <input
             id="loginId" name="username" autoComplete="username" autoFocus
             value={loginId} onChange={(e) => setLoginId(e.target.value)}
           />
         </Field>
 
-        <Field label="비밀번호" htmlFor="password">
+        <Field label="비밀번호" htmlFor="password" hint={msgFor('password') ?? '8자 이상.'}>
           <input
             id="password" name="password" type="password" autoComplete="new-password"
             value={password} onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
 
-        <Field label="닉네임" htmlFor="nickname" hint="화면에 표시되는 이름이에요.">
+        <Field label="닉네임" htmlFor="nickname" hint={msgFor('nickname') ?? '화면에 표시되는 이름이에요. 2~50자.'}>
           <input
             id="nickname" name="nickname" autoComplete="nickname"
             value={nickname} onChange={(e) => setNickname(e.target.value)}
@@ -82,7 +83,7 @@ export default function Signup() {
         {error && !field && <p className="auth-error" role="alert">{error}</p>}
 
         <button type="submit" className="btn-cta btn-block" disabled={busy}>
-          {busy ? '만드는 중…' : '가입하고 시작하기'}
+          {busy ? '만드는 중…' : '가입하기'}
         </button>
       </form>
     </AuthShell>

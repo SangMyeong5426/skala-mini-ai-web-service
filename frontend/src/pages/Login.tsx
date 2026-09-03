@@ -17,7 +17,10 @@ export default function Login() {
   const loc = useLocation()
   const from = (loc.state as { from?: string } | null)?.from ?? '/trips'
 
-  const [loginId, setLoginId] = useState('')
+
+  // 가입 직후면 방금 만든 아이디를 채워 둔다. 다시 입력하게 하지 않는다.
+  const handoff = loc.state as { from?: string; justSignedUp?: boolean; loginId?: string } | null
+  const [loginId, setLoginId] = useState(handoff?.loginId ?? '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -42,6 +45,10 @@ export default function Login() {
       sub="아이디로 로그인하고 여행 준비를 이어가세요."
       foot={<>아직 계정이 없나요? <Link to="/signup">회원가입</Link></>}
     >
+      {handoff?.justSignedUp && (
+        <p className="auth-note" role="status">가입이 끝났어요. 이제 로그인해 주세요.</p>
+      )}
+
       <form className="auth-form" onSubmit={submit} noValidate>
         <Field label="아이디" htmlFor="loginId">
           <input

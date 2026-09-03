@@ -12,6 +12,16 @@ import { MockError, NOT_FOUND, USE_MOCK, mockRequest } from './mock'
  */
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 
+/**
+ * CSRF 토큰. <b>메모리에만 둔다</b> — 06 이 그렇게 못박았다.
+ *
+ * `GET /auth/session` 이 줄 때마다 갱신하고, 바꾸는 요청(POST·PATCH·DELETE)에
+ * `X-CSRF-TOKEN` 으로 싣는다. 로그인·로그아웃 뒤에는 세션을 다시 조회해
+ * 새 토큰을 받는다.
+ */
+let csrf: string | null = null
+export const setCsrfToken = (token: string | null) => { csrf = token }
+
 /** 06 의 오류 봉투를 담은 예외. 화면은 `message` 를 그대로 보여주면 된다. */
 export class ApiFailure extends Error {
   // tsconfig 의 erasableSyntaxOnly 때문에 생성자 파라미터 프로퍼티를 쓸 수 없다.
@@ -78,11 +88,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return value as T
   }
 
+  const method = init?.method ?? 'GET'
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    // 세션 쿠키(JSESSIONID)를 실어 보낸다. 없으면 모든 보호 API 가 401 이다.
+    credentials: 'include',
     headers: {
       // FormData 일 때는 boundary 를 브라우저가 정해야 하므로 Content-Type 을 넣지 않는다.
       ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      // 바꾸는 요청에만 CSRF 토큰을 싣는다. 가입·로그인·로그아웃도 포함이다.
+      ...(csrf && method !== 'GET' ? { 'X-CSRF-TOKEN': csrf } : {}),
       ...init?.headers,
     },
   })

@@ -25,7 +25,7 @@
  */
 import * as fx from './fixtures'
 import type {
-  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto,
+  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto, User,
 } from '../types/api'
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
@@ -64,15 +64,12 @@ export class MockError {
 
 // ── 인증 ─────────────────────────────────────────────────
 //
-// <b>Mock 전용이다.</b> 비밀번호를 메모리에만 들고 있고 어디에도 저장하지
-// 않는다. 실제 해시(bcrypt)는 서버가 만든다.
+// 06 "회원가입·로그인 계약" 대로 <b>서버 세션</b>을 흉내 낸다. Mock 은 쿠키를
+// 다룰 수 없으므로 "지금 로그인한 사람" 을 이 모듈 안에 들고 있다. 브라우저가
+// 쿠키를 들고 있는 것과 같은 효과다 — 새로고침하면 풀린다.
 //
-// 로그인 식별자는 <b>아이디</b>다. 이메일이 아니다.
-// database/schema.sql 의 users 에는 아직 login_id 칸이 없다 — DB 담당자가
-// 추가해야 한다.
-//
-// 시드 사용자는 seed.sql 과 같은 사람이다. 백엔드가 붙어도 같은 계정으로
-// 들어갈 수 있어야 시연이 끊기지 않는다.
+// <b>비밀번호는 메모리에만 있고 어디에도 저장하지 않는다.</b>
+// 실제 해시(BCrypt)는 서버가 만든다.
 interface MockUser {
   userId: number
   loginId: string
@@ -86,32 +83,21 @@ const users: MockUser[] = [
 ]
 let nextUserId = 2
 
-/** token → userId. 토큰은 데모용 문자열이고 서명하지 않는다 */
-const sessions = new Map<string, number>()
-let nextToken = 1
+/** 지금 로그인한 사용자. 쿠키 대신 이 값이 세션이다. */
+let session: MockUser | null = null
 
-const publicUser = (u: MockUser) => ({
+/** CSRF 토큰. 로그인 전에도 발급된다 — 가입 요청에도 필요하기 때문이다. */
+let csrfToken = 'mock-csrf-1'
+let csrfSeq = 1
+const rotateCsrf = () => { csrfToken = `mock-csrf-${++csrfSeq}` }
+
+const publicUser = (u: MockUser): User => ({
   userId: u.userId, loginId: u.loginId, nickname: u.nickname, email: u.email,
 })
 
-function issue(u: MockUser) {
-  const token = `mock-${u.userId}-${nextToken++}`
-  sessions.set(token, u.userId)
-  return { token, user: publicUser(u) }
-}
-
-/**
- * 지금 로그인한 사용자.
- *
- * Mock 은 요청 헤더를 보지 못한다(client 가 본문만 넘긴다). 그래서 마지막으로
- * 발급한 세션이 아니라 <b>브라우저가 들고 있는 토큰</b>을 본문으로 받아
- * 확인한다. 실제 서버는 Authorization 헤더로 같은 일을 한다.
- */
-function userOf(token: unknown): MockUser | undefined {
-  if (typeof token !== 'string') return undefined
-  const id = sessions.get(token)
-  return users.find((u) => u.userId === id)
-}
+/** 06 의 입력 규칙. 서버가 최종 판정하는 자리라 Mock 도 같이 지킨다. */
+const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── 여행별 상태 ───────────────────────────────────────────
 interface TripState {
@@ -310,47 +296,62 @@ export function mockRequest(
   const p = path.split('?')[0]
   const b = (body ?? {}) as Record<string, unknown>
 
-  // ── 인증 ───────────────────────────────────────────────
+  // ── 인증 (06 "회원가입·로그인 계약") ───────────────────
+  //
+  // 세션 조회는 미인증이어도 200 이다. 화면이 authenticated 로 판단한다.
+  if (method === 'GET' && p === '/auth/session') {
+    return delay({
+      authenticated: session !== null,
+      user: session ? publicUser(session) : null,
+      csrfToken,
+    })
+  }
+
   if (method === 'POST' && p === '/auth/signup') {
+    const nickname = String(b.nickname ?? '').trim()
     const loginId = String(b.loginId ?? '').trim().toLowerCase()
     const password = String(b.password ?? '')
-    const nickname = String(b.nickname ?? '').trim()
     const email = String(b.email ?? '').trim().toLowerCase()
 
-    if (!loginId || !password || !nickname || !email) {
-      return delay(new MockError(400, 'INVALID_REQUEST', '입력하지 않은 항목이 있습니다.'))
-    }
+    const bad =
+      nickname.length < 2 || nickname.length > 50 ? ['nickname', '닉네임은 2~50자로 입력해 주세요.'] :
+      !LOGIN_ID_RE.test(loginId) ? ['loginId', '아이디는 영문 소문자·숫자·밑줄 4~30자입니다.'] :
+      password.length < 8 ? ['password', '비밀번호는 8자 이상이어야 합니다.'] :
+      !EMAIL_RE.test(email) || email.length > 255 ? ['email', '이메일 형식을 확인해 주세요.'] :
+      null
+    if (bad) return delay(new MockError(400, 'VALIDATION_FAILED', bad[1], bad[0]))
+
     if (users.some((u) => u.loginId === loginId)) {
-      return delay(new MockError(409, 'LOGIN_ID_TAKEN', '이미 사용 중인 아이디입니다.', 'loginId'))
+      return delay(new MockError(409, 'DUPLICATE_LOGIN_ID', '이미 사용 중인 아이디입니다.', 'loginId'))
     }
     if (users.some((u) => u.email === email)) {
-      return delay(new MockError(409, 'EMAIL_TAKEN', '이미 가입된 이메일입니다.', 'email'))
+      return delay(new MockError(409, 'DUPLICATE_EMAIL', '이미 가입된 이메일입니다.', 'email'))
     }
-    const u: MockUser = { userId: nextUserId++, loginId, password, nickname, email }
+
+    const u: MockUser = { userId: nextUserId++, loginId, nickname, email, password }
     users.push(u)
-    return delay(issue(u))
+    // 06: "가입만으로 인증 세션을 만들지 않으며 S-00 로그인 모드로 이동한다"
+    return delay({ user: publicUser(u) })
   }
 
   if (method === 'POST' && p === '/auth/login') {
     const loginId = String(b.loginId ?? '').trim().toLowerCase()
     const password = String(b.password ?? '')
     const u = users.find((x) => x.loginId === loginId && x.password === password)
-    // 어느 쪽이 틀렸는지 알려주지 않는다 — 가입 여부를 캐낼 수 있다
+    // 없는 아이디와 틀린 비밀번호를 구분하지 않는다 — 가입 여부를 캐낼 수 있다
     if (!u) {
-      return delay(new MockError(401, 'INVALID_CREDENTIALS', '아이디 또는 비밀번호가 올바르지 않습니다.'))
+      return delay(new MockError(401, 'INVALID_CREDENTIALS', '아이디 또는 비밀번호를 확인해 주세요.'))
     }
-    return delay(issue(u))
+    session = u
+    rotateCsrf()   // 로그인 시 세션 ID 를 교체하므로 토큰도 새로 받는다
+    return delay({ user: publicUser(u) })
   }
 
   if (method === 'POST' && p === '/auth/logout') {
-    if (typeof b.token === 'string') sessions.delete(b.token)
-    return delay({})
-  }
-
-  if (method === 'POST' && p === '/auth/me') {
-    const u = userOf(b.token)
-    if (!u) return delay(new MockError(401, 'UNAUTHORIZED', '로그인이 필요합니다.'))
-    return delay(publicUser(u))
+    if (!session) return delay(new MockError(401, 'UNAUTHORIZED', '로그인이 필요합니다.'))
+    session = null
+    rotateCsrf()
+    return delay({})   // 실제 서버는 204
   }
 
   // ── AI 작업 ────────────────────────────────────────────

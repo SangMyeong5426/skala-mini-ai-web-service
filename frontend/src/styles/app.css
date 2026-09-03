@@ -465,6 +465,12 @@ select:focus-visible, textarea:focus-visible {
 .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .field-hint { font-size: 12.5px; color: var(--ink-3); }
 
+.auth-note {
+  margin-top: 20px; padding: 11px 13px; border-radius: var(--r-sm);
+  background: var(--accent-soft); color: var(--accent-strong);
+  font-size: 13.5px; font-weight: 600;
+}
+
 .auth-error {
   padding: 10px 12px; border-radius: var(--r-sm);
   background: var(--danger-soft); color: var(--danger);

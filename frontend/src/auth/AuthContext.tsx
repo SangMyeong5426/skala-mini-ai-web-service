@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '../api/client'
-import type { AuthResponse, SignupRequest, User } from '../types/api'
+import { api, setCsrfToken } from '../api/client'
+import type { AuthUserResponse, SessionResponse, SignupRequest, User } from '../types/api'
 import { AuthCtx } from './context'
 
 /**
@@ -9,75 +9,61 @@ import { AuthCtx } from './context'
  * 라이브러리를 넣지 않는다(CLAUDE.md "기능을 늘리지 않는다"). React 의
  * Context 하나면 된다.
  *
- * <b>토큰만 저장하고 사용자 정보는 저장하지 않는다.</b> localStorage 의 값은
- * 사용자가 고칠 수 있으므로, 이름·이메일을 거기서 읽으면 화면이 거짓을 보여줄
- * 수 있다. 새로고침할 때마다 토큰으로 다시 물어본다.
+ * <b>인증 정보를 저장하지 않는다.</b> 06 이 서버 세션 + HttpOnly 쿠키로 정했다.
+ * JS 는 쿠키를 읽을 수 없고 localStorage 에 둘 것도 없다. 앱이 열릴 때마다
+ * `GET /auth/session` 으로 서버에 물어본다.
  *
- * 토큰을 <b>본문</b>으로 넘기는 것은 Mock 때문이다. Mock 은 요청 헤더를 보지
- * 못한다. 백엔드가 붙으면 client.ts 에서 Authorization 헤더로 옮긴다 —
- * 그때 고칠 곳은 이 파일과 client.ts 두 곳뿐이다.
+ * <b>쿠키가 있다고 로그인한 것이 아니다.</b> CSRF 토큰을 주려고 로그인 전에도
+ * 익명 세션이 생긴다. 반드시 `authenticated` 를 본다.
+ *
+ * CSRF 토큰은 client.ts 의 메모리에만 두고, 로그인·로그아웃 뒤에 다시 받는다 —
+ * 그때 서버가 세션 ID 를 교체하기 때문이다.
  */
-const TOKEN_KEY = 'jimssa.token'
-
-/** localStorage 는 사생활 보호 모드에서 던질 수 있다. 없으면 없는 대로 돈다. */
-function readToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
-function writeToken(token: string | null) {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token)
-    else localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    /* 저장하지 못해도 이번 세션은 동작한다 */
-  }
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  // 토큰이 없으면 확인할 것도 없다. 처음부터 false 로 시작해
-  // effect 안에서 상태를 되돌리는 일을 만들지 않는다.
-  const [loading, setLoading] = useState(() => readToken() !== null)
+  const [loading, setLoading] = useState(true)
 
-  // 새로고침 복구 — 토큰이 있으면 누구인지 다시 물어본다
+  /** 세션을 다시 읽어 사용자와 CSRF 토큰을 맞춘다 */
+  const sync = useCallback(async (): Promise<User | null> => {
+    const s = await api.get<SessionResponse>('/auth/session')
+    setCsrfToken(s.csrfToken)
+    const next = s.authenticated ? s.user : null
+    setUser(next)
+    return next
+  }, [])
+
   useEffect(() => {
-    const token = readToken()
-    if (!token) return
     let alive = true
-    api.post<User>('/auth/me', { token })
-      .then((u) => { if (alive) setUser(u) })
-      .catch(() => { writeToken(null) })   // 만료·위조된 토큰은 버린다
+    api.get<SessionResponse>('/auth/session')
+      .then((s) => {
+        if (!alive) return
+        setCsrfToken(s.csrfToken)
+        setUser(s.authenticated ? s.user : null)
+      })
+      // 세션 조회가 실패하면 미인증으로 둔다. 여기서 막으면 로그인조차 못 한다.
+      .catch(() => { if (alive) setUser(null) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [])
 
-  const apply = useCallback((r: AuthResponse) => {
-    writeToken(r.token)
-    setUser(r.user)
-  }, [])
-
   const login = useCallback(async (loginId: string, password: string) => {
-    apply(await api.post<AuthResponse>('/auth/login', { loginId, password }))
-  }, [apply])
+    await api.post<AuthUserResponse>('/auth/login', { loginId, password })
+    // 세션 ID 가 바뀌었으므로 토큰을 새로 받는다
+    await sync()
+  }, [sync])
 
   const signup = useCallback(async (input: SignupRequest) => {
-    apply(await api.post<AuthResponse>('/auth/signup', input))
-  }, [apply])
+    // 06: "가입만으로 인증 세션을 만들지 않으며 S-00 로그인 모드로 이동한다"
+    await api.post<AuthUserResponse>('/auth/signup', input)
+  }, [])
 
   const logout = useCallback(async () => {
-    const token = readToken()
-    writeToken(null)
+    // 06: "서버 실패 시 로그아웃 완료로 표시하지 않고 재시도한다" —
+    // 그래서 먼저 지우지 않는다. 실패하면 예외가 그대로 올라간다.
+    await api.post('/auth/logout')
     setUser(null)
-    // 서버 쪽 정리는 실패해도 화면은 이미 로그아웃 상태다. 되돌리지 않는다.
-    try {
-      await api.post('/auth/logout', { token })
-    } catch {
-      /* 무시 */
-    }
-  }, [])
+    await sync()
+  }, [sync])
 
   const value = useMemo(
     () => ({ user, loading, login, signup, logout }),

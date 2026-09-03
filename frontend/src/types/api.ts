@@ -328,18 +328,14 @@ export interface TransportRule {
 
 // ── 인증 ──────────────────────────────────────────────────
 //
-// 06-api-spec.md 에 아직 없는 계약이다. **문서 최신화가 끝나면 이 모양과
-// 맞는지 대조해야 한다.**
+// 06-api-spec.md "회원가입·로그인 계약 (UC-01)" 을 그대로 옮긴 것이다.
 //
-// 가입 입력은 넷이다 — <b>아이디 · 비밀번호 · 닉네임 · 이메일</b>.
-// 로그인 식별자는 이메일이 아니라 <b>아이디</b>다.
+// <b>토큰을 저장하지 않는다.</b> 인증은 서버 세션 + HttpOnly 쿠키다. JS 가
+// 쿠키를 읽을 수 없으므로 localStorage 에 보관할 것도 없고, 요청마다
+// `credentials: 'include'` 로 브라우저가 알아서 붙인다.
 //
-// <b>database/schema.sql 의 users 에는 아직 아이디 칸이 없다.</b>
-// (email · password_hash · nickname 셋뿐) DB 담당자가 `login_id` 를
-// 추가해야 백엔드가 이 계약을 지킬 수 있다.
-//
-// 비밀번호는 요청 본문에만 실리고 <b>어디에도 보관하지 않는다.</b>
-// 해시(bcrypt)는 서버가 만든다.
+// <b>쿠키가 있다고 로그인한 것이 아니다.</b> CSRF 토큰을 주려고 로그인 전에도
+// 익명 세션 쿠키가 생긴다. 반드시 `authenticated` 를 본다.
 
 export interface User {
   userId: number
@@ -348,10 +344,11 @@ export interface User {
   email: string
 }
 
+/** 가입 입력. <b>이 넷만 받는다</b> — 비밀번호 확인 칸을 두지 않는다. */
 export interface SignupRequest {
+  nickname: string
   loginId: string
   password: string
-  nickname: string
   email: string
 }
 
@@ -360,8 +357,21 @@ export interface LoginRequest {
   password: string
 }
 
-/** 로그인·회원가입 성공 응답. 토큰은 이후 요청의 Authorization 헤더에 실린다. */
-export interface AuthResponse {
-  token: string
+/** 가입·로그인 응답. 가입은 `201`, 로그인은 `200` + 세션 쿠키다. */
+export interface AuthUserResponse {
   user: User
 }
+
+/**
+ * `GET /api/auth/session` — 앱 진입과 로그인·로그아웃 성공 후 부른다.
+ * 미인증도 `200` 이고 상태만 돌려준다. `csrfToken` 은 항상 문자열이다.
+ */
+export interface SessionResponse {
+  authenticated: boolean
+  user: User | null
+  csrfToken: string
+}
+
+/** 06 의 입력 규칙. 서버가 최종 판정하지만 화면에서 먼저 걸러 왕복을 줄인다. */
+export const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
+export const PASSWORD_MIN = 8
