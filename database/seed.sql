@@ -74,22 +74,25 @@ INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_d
                    bag_type, bag_empty_g, weight_limit_g, note, status) VALUES
   (1, '서울', '도쿄', 'JP', '2026-10-01', '2026-10-04',
    'TOUR', 'FLIGHT', '대한항공', 'ICN', 'NRT',
-   'CARRY_ON', 3200, 23000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
+   'CARRY_ON', 3200, 10000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
 
 
 -- ── 체크리스트 (AI 추천 + 규칙 보강) ──────────────────────
--- source: RULE = 고정 필수 규칙, AI = 추천, USER = 직접 추가
+-- source: RULE = 고정 필수 규칙, PHOTO = 사진에서 승인, AI = 추천, USER = 직접 추가
+--
+-- PHOTO 인 5개는 item_detections 에서 confirmed_by_user = TRUE 로 연결된 것들이다.
+-- 화장품은 후보(화장품 용기·검정 파우치)만 있고 아직 승인 전이라 AI 로 둔다.
 INSERT INTO checklist_items (trip_id, item_weight_id, name, category, qty, priority, source, check_status) VALUES
-  (1,  1, '여권',        'DOCUMENT',   1, 'REQUIRED',    'RULE', 'NOT_IN_PHOTO'),
-  (1,  2, '상의',        'CLOTHING',   4, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  3, '하의',        'CLOTHING',   2, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  4, '속옷',        'CLOTHING',   4, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  7, '충전기',      'ELECTRONIC', 1, 'REQUIRED',    'AI',   'PREPARED'),
-  (1,  8, '보조배터리',  'ELECTRONIC', 1, 'RECOMMENDED', 'AI',   'PREPARED'),
-  (1,  9, '변환 플러그', 'ELECTRONIC', 1, 'REQUIRED',    'AI',   'NOT_IN_PHOTO'),
-  (1, 11, '화장품',      'TOILETRY',   1, 'RECOMMENDED', 'AI',   'NEEDS_CHECK'),
-  (1, 13, '상비약',      'MEDICINE',   1, 'RECOMMENDED', 'AI',   'NOT_IN_PHOTO'),
-  (1, 14, '우산',        'ETC',        1, 'RECOMMENDED', 'AI',   'NOT_IN_PHOTO');
+  (1,  1, '여권',        'DOCUMENT',   1, 'REQUIRED',    'RULE',  'NOT_IN_PHOTO'),
+  (1,  2, '상의',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  3, '하의',        'CLOTHING',   2, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  4, '속옷',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  7, '충전기',      'ELECTRONIC', 1, 'REQUIRED',    'PHOTO', 'PREPARED'),
+  (1,  8, '보조배터리',  'ELECTRONIC', 1, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1,  9, '변환 플러그', 'ELECTRONIC', 1, 'REQUIRED',    'AI',    'NOT_IN_PHOTO'),
+  (1, 11, '화장품',      'TOILETRY',   1, 'RECOMMENDED', 'AI',    'NEEDS_CHECK'),
+  (1, 13, '상비약',      'MEDICINE',   1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO'),
+  (1, 14, '우산',        'ETC',        1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO');
 
 
 -- ── 짐 사진 ───────────────────────────────────────────────
@@ -101,15 +104,16 @@ INSERT INTO trip_photos (trip_id, file_path, bag_kind) VALUES
 -- ── 사진에서 인식된 물품 ──────────────────────────────────
 -- approved = false 인 것은 아직 사용자 승인 전이다.
 -- 명세 9.2: "승인 전에는 최종 준비 상태에 반영되지 않아야 한다"
-INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level, approved) VALUES
-  (1, '충전기',      1, 0.930, 'HIGH',   TRUE),
-  (1, '보조배터리',  1, 0.880, 'HIGH',   TRUE),
-  (1, '상의',        4, 0.810, 'HIGH',   TRUE),
-  (1, '하의',        2, 0.790, 'MEDIUM', TRUE),
-  (1, '속옷',        4, 0.720, 'MEDIUM', TRUE),
-  (2, '화장품 용기', 1, 0.640, 'MEDIUM', FALSE),   -- 확인 필요
-  (2, '가위',        1, 0.910, 'HIGH',   TRUE),    -- 체크리스트에 없던 추가 물품
-  (2, '검정 파우치', 1, 0.430, 'LOW',    FALSE);   -- 무엇인지 불분명
+-- missing_info · label_text 는 docs/07-ai-ready.md BAG_CHECK 예시 output 과 같다.
+INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level, approved, missing_info, label_text) VALUES
+  (1, '충전기',      1, 0.930, 'HIGH',   TRUE,  NULL,              NULL),
+  (1, '보조배터리',  1, 0.880, 'HIGH',   TRUE,  '배터리 정격(Wh)', NULL),
+  (1, '상의',        4, 0.810, 'HIGH',   TRUE,  NULL,              NULL),
+  (1, '하의',        2, 0.790, 'MEDIUM', TRUE,  NULL,              NULL),
+  (1, '속옷',        4, 0.720, 'MEDIUM', TRUE,  NULL,              NULL),
+  (2, '화장품 용기', 1, 0.640, 'MEDIUM', FALSE, '용량(ml)',        NULL),   -- 확인 필요
+  (2, '가위',        1, 0.910, 'HIGH',   TRUE,  '날 길이(cm)',     NULL),   -- 체크리스트에 없던 추가 물품
+  (2, '검정 파우치', 1, 0.430, 'LOW',    FALSE, NULL,              NULL);   -- 무엇인지 불분명
 
 
 -- ══════════════════════════════════════════════════════════
@@ -134,11 +138,15 @@ INSERT INTO item_detections (checklist_item_id, detected_object_id, match_confid
 --  ★ N:M 2 — 체크리스트 항목 ↔ 반입 규정
 --  "화장품" 하나가 규정 둘에 걸리는 경우를 넣었다.
 -- ══════════════════════════════════════════════════════════
+-- rule_id 는 transport_rules 의 삽입 순서다. 값을 바꾸면 근거 문구가 통째로 달라진다.
+--   1~3  보조배터리 (100Wh 이하 / 100~160Wh / 160Wh 초과)
+--   4~5  액체 (100ml 이하 / 100ml 초과)
+--   6    가위
 INSERT INTO item_rule_checks (checklist_item_id, rule_id, verdict, missing_info) VALUES
   (6, 1, 'CABIN_OK',       NULL),          -- 보조배터리 ← 100Wh 이하 규정
   (6, 2, 'NEED_MORE_INFO', '배터리 정격(Wh)'),  -- 보조배터리 ← 100Wh 초과 규정
-  (8, 3, 'NEED_MORE_INFO', '용량(ml)'),    -- 화장품     ← 액체 100ml 이하 규정
-  (8, 4, 'NEED_MORE_INFO', '용량(ml)');    -- 화장품     ← 액체 100ml 초과 규정
+  (8, 4, 'NEED_MORE_INFO', '용량(ml)'),    -- 화장품     ← 액체 100ml 이하 규정
+  (8, 5, 'NEED_MORE_INFO', '용량(ml)');    -- 화장품     ← 액체 100ml 초과 규정
 
 
 -- ── AI 작업 이력 ─────────────────────────────────────────
