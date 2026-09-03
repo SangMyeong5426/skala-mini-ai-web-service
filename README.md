@@ -296,6 +296,6 @@ Swagger UI는 <http://localhost:8080/swagger-ui.html>.
 | AI 작업 엔드포인트 | `POST /api/ai-jobs` 하나 + `job_type` | [ADR 0003](docs/adr/0003-ai-job-endpoint.md) |
 | 사진 저장 | 로컬 디렉터리 (`UPLOAD_DIR`) — 데모가 네트워크에 묶이지 않게 | `backend/.env.example` |
 | 날씨 | Open-Meteo · **API 키 불필요** · 16일 예보 + 계절 예보 7개월 | `backend/.env.example` |
-| 인증 | 이번 데모에서 구현하지 않음. 스키마에 `password_hash` 자리만 두고 시드 사용자 1명 고정 (채점 항목 아님) | [05-erd.md](docs/05-erd.md) |
+| 인증 | 로그인 필수 설계 확정. 가입은 닉네임·아이디·비밀번호·이메일, 로그인은 아이디·비밀번호. 코드·SQL 반영은 후속 작업 | [기능정의서](docs/functional-specification.md) · [06-api-spec.md](docs/06-api-spec.md) |
 
 > React 사용 가능 여부는 1일차에 확인했다. 사용해도 된다.
