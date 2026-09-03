@@ -28,10 +28,12 @@ import com.skala.miniai.domain.ai.MockAiClient;
 import com.skala.miniai.domain.ai.OpenAiChatApi;
 import com.skala.miniai.domain.ai.OpenAiClient;
 import com.skala.miniai.domain.ai.PackingListPrompt;
+import com.skala.miniai.domain.ai.RuleCheckPrompt;
 import com.skala.miniai.domain.ai.VisionImageLoader;
 import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
 import com.skala.miniai.domain.photo.TripPhoto;
+import com.skala.miniai.domain.master.SeedRules;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
 import com.skala.miniai.domain.trip.Trip;
 import com.skala.miniai.domain.trip.TripRepository;
@@ -154,8 +156,53 @@ class RealOpenAiSmokeTest {
         given(upload.dir()).willReturn(DEMO_PHOTOS.toAbsolutePath().normalize());
 
         return new OpenAiClient(mock(MockAiClient.class), api, new BagCheckPrompt(json),
-                new PackingListPrompt(json), new VisionImageLoader(upload, 1024, 4_194_304),
+                new PackingListPrompt(json), new RuleCheckPrompt(json), SeedRules.engine(),
+                new VisionImageLoader(upload, 1024, 4_194_304),
                 photos, trips, items, Optional.of(weatherClient()), json, 20);
+    }
+
+    @Test
+    void 자연어_질문을_구조화하고_규칙_엔진_판정을_설명한다() {
+        JsonNode output = client(mock(TripPhotoRepository.class), mock(ChecklistItemRepository.class))
+                .run(Codes.JobType.RULE_CHECK, null, json.read("""
+                        {"transport":"FLIGHT","airline":"대한항공",
+                         "question":"20000mAh 보조배터리랑 120ml 클렌징오일 기내 되나요?","items":[]}
+                        """));
+
+        System.out.println("─── RULE_CHECK 실제 응답 ───\n" + json.write(output));
+
+        JsonNode results = output.path("results");
+        assertThat(results).hasSizeGreaterThanOrEqualTo(2);
+        for (JsonNode r : results) {
+            assertThat(r.path("reason").asText()).isNotBlank();
+            // 판정과 출처는 규칙 엔진 몫이다. 모델이 지어낸 URL 이 새어 나오면 안 된다.
+            if (!r.path("sourceUrl").isNull()) {
+                assertThat(r.path("sourceUrl").asText()).startsWith("https://www.airport");
+                assertThat(r.path("checkedAt").asText()).isEqualTo("2026-09-02");
+            }
+        }
+
+        // 보조배터리는 mAh 만 있으므로 Wh 를 되물어야 한다 (07 「예시 2」).
+        JsonNode battery = byKeyword(results, "보조배터리");
+        assertThat(battery.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
+        assertThat(battery.path("missingInfo").asText()).isEqualTo("배터리 정격(Wh)");
+        assertThat(battery.path("attributes").path("batteryMah").asInt()).isEqualTo(20000);
+        // 07: mAh 에서 Wh 로 환산하지 않는다.
+        assertThat(battery.path("attributes").path("batteryWh").isNull()).isTrue();
+
+        // 120ml 액체는 규정표만으로 확정된다.
+        assertThat(byKeyword(results, "액체").path("verdict").asText()).isEqualTo("CHECKED_OK");
+
+        assertThat(output.path("answer").asText()).isNotBlank();
+        // NEED_MORE_INFO 가 하나라도 있으면 되물어야 한다 (07 계약).
+        assertThat(output.path("followUpQuestion").asText()).isNotBlank();
+    }
+
+    private static JsonNode byKeyword(JsonNode results, String keyword) {
+        for (JsonNode r : results) {
+            if (keyword.equals(r.path("ruleKeyword").asText(""))) return r;
+        }
+        throw new AssertionError("ruleKeyword=" + keyword + " 인 결과가 없다: " + results);
     }
 
     private OpenMeteoWeatherClient weatherClient() {

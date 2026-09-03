@@ -29,6 +29,13 @@ import com.skala.miniai.common.Json;
  * 나머지는 <b>id 만 입력에 맞춘다</b> —
  * {@code BAG_CHECK} 의 {@code photoId}, {@code WEIGHT_ESTIMATE} 의 {@code limitG}·{@code bagEmptyG},
  * {@code RULE_CHECK} 의 {@code itemId}. 새 여행에서도 Mock 이 깨지지 않는다.
+ *
+ * <p><b>{@code RULE_CHECK_*.json} 의 {@code verdict}·{@code ruleId}·{@code conditionNote}·
+ * {@code sourceUrl}·{@code checkedAt} 은 자리만 채운다.</b> 값은
+ * {@link com.skala.miniai.domain.master.RuleEngine} 이 {@code transport_rules} 로 덮어쓴다.
+ * 지우지는 않는다 — {@code RuleCheckContract} 가 결과의 열세 칸을 <b>전부</b> 요구해서,
+ * 빠지면 Mock 경로가 통째로 검증에 막힌다. 픽스처가 실제로 정하는 것은
+ * <b>물품과 속성을 어떻게 구조화하느냐</b>까지다.
  */
 @Component
 public class MockAiClient implements AiClient {
