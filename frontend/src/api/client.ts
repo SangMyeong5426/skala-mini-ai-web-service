@@ -1,5 +1,5 @@
 import type { ApiError } from '../types/api'
-import { USE_MOCK, mockRequest } from './mock'
+import { NOT_FOUND, USE_MOCK, mockRequest } from './mock'
 
 /**
  * fetch 래퍼 하나로 통일한다. 화면마다 fetch 를 직접 부르면 오류 처리가 흩어진다.
@@ -58,9 +58,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // 다루지 않는 경로는 mockRequest 가 undefined 를 주므로 아래로 내려가 404 가 난다 —
   // 안 만든 것을 조용히 성공시키지 않는다.
   if (USE_MOCK) {
-    const mocked = mockRequest(init?.method ?? 'GET', path, parseBody(init?.body))
-    if (mocked) return (await mocked) as T
-    throw new ApiFailure(404, 'MOCK_MISS', `Mock 에 없는 경로입니다: ${init?.method ?? 'GET'} ${path}`)
+    const method = init?.method ?? 'GET'
+    const mocked = mockRequest(method, path, parseBody(init?.body))
+
+    // 자원이 없다 — 06 이 정의한 정상 오류다. 화면이 다뤄야 하는 상태다.
+    if (mocked === NOT_FOUND) {
+      throw new ApiFailure(404, 'NOT_FOUND', '찾을 수 없습니다.')
+    }
+    // 경로를 아직 안 만들었다 — Mock 이 덜 된 것이다. 위와 구분한다.
+    if (!mocked) {
+      throw new ApiFailure(404, 'MOCK_MISS', `Mock 에 없는 경로입니다: ${method} ${path}`)
+    }
+    return (await mocked) as T
   }
 
   const res = await fetch(`${BASE}${path}`, {

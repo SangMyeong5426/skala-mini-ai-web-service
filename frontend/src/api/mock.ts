@@ -31,7 +31,11 @@ const LATENCY_MS = 200
 // fixtures 는 건드리지 않는다. 여기 복사본만 바뀐다.
 const db = {
   trips: fx.TRIPS.map((t) => ({ ...t })) as TripSummary[],
-  details: new Map<number, TripDetail>([[1, { ...fx.TRIP_DETAIL }]]),
+  // 목록에 3건이 있으므로 상세도 3건이어야 한다.
+  // 1건만 두면 S-01 에서 오사카·부산 카드를 누른 순간 404 다.
+  details: new Map<number, TripDetail>(
+    fx.TRIPS.map((t) => [t.tripId, t.tripId === 1 ? { ...fx.TRIP_DETAIL } : { ...t }]),
+  ),
   items: fx.ITEMS.map((i) => ({ ...i })) as ChecklistItem[],
   detections: fx.DETECTIONS.map((d) => ({ ...d })) as Detection[],
   /** detectionId → 연결된 itemId 목록. 06 의 matchedItemIds 규약을 그대로 따른다. */
@@ -45,6 +49,16 @@ let nextJobId = 1041
 function delay<T>(value: T): Promise<T> {
   return new Promise((r) => setTimeout(() => r(value), LATENCY_MS))
 }
+
+/**
+ * 자원이 없다는 뜻. 경로를 아직 안 만들었다는 뜻(`undefined`)과 구분한다.
+ *
+ * 06 은 `GET /trips/{tripId}` 의 주요 오류로 404 를 적어 뒀다.
+ * "없는 여행을 열면 어떻게 보이나" 는 화면이 다뤄야 하는 정상 흐름이지
+ * Mock 이 덜 만들어졌다는 뜻이 아니다. 둘을 같은 코드로 던지면 개발자가
+ * 자기 코드를 의심하게 된다.
+ */
+export const NOT_FOUND = Symbol('NOT_FOUND')
 
 function idsIn(path: string): number[] {
   return (path.match(/\d+/g) ?? []).map(Number)
@@ -71,7 +85,11 @@ function linkedItems(detectionId: number) {
  * 다루지 않는 경로는 `undefined` 를 반환하고 호출한 쪽이 404 로 처리한다 —
  * <b>안 만든 것을 조용히 성공시키지 않는다.</b>
  */
-export function mockRequest(method: string, path: string, body?: unknown): Promise<unknown> | undefined {
+export function mockRequest(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<unknown> | typeof NOT_FOUND | undefined {
   const p = path.split('?')[0]
   const b = (body ?? {}) as Record<string, unknown>
 
@@ -127,7 +145,7 @@ export function mockRequest(method: string, path: string, body?: unknown): Promi
   if (method === 'GET' && /^\/trips\/\d+$/.test(p)) {
     const [tripId] = idsIn(p)
     const found = db.details.get(tripId)
-    if (!found) return undefined   // 없는 여행은 404 다
+    if (!found) return NOT_FOUND
     return delay(found)
   }
 
@@ -138,7 +156,7 @@ export function mockRequest(method: string, path: string, body?: unknown): Promi
   if (method === 'PATCH' && /^\/trips\/\d+\/items\/\d+$/.test(p)) {
     const itemId = idsIn(p)[1]
     const item = db.items.find((i) => i.itemId === itemId)
-    if (!item) return undefined
+    if (!item) return NOT_FOUND
     Object.assign(item, b)          // 상태에 반영한다
     return delay({ ...item })
   }
@@ -153,7 +171,7 @@ export function mockRequest(method: string, path: string, body?: unknown): Promi
   if (method === 'PATCH' && /^\/trips\/\d+\/detections\/\d+$/.test(p)) {
     const detectionId = idsIn(p)[1]
     const d = db.detections.find((x) => x.detectionId === detectionId)
-    if (!d) return undefined
+    if (!d) return NOT_FOUND
 
     if (b.approved !== undefined) d.approved = Boolean(b.approved)
     if (b.name !== undefined) d.name = String(b.name)
@@ -171,9 +189,36 @@ export function mockRequest(method: string, path: string, body?: unknown): Promi
 
   // ── 검수 결과 ──────────────────────────────────────────
   if (method === 'GET' && /^\/trips\/\d+\/inspection$/.test(p)) {
-    // readiness 는 현재 상태에서 다시 계산한다. 승인·완료 처리가 반영돼야 한다.
+    // readiness 를 현재 상태에서 계산한다. S-04 에서 승인하면 S-06 에 보여야
+    // 승인 → 검수 흐름을 검증할 수 있다. weight·customs 는 AI 결과라 fixture 그대로다.
     const insp = structuredClone(fx.INSPECTION)
-    if (insp.readiness) insp.readiness.completionRate = completionRate()
+    if (insp.readiness) {
+      const byStatus = (st: string) =>
+        db.items.filter((i) => i.checkStatus === st)
+          .map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty }))
+
+      insp.readiness.prepared = byStatus('PREPARED')
+      insp.readiness.needsCheck = db.items
+        .filter((i) => i.checkStatus === 'NEEDS_CHECK')
+        .map((i) => ({
+          itemId: i.itemId, name: i.name, qty: i.qty,
+          // 이 항목에 걸린 인식 후보를 links 에서 찾는다.
+          candidates: [...db.links.entries()]
+            .filter(([, items]) => items.includes(i.itemId))
+            .map(([detectionId]) => {
+              const d = db.detections.find((x) => x.detectionId === detectionId)
+              return { detectionId, name: d?.name ?? '', matchConfidence: d?.confidence ?? 0 }
+            }),
+        }))
+      insp.readiness.notInPhoto = db.items
+        .filter((i) => i.checkStatus === 'NOT_IN_PHOTO')
+        .map((i) => ({ itemId: i.itemId, name: i.name, priority: i.priority }))
+      // 승인됐는데 어느 항목에도 연결되지 않은 인식 물품 = 추가 물품.
+      insp.readiness.extra = db.detections
+        .filter((d) => d.approved && (db.links.get(d.detectionId) ?? []).length === 0)
+        .map((d) => ({ detectionId: d.detectionId, name: d.name, confidence: d.confidence }))
+      insp.readiness.completionRate = completionRate()
+    }
     return delay(insp)
   }
 

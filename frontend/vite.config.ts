@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
@@ -13,7 +14,9 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
  * 백엔드가 있을 때는 이 플러그인이 아니라 아래 프록시가 8080 으로 넘긴다.
  */
 function demoPhotos(): Plugin {
-  const root = new URL('../database/demo-photos', import.meta.url).pathname
+  // URL.pathname 은 Windows 에서 `/C:/Users/...` 를 준다. 앞 슬래시 때문에
+  // join 결과가 유효한 경로가 아니게 되어 사진이 전부 404 가 된다.
+  const root = fileURLToPath(new URL('../database/demo-photos', import.meta.url))
   return {
     name: 'demo-photos',
     configureServer(server) {
