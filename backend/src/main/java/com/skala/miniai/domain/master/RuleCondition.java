@@ -3,6 +3,7 @@ package com.skala.miniai.domain.master;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,6 +40,18 @@ public final class RuleCondition {
     private static final Pattern CLAUSE = Pattern.compile(
             "(\\d+(?:\\.\\d+)?)\\s*(wh|ml|cm)\\s*(이하|미만|초과|이상)", Pattern.CASE_INSENSITIVE);
 
+    /** 문장에서 <b>수치 조건처럼 보이는</b> 조각. 읽은 절 수와 비교해 놓친 것을 찾는다. */
+    private static final Pattern NUMBER_WITH_UNIT = Pattern.compile(
+            "(\\d+(?:\\.\\d+)?)\\s*([A-Za-z가-힣]+)");
+
+    /**
+     * 물품 하나로 판정할 수 없어 <b>일부러 읽지 않는</b> 단위.
+     *
+     * <p>{@code "용기당 100ml 이하, 총 1L 이하"} 의 {@code 1L} 이 그렇다 — 가방 전체 합계라
+     * 물품별 속성에 없다. 07 도 이 합계 조건을 속성으로 두지 않았다.
+     */
+    private static final Set<String> IGNORED_UNITS = Set.of("l", "ℓ", "리터");
+
     private final List<Clause> clauses;
 
     private RuleCondition(List<Clause> clauses) {
@@ -65,9 +78,38 @@ public final class RuleCondition {
         return clauses.stream().map(Clause::attribute).distinct().toList();
     }
 
-    /** 조건 문장이 있는데 한 개도 읽지 못했는가. 그러면 이 행으로 확정 판정을 하지 않는다. */
+    /**
+     * 문장에 <b>읽지 못한 수치 조건</b>이 남아 있는가. 그러면 이 행으로 확정 판정을 하지 않는다.
+     *
+     * <p>예전에는 <b>한 조각도</b> 못 읽었을 때만 참이었다. 절반만 읽으면 나머지가 조용히
+     * 사라졌다 — 리뷰가 짚은 구멍이다.
+     *
+     * <pre>{@code
+     * "100Wh 이하, 1인 2개까지"  →  batteryWh <= 100 만 읽고 수량 제한은 사라진다
+     *                            →  5개를 들고 가도 CABIN_OK
+     * }</pre>
+     *
+     * <p>규정표는 앞으로 사람이 늘릴 데이터다. <b>잘못 읽는 것과 못 읽는 것을 구분해야</b>
+     * 새 규정이 조용히 무시되지 않는다. 그래서 문장의 {@code 숫자+단위} 조각 수와 실제로 읽은
+     * 절 수를 견준다. {@link #IGNORED_UNITS} 는 세지 않는다 — 일부러 읽지 않기로 한 것이다.
+     */
     public static boolean unreadable(String conditionNote) {
-        return conditionNote != null && !conditionNote.isBlank() && parse(conditionNote).clauses.isEmpty();
+        if (conditionNote == null || conditionNote.isBlank()) return false;
+
+        int parsed = parse(conditionNote).clauses.size();
+        // 문장은 있는데 수치 조건을 하나도 못 읽었다 — "배터리 분리 후 휴대" 같은 산문이다.
+        // 지킬 조건이 분명히 있는데 값으로 확인할 방법이 없으므로 확정하지 않는다.
+        if (parsed == 0) return true;
+
+        int expected = 0;
+        Matcher fragments = NUMBER_WITH_UNIT.matcher(conditionNote);
+        while (fragments.find()) {
+            String unit = fragments.group(2).toLowerCase(Locale.ROOT);
+            if (IGNORED_UNITS.stream().anyMatch(unit::startsWith)) continue;
+            expected++;
+        }
+        // 일부만 읽었다 — 나머지가 조용히 사라지지 않게 막는다.
+        return expected != parsed;
     }
 
     /** 07 {@code attributes} 로 이 조건이 성립하는가. 값이 없으면 판정하지 않는다({@code false}). */

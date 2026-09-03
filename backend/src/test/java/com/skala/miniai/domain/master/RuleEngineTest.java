@@ -206,4 +206,82 @@ class RuleEngineTest {
         assertThat(result.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
         assertThat(result.path("missingInfo").asText()).isEqualTo("규정 조건 확인");
     }
+
+    /**
+     * 리뷰 ② — {@code ASK_AIRLINE} 이 {@code CHECKED_OK} 에 밀리면 "항공사 승인 필요" 가
+     * "부치면 된다" 로 보인다. 판정을 실제보다 확정적으로 보이게 하는 것이라 막는다.
+     */
+    @Test
+    void 항공사_승인_필요가_위탁_가능에_밀리지_않는다() {
+        given(rules.findByTransportAndKeywordContainingIgnoreCaseOrderById(
+                eq(Codes.Transport.FLIGHT), eq("드라이아이스")))
+                .willReturn(List.of(
+                        rule(20L, "드라이아이스", Codes.RuleVerdict.CHECKED_OK, "100ml 초과"),
+                        rule(21L, "드라이아이스", Codes.RuleVerdict.ASK_AIRLINE, "100ml 이상")));
+
+        assertThat(judge("드라이아이스", NO_ATTRS.replace("\"capacityMl\":null", "\"capacityMl\":120"))
+                .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+    }
+
+    /**
+     * 리뷰 A — 조건이 안 맞아 <b>적용하지 않기로 한</b> 규정의 출처를 붙이면, 화면에서 그 링크가
+     * "항공사에 확인하세요" 를 뒷받침하는 것처럼 보인다. 규정을 못 찾은 경우와 같은 모양이어야 한다.
+     */
+    @Test
+    void 조건에_걸리지_않으면_출처를_붙이지_않는다() {
+        given(rules.findByTransportAndKeywordContainingIgnoreCaseOrderById(
+                eq(Codes.Transport.FLIGHT), eq("스프레이")))
+                .willReturn(List.of(
+                        rule(22L, "스프레이", Codes.RuleVerdict.CHECKED_OK, "100ml 초과")));
+
+        JsonNode result = judge("스프레이", NO_ATTRS.replace("\"capacityMl\":null", "\"capacityMl\":50"));
+        assertThat(result.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        assertThat(result.path("ruleId").isNull()).isTrue();
+        assertThat(result.path("sourceUrl").isNull()).isTrue();
+        assertThat(result.path("checkedAt").isNull()).isTrue();
+    }
+
+    /**
+     * 리뷰 ① — 문장의 <b>일부만</b> 읽히면 나머지가 조용히 사라진다.
+     * 규정표는 사람이 늘릴 데이터라, 새 조건이 소리 없이 무시되면 안 된다.
+     */
+    @Test
+    void 조건_문장이_절반만_읽히면_확정하지_않는다() {
+        given(rules.findByTransportAndKeywordContainingIgnoreCaseOrderById(
+                eq(Codes.Transport.FLIGHT), eq("예비배터리")))
+                .willReturn(List.of(
+                        rule(23L, "예비배터리", Codes.RuleVerdict.CABIN_OK, "100Wh 이하, 1인 2개까지")));
+
+        JsonNode result = judge("예비배터리", NO_ATTRS.replace("\"batteryWh\":null", "\"batteryWh\":50"));
+        assertThat(result.path("verdict").asText())
+                .as("수량 제한을 못 읽었으므로 CABIN_OK 로 확정하면 안 된다")
+                .isEqualTo("NEED_MORE_INFO");
+    }
+
+    /** 가방 전체 조건(총 1L)은 <b>일부러</b> 읽지 않는 것이라 위 검사에 걸리면 안 된다. */
+    @Test
+    void 가방_전체_조건은_판정을_막지_않는다() {
+        given(rules.findByTransportAndKeywordContainingIgnoreCaseOrderById(
+                eq(Codes.Transport.FLIGHT), eq("액체")))
+                .willReturn(List.of(
+                        rule(4L, "액체", Codes.RuleVerdict.CABIN_OK, "용기당 100ml 이하, 총 1L 이하"),
+                        rule(5L, "액체", Codes.RuleVerdict.CHECKED_OK, "100ml 초과")));
+
+        assertThat(judge("액체", NO_ATTRS.replace("\"capacityMl\":null", "\"capacityMl\":80"))
+                .path("verdict").asText()).isEqualTo("CABIN_OK");
+    }
+
+    /** 리뷰 「작은 것」 — 부분 일치가 다른 규정을 끌어오지 않게, 정확 일치를 먼저 본다. */
+    @Test
+    void 같은_키워드_규정을_먼저_고른다() {
+        given(rules.findByTransportAndKeywordContainingIgnoreCaseOrderById(
+                eq(Codes.Transport.FLIGHT), eq("배터리")))
+                .willReturn(List.of(
+                        rule(30L, "보조배터리", Codes.RuleVerdict.CHECKED_FORBIDDEN, "160Wh 초과"),
+                        rule(31L, "배터리", Codes.RuleVerdict.CABIN_OK, null)));
+
+        JsonNode result = judge("배터리", NO_ATTRS);
+        assertThat(result.path("verdict").asText()).isEqualTo("CABIN_OK");
+        assertThat(result.path("ruleId").asLong()).isEqualTo(31L);
+    }
 }
