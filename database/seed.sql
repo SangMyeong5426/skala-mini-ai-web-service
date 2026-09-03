@@ -7,9 +7,10 @@
 --   docs/01-service-plan.md 의 1차 핵심 페르소나 그대로다.
 
 -- ── 사용자 ────────────────────────────────────────────────
--- 인증을 구현하지 않으므로 이 사용자 하나를 고정으로 쓴다.
-INSERT INTO users (email, nickname) VALUES
-  ('kim@skala.dev', '김지우');
+-- 이번 데모에서 인증 흐름을 구현하지 않으므로 이 사용자 하나를 고정으로 쓴다.
+-- password_hash 는 데모용 bcrypt 해시다. 평문을 저장하지 않는다.
+INSERT INTO users (email, password_hash, nickname) VALUES
+  ('kim@skala.dev', '$2b$12$Kx8fJ0qN3vZ1sWmT7pLuAeR5yQdH2cVbXn9gM4tJ6oB1iE0aS3wDy', '김지우');
 
 
 -- ── 품목별 무게 마스터 ────────────────────────────────────

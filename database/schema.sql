@@ -20,10 +20,11 @@ DROP TABLE IF EXISTS users              CASCADE;
 
 -- ── 사용자 ────────────────────────────────────────────────
 CREATE TABLE users (
-    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    email       VARCHAR(255) NOT NULL UNIQUE,
-    nickname    VARCHAR(50)  NOT NULL,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    nickname      VARCHAR(50)  NOT NULL,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
 
