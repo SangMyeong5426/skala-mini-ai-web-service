@@ -13,7 +13,7 @@
 - [x] Teaming, R&R 정의 → [`00-team.md`](00-team.md) — 7개 역할 전부 채움
 - [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 4종
 - [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개 + UC-07 부분 연동
-- [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema, 기계 검증 39항목
+- [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema, 기계 검증 45항목
 - [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-01~10
 - [ ] **Figma 와이어프레임** — 1차 `S-01`~`S-06` 은 정성껏, 나머지는 스케치
 
@@ -37,7 +37,8 @@
 - [x] **Node.js 20.19+ 또는 22.12+ 설치** — **역할과 무관하게 5명 전원.** 2026-09-03 완료
 - [x] FE 프로젝트 생성 (Vite 8 · React 19 · TS 6) — 검증 완료
 - [x] BE 프로젝트 생성 (Spring Boot 4.1.1 · Java 21) — `./gradlew build` 통과 확인
-- [ ] DB 프로젝트 생성 (Supabase 또는 Neon) 및 접속 정보 팀 공유 (**저장소 밖에서**)
+- [x] DB 프로젝트 생성 — Supabase (PostgreSQL 17.6 · `ap-south-1`). 스키마·시드 적용 완료
+- [ ] 접속 정보 팀 공유 (**저장소 밖에서**) — `DATABASE_URL`·`DATABASE_USERNAME` 은 그대로, 비밀번호만 따로. 받는 쪽은 `./scripts/db-password` → `./scripts/check-db`
 - [x] 전원 `npm run dev` · `./gradlew build` 한 번씩 돌려 보기 — 2026-09-03 완료
 
 ---
@@ -48,7 +49,7 @@
 
 - [x] 데이터 모델링(ERD) → [`05-erd.md`](05-erd.md) — 10테이블 · **N:M 2개**
 - [x] 스키마 SQL 작성 → [`database/schema.sql`](../database/schema.sql) — 로컬 DB에서 실행·제약 검증 완료
-- [ ] 클라우드 DB(Supabase)에 실행 — **`schema.sql`·`seed.sql` 이 #27 에서 바뀌었다. 강의장에서 `./scripts/db-apply`**
+- [x] 클라우드 DB(Supabase)에 실행 — 2026-09-03 `./scripts/db-apply`. `source` 에 `PHOTO` 추가와 `detected_objects` 의 `missing_info`·`label_text` 까지 반영 확인
 - [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
 - [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{jobId}` · `jobType` 4종
@@ -96,7 +97,7 @@
 
 ## 데모 사고 방지
 
-- [ ] 데모용 시드 데이터를 미리 넣어 둔다 (빈 화면 시연 방지)
+- [x] 데모용 시드 데이터를 미리 넣어 둔다 (빈 화면 시연 방지) — 2026-09-03 Supabase 적용. 여행 1 · 체크리스트 10(`PHOTO` 5 · `AI` 4 · `RULE` 1) · 인식 물품 8 · N:M 8/4
 - [ ] 인터넷이 끊겨도 되도록 Mock을 **로컬 백엔드**에 둔다
 - [ ] 발표 PC에서 한 번 실행해 본다 (`npm install`부터)
 - [ ] 백업: 데모 화면 녹화본 준비
