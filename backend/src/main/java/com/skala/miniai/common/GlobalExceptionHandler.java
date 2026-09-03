@@ -10,9 +10,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 예외를 06 의 오류 봉투로 바꾼다. 컨트롤러마다 try/catch 를 쓰지 않는다.
@@ -46,6 +48,13 @@ public class GlobalExceptionHandler {
                 "VALIDATION_FAILED", e.getParameterName() + " 은(는) 필수입니다.", e.getParameterName()));
     }
 
+    /** 날짜·enum·경로 ID를 변환하지 못한 요청은 서버 오류가 아니라 입력 오류다. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(
+                "VALIDATION_FAILED", e.getName() + " 값 형식을 확인해 주세요.", e.getName()));
+    }
+
     /** 본문이 JSON 이 아니거나 enum 값이 틀렸을 때. 원문 메시지는 내부 구조를 드러내므로 감춘다. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
@@ -63,6 +72,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNoSuch(NoSuchElementException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("NOT_FOUND", e.getMessage(), null));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("NOT_FOUND", "찾을 수 없습니다.", null));
     }
 
     /**

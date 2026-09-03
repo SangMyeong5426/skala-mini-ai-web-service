@@ -28,7 +28,7 @@ public final class PackingDtos {
             Boolean rotated) { }
 
     /** 전체 배치를 통째로 교체한다. 드래그 한 번에 요청 하나씩 보내면 순서가 뒤집힌다. */
-    public record SaveRequest(@Valid List<Placement> placements) { }
+    public record SaveRequest(List<@NotNull(message = "배치 항목은 null일 수 없습니다.") @Valid Placement> placements) { }
 
     /** 아직 자리를 못 잡은 물품. 화면 오른쪽 "정리 대기" 목록이다. */
     public record Unplaced(Long itemId, String name, Codes.Category category, Integer qty) { }
