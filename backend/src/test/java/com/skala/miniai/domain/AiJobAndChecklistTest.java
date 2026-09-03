@@ -40,6 +40,11 @@ import com.skala.miniai.domain.trip.TripService;
 @ActiveProfiles("test")
 class AiJobAndChecklistTest {
 
+    /**
+     * {@code AiJobRunner} 는 {@code run(jobType, tripId, input)} 쪽을 부른다. Mockito 모의 객체는
+     * 인터페이스의 {@code default} 구현을 타지 않으므로, 스텁도 <b>3-인자 오버로드</b>에 건다.
+     * 2-인자 쪽에 걸면 스텁이 걸리지 않아 조용히 {@code null} 이 돌아온다.
+     */
     @MockitoBean
     AiClient aiClient;
 
@@ -84,7 +89,7 @@ class AiJobAndChecklistTest {
      */
     @Test
     void aiJobBecomesFailedWhenClientThrows() {
-        given(aiClient.run(any(), any())).willThrow(new IllegalStateException("모델 호출 실패"));
+        given(aiClient.run(any(), any(), any())).willThrow(new IllegalStateException("모델 호출 실패"));
 
         Long jobId = aiJobService.create(new AiJobDtosFixture().packingList(tripId)).jobId();
 
@@ -111,7 +116,7 @@ class AiJobAndChecklistTest {
                 "select id from trip_photos where trip_id = ?", Long.class, tripId);
 
         String tooLong = "충".repeat(200);
-        given(aiClient.run(any(), any())).willReturn(json.read(
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(
                 "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"" + tooLong + "\",\"qty\":1,"
                 + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
                 + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}"));
@@ -132,7 +137,7 @@ class AiJobAndChecklistTest {
      */
     @Test
     void acceptingSameCandidateTwiceKeepsOneItem() {
-        given(aiClient.run(any(), any())).willReturn(json.read("""
+        given(aiClient.run(any(), any(), any())).willReturn(json.read("""
                 {"items":[{"name":"변환 플러그","category":"ELECTRONIC","qty":1,
                            "priority":"REQUIRED","reason":"어댑터가 필요합니다.",
                            "source":"AI","acceptedItemId":null}],
@@ -172,7 +177,7 @@ class AiJobAndChecklistTest {
         Long photoId = jdbc.queryForObject(
                 "select id from trip_photos where trip_id = ?", Long.class, tripId);
 
-        given(aiClient.run(any(), any())).willReturn(json.read(
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(
                 "{\"detections\":["
                 + "{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,\"confidence\":0.93,"
                 + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null},"
@@ -212,7 +217,7 @@ class AiJobAndChecklistTest {
         String output = "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,"
                 + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
                 + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}";
-        given(aiClient.run(any(), any())).willReturn(json.read(output));
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(output));
 
         Long first = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
                 Codes.JobType.BAG_CHECK, tripId, null)).jobId();

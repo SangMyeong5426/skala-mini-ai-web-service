@@ -137,11 +137,15 @@ DB 비밀번호와 API 키는 커밋하지 않는다. `.env.example`의 DB 정�
 | `DB_POOL_SIZE` | `5` | 서버 하나의 최대 연결 수. 최소 유휴 연결은 1개 |
 | `UPLOAD_DIR` | `./uploads` | 파일 제공 경로. 업로드 API 자체는 후속 구현 |
 | `MAX_UPLOAD_SIZE` | `10MB` | 파일 하나의 한도. 전체 요청 한도는 별도로 고정된 `30MB` |
-| `WEATHER_PROVIDER` | `openmeteo` | 설정만 존재. 날씨 클라이언트는 미구현 |
-| `AI_PROVIDER` · `AI_MODEL` | `mock` | 향후 Mock 구현에서 사용할 설정 |
-| `AI_API_KEY` | 비워 둠 | 실제 AI 미사용. 현재 읽거나 호출하는 클라이언트 없음 |
-| `AI_TEMPERATURE` · `AI_MAX_TOKENS` | [환경 변수 양식](.env.example)과 [AI 명세](../docs/07-ai-ready.md)의 값 사용 | 향후 AI 구현의 파라미터 |
-| `AI_MOCK_DELAY_MS` | `0` | 향후 Mock 구현의 지연 설정. 현재는 지연 처리가 없음 |
+| `WEATHER_PROVIDER` · `WEATHER_TIMEOUT_MS` | `openmeteo` · `10000` | `PACKING_LIST` 프롬프트에 넣을 날씨. **API 키가 없다.** `mock` 이면 조회하지 않고 날씨 없이 추천한다. 실패해도 추천은 나간다 |
+| `AI_PROVIDER` | `mock` | `openai` 로 바꿔야만 실제 호출이 나간다. 그때도 `BAG_CHECK`(사진 인식)·`PACKING_LIST`(준비물 추천) 둘뿐이고 `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 Mock 이다. 구현이 없는 값은 조용히 mock 으로 떨어진다 |
+| `AI_MODEL` | `mock` | `AI_PROVIDER=openai` 면 **이미지를 읽는 모델** 이름. `mock` 이면 기동이 막힌다 |
+| `AI_BASE_URL` | `https://api.openai.com/v1` | 실제로 어디로 나갈지를 정한다. `openai` 는 회사가 아니라 **프로토콜** 이름이라, Gemini 처럼 호환 엔드포인트를 주는 곳으로 갈아 끼울 수 있다 |
+| `AI_API_KEY` | 비워 둠 | `AI_PROVIDER=openai` 일 때만 필요하다. 비어 있으면 기동이 막힌다 — 첫 분석에서 401을 만나는 것보다 낫다 |
+| `AI_TEMPERATURE` · `AI_MAX_TOKENS` | [환경 변수 양식](.env.example)과 [AI 명세](../docs/07-ai-ready.md)의 값 사용 | 실제 호출의 파라미터. 온도를 받지 않는 모델이면 `AI_TEMPERATURE=-1` 로 두어 보내지 않는다 |
+| `AI_TIMEOUT_MS` | `60000` | 호출 제한 시간. 사진 여러 장은 느리다 |
+| `AI_VISION_MAX_PHOTOS` · `AI_VISION_MAX_EDGE_PX` · `AI_VISION_MAX_RAW_BYTES` | `20` · `1024` · `4194304` | 모델에 보낼 사진 장수·해상도·원본 전송 한도 |
+| `AI_MOCK_DELAY_MS` | `0` | Mock 응답 지연. 발표에서 로딩 화면을 보여주려면 `1000`~`2000` |
 
 ### `.env`가 적용되는 방식
 
@@ -288,8 +292,10 @@ DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spe
 - `POST /api/ai-jobs` → **202 + jobId**, `GET /api/ai-jobs/{jobId}` → 상태·결과 조회.
 - Mock도 DB에 작업을 기록하고 FE는 폴링한다. 가상 스레드 설정만으로 비동기 작업이 구현되지는 않는다.
 - `BAG_CHECK`·`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK` 네 종류의 규격을 지킨다.
-- 실제 Vision/LLM은 추후 구현체로 교체한다. 지금은 SDK·실제 호출·큐를 추가하지 않는다.
-- 실제 구현체가 생기기 전에는 `AI_PROVIDER`만 바꿔도 실제 AI가 동작하지 않는다.
+- `BAG_CHECK` 와 `PACKING_LIST` 는 `AI_PROVIDER=openai` 에서 실제 모델을 부른다(`OpenAiClient`).
+  **SDK 는 넣지 않았고** `RestClient` 로 직접 부른다. 큐는 아직 없다.
+  `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 07 이 AI 를 두지 않기로 한 자리라 그때도 Mock 이다.
+- 기본값은 `mock` 이다. **기동 로그에 `OpenAI 연동을 켰습니다` 가 없으면 Mock 으로 돌고 있는 것이다.**
 - 반입 규정의 최종 판단은 규칙 엔진, 인식 결과의 최종 승인은 사용자 책임으로 둔다.
 
 ### 후속 작업에서 확정할 사항

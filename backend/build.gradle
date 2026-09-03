@@ -51,6 +51,11 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// 실제 OpenAI 를 부르는 수동 점검(RealOpenAiSmokeTest)은 이 값을 줄 때만 돈다.
+	// 기본 build 에서 돌면 팀원이 빌드할 때마다 요금이 나간다.
+	//   ./gradlew test --tests '*RealOpenAiSmokeTest*' -Dai.smoke=true
+	systemProperty 'ai.smoke', System.getProperty('ai.smoke', 'false')
 }
 
 // ── .env 를 bootRun 에 주입한다 ────────────────────────────────
