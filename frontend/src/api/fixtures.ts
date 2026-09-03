@@ -39,18 +39,106 @@ export const TRIP_DETAIL: TripDetail = {
 }
 
 // ── 체크리스트 (S-05) — 06 예시 + 시드로 보강 ─────────────
+/** 06 의 `GET /items` 예시 그대로. photoStatus 는 checkStatus 와 별개 축이다. */
 export const ITEMS: ChecklistItem[] = [
-  { itemId: 1, name: '여권', category: 'DOCUMENT', qty: 1, priority: 'REQUIRED', source: 'RULE', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 2, name: '상의', category: 'CLOTHING', qty: 4, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 3, name: '하의', category: 'CLOTHING', qty: 2, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 4, name: '속옷', category: 'CLOTHING', qty: 4, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 5, name: '충전기', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 6, name: '보조배터리', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 7, name: '변환 플러그', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 8, name: '화장품', category: 'TOILETRY', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NEEDS_CHECK' },
-  { itemId: 9, name: '상비약', category: 'MEDICINE', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 10, name: '우산', category: 'ETC', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-]
+    {
+      itemId: 2,
+      name: "상의",
+      category: "CLOTHING",
+      qty: 4,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 3,
+      name: "하의",
+      category: "CLOTHING",
+      qty: 2,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 4,
+      name: "속옷",
+      category: "CLOTHING",
+      qty: 4,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 5,
+      name: "충전기",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 6,
+      name: "보조배터리",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 11,
+      name: "가위",
+      category: "ETC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 8,
+      name: "화장품 용기",
+      category: "TOILETRY",
+      qty: 1,
+      photoStatus: "CONFIRMED",
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED"
+    },
+    {
+      itemId: 9,
+      name: "검정 파우치",
+      category: "ETC",
+      qty: 1,
+      photoStatus: "NEEDS_CHECK",
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED"
+    },
+    {
+      itemId: 7,
+      name: "변환 플러그",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "REQUIRED",
+      source: "AI",
+      checkStatus: "UNCHECKED",
+      photoStatus: "NOT_IN_PHOTO"
+    }
+  ]
+
+/** 06 이 items 응답에 함께 주는 값들. */
+export const ITEMS_META = {
+  completionRate: 0.889,
+  recommendationJobId: 1041,
+  unacceptedRequiredCount: 1,
+}
 
 // ── 사진 (S-03) ───────────────────────────────────────────
 // 06 에 GET /photos 응답 예시가 아직 없다. schema.sql 과 seed.sql 로 만들었다.
@@ -63,13 +151,13 @@ export const PHOTOS: TripPhoto[] = [
 // ── 인식 결과 (S-04) — 06 예시 그대로 ─────────────────────
 export const DETECTIONS: Detection[] = [
   { detectionId: 2, photoId: 1, name: '보조배터리', qty: 1,
-    confidence: 0.880, confidenceLevel: 'HIGH', approved: true,
+    confidence: 0.880, confidenceLevel: 'HIGH',
     missingInfo: '배터리 정격(Wh)', labelText: null },
   { detectionId: 6, photoId: 2, name: '화장품 용기', qty: 1,
-    confidence: 0.640, confidenceLevel: 'MEDIUM', approved: false,
+    confidence: 0.640, confidenceLevel: 'MEDIUM',
     missingInfo: '용량(ml)', labelText: null },
   { detectionId: 8, photoId: 2, name: '검정 파우치', qty: 1,
-    confidence: 0.430, confidenceLevel: 'LOW', approved: false,
+    confidence: 0.430, confidenceLevel: 'LOW',
     missingInfo: null, labelText: null },
 ]
 
@@ -77,30 +165,43 @@ export const DETECTIONS: Detection[] = [
 export const INSPECTION: Inspection = {
   tripId: 1,
   readiness: {
-    prepared: [{ itemId: 5, name: '충전기', qty: 1 }],
-    needsCheck: [
-      { itemId: 8, name: '화장품', qty: 1,
-        candidates: [
-          { detectionId: 6, name: '화장품 용기', matchConfidence: 0.71 },
-          { detectionId: 8, name: '검정 파우치', matchConfidence: 0.31 },
-        ] },
+    // 06:541·591 — 내 목록을 완료 여부로만 나눈다. Mock 이 여행 상태로 덮어쓰므로
+    // 여기는 모양을 보여주는 예시다.
+    prepared: [
+      { itemId: 5, name: '충전기', qty: 1, photoStatus: 'CONFIRMED' },
+      { itemId: 8, name: '화장품 용기', qty: 1, photoStatus: 'CONFIRMED' },
+      { itemId: 9, name: '검정 파우치', qty: 1, photoStatus: 'NEEDS_CHECK' },
     ],
-    notInPhoto: [{ itemId: 1, name: '여권', priority: 'REQUIRED' }],
-    extra: [{ detectionId: 7, name: '가위', confidence: 0.91,
-              verdict: 'NEED_MORE_INFO', missingInfo: '날 길이(cm)' }],
-    completionRate: 0.5,
+    unprepared: [
+      { itemId: 7, name: '변환 플러그', qty: 1, photoStatus: 'NOT_IN_PHOTO' },
+    ],
+    completionRate: 0.889,
+    unacceptedRequiredCount: 1,
   },
+  /*
+   * S-06 검수 응답의 <b>모양</b>을 보여주는 예시다. Mock 의 실제 응답은 접수한
+   * 입력으로 `weightFor` 가 만든다 — 다른 여행의 값을 현재 결과로 쓰지 않는다.
+   *
+   * `contributions` 는 <b>6개다.</b> 07:1081 이 "S-06 은 위 3개만, S-07 은 전부"
+   * 로 정했고 서버도 3개에서 자른다. 자르는 일은 응답을 만드는 쪽(`weightFor`)이
+   * 하고, 여기에는 S-07 이 쓸 전체를 둔다.
+   */
   weight: {
-    minG: 4570, typicalG: 5410, maxG: 6890,
+    // 06:603-610 예시 그대로. 랜딩(4.6—5.5—7.0)과 같은 값이어야 한다.
+    minG: 4610, typicalG: 5480, maxG: 7010,
     limitG: 10000,
     verdict: 'ROOM',
     confidence: 'MEDIUM',
-    confidenceReason: '사진에서 미확인 4개, 승인 전 1개',
-    excludedCount: 5,
+    // 승인 게이트가 폐기됐으므로 "승인 전" 이라는 사유가 남아 있으면 안 된다
+    confidenceReason: '자동 등록 8개 중 6개의 무게를 계산했습니다. 미완료 1개와 무게 정보가 없는 2개는 제외했습니다.',
+    excludedCount: 3,
     contributions: [
       { name: '상의', typicalG: 200, qty: 4, subtotalG: 800 },
       { name: '하의', typicalG: 400, qty: 2, subtotalG: 800 },
       { name: '보조배터리', typicalG: 280, qty: 1, subtotalG: 280 },
+      { name: '속옷', typicalG: 60, qty: 4, subtotalG: 240 },
+      { name: '충전기', typicalG: 90, qty: 1, subtotalG: 90 },
+      { name: '가위', typicalG: 70, qty: 1, subtotalG: 70 },
     ],
   },
   customs: [
@@ -109,7 +210,7 @@ export const INSPECTION: Inspection = {
       reason: '보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.',
       sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do',
       checkedAt: '2026-09-02' },
-    { itemId: 8, name: '화장품', verdict: 'NEED_MORE_INFO',
+    { itemId: 8, name: '화장품 용기', verdict: 'NEED_MORE_INFO',
       missingInfo: '용량(ml)',
       reason: '액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.',
       sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do',
@@ -142,25 +243,46 @@ export const AI_OUTPUT: {
         name: "변환 플러그",
         category: "ELECTRONIC",
         qty: 1,
-        priority: "REQUIRED"
+        priority: "REQUIRED",
+        reason: "여행지에서 충전기를 연결할 어댑터를 확인하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "상비약",
         category: "MEDICINE",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "평소 사용하는 약이 있다면 여행 기간에 맞게 준비하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "화장품",
         category: "TOILETRY",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "숙소 제공 여부에 따라 개인 세면용품을 검토하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "우산",
         category: "ETC",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "여행 중 강수에 대비할 휴대용 우산을 검토하세요.",
+        source: "AI",
+        acceptedItemId: null
+      },
+      {
+        name: "여권",
+        category: "DOCUMENT",
+        qty: 1,
+        priority: "REQUIRED",
+        reason: "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
+        source: "RULE",
+        acceptedItemId: null
       }
     ],
     tips: [
@@ -168,7 +290,8 @@ export const AI_OUTPUT: {
       "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다. 실시간 예보가 아닙니다.",
       "디즈니랜드는 하루 2만 보 이상 걷습니다."
     ],
-    weatherSource: "SEASONAL"
+    weatherSource: "SEASONAL",
+    weatherAsOf: "2026-09-03"
   },
 
   BAG_CHECK: {
@@ -250,35 +373,27 @@ export const AI_OUTPUT: {
   },
 
   WEIGHT_ESTIMATE: {
-    minG: 4570,
-    typicalG: 5410,
-    maxG: 6890,
+    minG: 4610,
+    typicalG: 5480,
+    maxG: 7010,
     limitG: 10000,
     bagEmptyG: 3200,
     verdict: "ROOM",
     confidence: "MEDIUM",
-    confidenceReason: "사진에서 미확인 4개, 승인 전 1개",
-    excludedCount: 5,
+    confidenceReason: "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+    excludedCount: 3,
     excluded: [
       {
-        name: "여권",
-        reason: "NOT_IN_PHOTO"
-      },
-      {
         name: "변환 플러그",
-        reason: "NOT_IN_PHOTO"
+        reason: "UNCHECKED"
       },
       {
-        name: "상비약",
-        reason: "NOT_IN_PHOTO"
+        name: "화장품 용기",
+        reason: "NO_WEIGHT_INFO"
       },
       {
-        name: "우산",
-        reason: "NOT_IN_PHOTO"
-      },
-      {
-        name: "화장품",
-        reason: "PENDING_APPROVAL"
+        name: "검정 파우치",
+        reason: "NO_WEIGHT_INFO"
       }
     ],
     contributions: [
@@ -321,6 +436,14 @@ export const AI_OUTPUT: {
         maxG: 180,
         qty: 1,
         subtotalG: 90
+      },
+      {
+        name: "가위",
+        minG: 40,
+        typicalG: 70,
+        maxG: 120,
+        qty: 1,
+        subtotalG: 70
       }
     ]
   },
@@ -348,27 +471,7 @@ export const AI_OUTPUT: {
         checkedAt: "2026-09-02"
       },
       {
-        itemId: 8,
-        detectionId: null,
-        name: "화장품",
-        qty: 1,
-        ruleKeyword: "액체",
-        attributes: {
-          capacityMl: null,
-          batteryWh: null,
-          batteryMah: null,
-          bladeCm: null
-        },
-        verdict: "NEED_MORE_INFO",
-        ruleId: 4,
-        conditionNote: "용기당 100ml 이하, 총 1L 이하",
-        reason: "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
-        missingInfo: "용량(ml)",
-        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
-        checkedAt: "2026-09-02"
-      },
-      {
-        itemId: null,
+        itemId: 11,
         detectionId: 7,
         name: "가위",
         qty: 1,
@@ -382,7 +485,7 @@ export const AI_OUTPUT: {
         verdict: "NEED_MORE_INFO",
         ruleId: 6,
         conditionNote: "날 길이 6cm 초과",
-        reason: "날 길이 6cm를 넘는 가위는 기내 반입이 제한됩니다. 위탁수하물로 부치세요.",
+        reason: "날 길이를 확인해야 반입 조건을 비교할 수 있습니다. 라벨이나 실측 길이를 확인해 주세요.",
         missingInfo: "날 길이(cm)",
         sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
         checkedAt: "2026-09-02"
@@ -391,6 +494,178 @@ export const AI_OUTPUT: {
     answer: null,
     followUpQuestion: null
   },
+}
+
+/**
+ * 챗봇 호출일 때의 <b>RULE_CHECK 출력</b> — 질문마다 다르다.
+ *
+ * `AI_OUTPUT.RULE_CHECK` 은 07 의 <b>예시 1(물품 목록 호출)</b>이라 `answer` 와
+ * `followUpQuestion` 이 null 이다. 07:1733 이 <i>"question 이 있으면 answer 는
+ * string"</i> 이라고 못박았으므로 챗봇에 그것을 돌려주면 계약 위반이다.
+ *
+ * 아래 다섯은 백엔드 Mock(`backend/src/main/resources/mock/RULE_CHECK_*.json`)과
+ * <b>같은 값이다.</b> 06:400-411 이 대표 질문 3개와 되묻기 답 하나, 그리고 그 밖의
+ * 질문을 어떻게 처리할지 정해 두었다 — 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ *
+ * 질문에서 뽑은 물품이라 `itemId`·`detectionId` 가 null 이다(07:1888).
+ */
+const CHAT_BATTERY: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "보조배터리",
+      qty: 1,
+      ruleKeyword: "보조배터리",
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: 20000,
+        bladeCm: null
+      },
+      verdict: "NEED_MORE_INFO",
+      ruleId: 1,
+      conditionNote: "100Wh 이하",
+      reason: "mAh만으로 정격 Wh를 확정하지 않습니다. 라벨의 Wh를 확인해 주세요.",
+      missingInfo: "배터리 정격(Wh)",
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
+}
+
+/** 위 되묻기에 "100Wh예요" 라고 답했을 때. 되묻기가 <b>닫힌다</b>. */
+const CHAT_BATTERY_100WH: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "보조배터리",
+      qty: 1,
+      ruleKeyword: "보조배터리",
+      attributes: {
+        capacityMl: null,
+        batteryWh: 100,
+        batteryMah: 20000,
+        bladeCm: null
+      },
+      verdict: "CABIN_OK",
+      ruleId: 1,
+      conditionNote: "100Wh 이하",
+      reason: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+const CHAT_LIQUID: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "화장품",
+      qty: 1,
+      ruleKeyword: "액체",
+      attributes: {
+        capacityMl: 120,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: null
+      },
+      verdict: "CHECKED_OK",
+      ruleId: 5,
+      conditionNote: "100ml 초과",
+      reason: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+const CHAT_SCISSORS: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "가위",
+      qty: 1,
+      ruleKeyword: "가위",
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: 7
+      },
+      verdict: "CHECKED_OK",
+      ruleId: 6,
+      conditionNote: "날 길이 6cm 초과",
+      reason: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+/** 모르는 질문. <b>규정을 지어내지 않는다</b> — 항공사에 넘긴다. */
+const CHAT_UNKNOWN: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "문의 물품",
+      qty: 1,
+      ruleKeyword: null,
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: null
+      },
+      verdict: "ASK_AIRLINE",
+      ruleId: null,
+      conditionNote: null,
+      reason: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인하세요.",
+      missingInfo: null,
+      sourceUrl: null,
+      checkedAt: null
+    }
+  ],
+  answer: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+/**
+ * 질문을 보고 답을 고른다. <b>백엔드 `MockAiClient.ruleCheckFixture` 와 같은 순서·같은 조건이다.</b>
+ *
+ * 공백을 지우고 소문자로 맞춘 뒤 <b>물품 이름과 기준값을 함께</b> 본다(06:398).
+ * "화장품 기내 되나요?" 처럼 수치가 없으면 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ *
+ * 되묻기에 답하는 턴은 질문에 물품 이름이 없다("100Wh예요"). 그래서 화면이 함께
+ * 보낸 `items[]` 의 이름도 본다 — 백엔드의 `hasItem(input, "보조배터리")` 자리다.
+ *
+ * Mock 이 서버보다 후하면 Mock 에서만 되는 화면이 생긴다. 예전에는 무엇을 물어도
+ * 보조배터리 답이 돌아왔고, 되묻기에 답해도 같은 되묻기가 다시 나와 끝나지 않았다.
+ */
+export function RULE_CHECK_CHAT(question: string, itemNames: string[] = []): RuleCheckOutput {
+  const q = question.replace(/\s+/g, '').toLowerCase()
+  const asked = (name: string) => q.includes(name) || itemNames.includes(name)
+  if (q.includes('100wh') && asked('보조배터리')) return CHAT_BATTERY_100WH
+  if (q.includes('보조배터리') && q.includes('20000mah')) return CHAT_BATTERY
+  if (q.includes('화장품') && q.includes('120ml')) return CHAT_LIQUID
+  if (q.includes('가위') && q.includes('7cm')) return CHAT_SCISSORS
+  return CHAT_UNKNOWN
 }
 
 export const AI_JOB_CREATED = (jobType: JobType, jobId: number): AiJobCreated => ({
