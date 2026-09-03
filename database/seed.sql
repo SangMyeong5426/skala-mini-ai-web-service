@@ -76,6 +76,22 @@ INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_d
    'TOUR', 'FLIGHT', '대한항공', 'ICN', 'NRT',
    'CARRY_ON', 3200, 10000, '친구 2명, 디즈니랜드, 사진 많이 찍을 예정', 'CONFIRMED');
 
+-- ── 지난 여행 (S-01 홈의 '과거 여행' 목록) ────────────────
+-- 반드시 위 도쿄 여행 **뒤에** 넣는다. 도쿄가 id = 1 로 남아야
+-- checklist_items · trip_photos · ai_jobs 의 trip_id = 1 참조가 유지된다.
+--
+-- 체크리스트·사진은 넣지 않는다. S-10 여행 기록 상세는 3차라 데모에서
+-- 클릭하지 않는다. 홈 카드가 비지 않는 것이 목적이다.
+INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_date,
+                   purpose, transport, airline, departure_airport, arrival_airport,
+                   bag_type, bag_empty_g, weight_limit_g, note, status) VALUES
+  (1, '서울', '오사카', 'JP', '2026-05-02', '2026-05-04',
+   'TOUR', 'FLIGHT', '아시아나항공', 'ICN', 'KIX',
+   'CARRY_ON', 3200, 10000, '2박 3일, 유니버설 스튜디오', 'DONE'),
+  (1, '서울', '부산', 'KR', '2026-03-14', '2026-03-15',
+   'TOUR', 'TRAIN', NULL, NULL, NULL,
+   'CARRY_ON', 3200, NULL, '1박 2일, KTX', 'DONE');
+
 
 -- ── 체크리스트 (AI 추천 + 규칙 보강) ──────────────────────
 -- source: RULE = 고정 필수 규칙, PHOTO = 사진에서 승인, AI = 추천, USER = 직접 추가
