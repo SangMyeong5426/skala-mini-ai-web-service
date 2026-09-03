@@ -10,8 +10,9 @@
 기다리지 않고 동시에 작업할 수 있다. 바꿀 때는 반드시 양쪽에 알린다.
 
 > **2026-09-03 개정 계약:** [Notion 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)에
-> 따라 사진 승인은 완료 등록, 추천 채택은 미완료 등록으로 분리했다. 엔드포인트 18개는
-> 유지하고 기존 요청·응답을 확장한다. 현재 코드·시드의 후속 반영 상태는 [문서 지도](README.md#개정안-반영-상태)에 적는다.
+> 따라 사진 승인은 완료 등록, 추천 채택은 미완료 등록으로 분리했다. 이후 [로그인 최종 결정](functional-specification.md)을
+> 반영해 기존 업무 API 18개에 인증 API 4개를 더한 **총 22개**로 정의한다. 현재 코드·시드의
+> 후속 반영 상태는 [문서 지도](README.md#개정안-반영-상태)에 적는다.
 
 ## 공통 규칙
 
@@ -19,9 +20,9 @@
 | --- | --- |
 | Base URL (로컬) | `http://localhost:8080/api` — Spring Boot 기본 포트. [ADR 0001](adr/0001-backend-stack.md)에서 확정 |
 | 요청·응답 형식 | `application/json; charset=utf-8` |
-| 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X). 예외: `/inspection` 은 자원 목록이 아니라 여행 하나의 **집계 결과**라 단수다 |
+| 경로 | 소문자 복수형 명사를 기본으로 한다. 예외: 집계 `/inspection`, 인증 전용 `/auth/signup`·`login`·`logout`·`session` |
 | 시각 형식 | ISO 8601 UTC (`2026-09-03T05:30:00Z`) |
-| 인증 | **이번 데모에서 구현하지 않는다.** 스키마에는 `users.password_hash` 자리를 두었지만 토큰·세션을 발급하지 않고, 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
+| 인증 | **서비스 전체 로그인 필수.** 서버 세션·HttpOnly 쿠키를 사용하고 사용자 ID는 세션에서 결정한다. 요청의 임의 userId나 고정 시드 사용자를 신뢰하지 않는다 |
 
 브라우저 연동 시 `CORS_ALLOWED_ORIGINS`에 지정한 origin만 허용한다.
 생성 응답의 `Location`을 React의 `response.headers.get('Location')`으로 읽을 수
@@ -34,12 +35,14 @@
 | 코드 | 언제 쓰는가 |
 | --- | --- |
 | `200 OK` | 조회 성공, 수정 성공 |
-| `201 Created` | 생성 성공. `Location` 헤더에 새 리소스 경로를 넣는다 |
+| `201 Created` | 생성 성공. `Location` 헤더에 새 리소스 경로를 넣는다. 회원가입은 공개 회원 상세 API가 없어 본문만 반환 |
 | `202 Accepted` | **비동기 작업을 접수했고 아직 끝나지 않았다.** AI 호출이 여기 해당 |
-| `204 No Content` | 삭제 성공. 본문 없음 |
+| `204 No Content` | 삭제·로그아웃 성공. 본문 없음 |
 | `400 Bad Request` | 요청 형식·값이 잘못됨 |
+| `401 Unauthorized` | 로그인 실패·보호 자원 요청의 세션 없음/만료 |
+| `403 Forbidden` | CSRF 토큰 누락·불일치. 세션 상태 재확인 후 필요 시 로그인 |
 | `413 Payload Too Large` | 요청 전체 크기 초과 — 사진 여러 장 (`spring.servlet.multipart.max-request-size`) |
-| `404 Not Found` | 리소스 없음 |
+| `404 Not Found` | 리소스 없음 또는 로그인한 사용자 소유가 아님 |
 | `409 Conflict` | 중복 등 상태 충돌 |
 | `500 Internal Server Error` | 서버 오류 |
 
@@ -60,6 +63,20 @@
 ## 엔드포인트 목록
 
 **Status Code 를 함께 적는다.** 루브릭이 `Method, Path, Status Code` 셋을 나란히 본다.
+
+**업무 API 1~18과 기존 `/uploads/**` 파일 조회는 모두 인증 대상이다.** 아래 주요 오류에
+공통 `401`을 반복 기재하지 않는다. 상태 변경은 CSRF 검증 대상이며 CSRF 필터가 먼저
+거부하면 `403`일 수 있다. FE는 이때 세션 상태를 다시 확인한다. 공개 API는 가입·로그인·
+인증 상태 조회뿐이다. 로그아웃은 로그인한 사용자만 처리한다.
+
+### 인증 (UC-01)
+
+| # | Method | Path | 설명 | 성공 | 주요 오류 |
+| --- | --- | --- | --- | --- | --- |
+| 19 | `POST` | `/api/auth/signup` | 닉네임·아이디·비밀번호·이메일로 가입 | `201` (회원 결과, 자동 로그인 안 함) | `400` `403` `409` |
+| 20 | `POST` | `/api/auth/login` | 아이디·비밀번호 로그인, 서버 세션 생성 | `200` + 세션 쿠키 | `400` `401` `403` |
+| 21 | `GET` | `/api/auth/session` | 로그인 여부·본인 정보·CSRF 토큰 확인 | `200` (미인증도 상태만 반환) | `500` |
+| 22 | `POST` | `/api/auth/logout` | 서버 세션 폐기·쿠키 만료 | `204` | `401` `403` |
 
 ### 여행 (UC-02 · UC-09)
 
@@ -132,6 +149,125 @@
 | --- | --- | --- |
 | `POST /api/ai-jobs` 로 작업 접수 | **`202`** | 접수만 했고 **아직 안 끝났다**. `200` 이 아니다 |
 | `GET /api/ai-jobs/{jobId}` 인데 아직 `PENDING` | **`200`** | **조회 자체는 성공했다.** `202` 가 아니다. 본문의 `status` 로 구분한다 |
+
+## 회원가입·로그인 계약 (UC-01)
+
+### 가입·로그인 입력
+
+| 필드 | 가입 | 로그인 | 검증·저장 |
+| --- | --- | --- | --- |
+| `nickname` | 필수 | — | 앞뒤 공백 제거 후 2~50자, 공백만 불가, 중복 허용 |
+| `loginId` | 필수 | 필수 | 앞뒤 공백 제거·소문자 정규화, `[a-z0-9_]{4,30}`, 고유값. 내부 userId와 구분 |
+| `password` | 필수 | 필수 | 8자 이상·UTF-8 72바이트 이하. 공백 제거·임의 자르기 없음. BCrypt 해시로 저장 |
+| `email` | 필수 | — | 이메일 형식·최대 255자, 앞뒤 공백 제거·소문자 정규화 후 고유값 |
+
+가입은 위 **4개 필드만** 받는다. 비밀번호 확인 필드·추가 프로필·이메일 인증은 요구하지 않는다.
+닉네임·이메일로 로그인하지 않는다. 서버와 DB의 고유 제약으로 동시 중복 가입도 거부한다.
+비밀번호 원문·해시·세션 쿠키는 응답·로그·AI 입력에 남기지 않는다.
+
+**가입 요청 — `POST /api/auth/signup`**
+
+```json
+{
+  "nickname": "김지우",
+  "loginId": "jiwoo28",
+  "password": "<사용자가 입력한 비밀번호>",
+  "email": "jiwoo@example.com"
+}
+```
+
+`201 Created`와 아래 본문을 반환한다. 회원 상세 공개 API를 별도로 두지 않으므로 이 인증
+가입 응답은 `Location`을 생략한다. 가입만으로 인증 세션을 만들지 않으며 S-00 로그인 모드로
+이동한다. 비밀번호는 비우고 아이디만 유지한다.
+
+```json
+{
+  "user": { "userId": 12, "loginId": "jiwoo28", "nickname": "김지우", "email": "jiwoo@example.com" }
+}
+```
+
+**로그인 요청 — `POST /api/auth/login`**
+
+```json
+{ "loginId": "jiwoo28", "password": "<사용자가 입력한 비밀번호>" }
+```
+
+성공은 `200`과 위와 같은 `user` 객체, 서버 세션 쿠키다. 로그인 시 세션 ID를 교체하고
+인증 정보를 저장한다. 실패는 존재하지 않는 아이디·틀린 비밀번호를 구분하지 않는 `401`이다.
+
+```json
+{ "error": { "code": "INVALID_CREDENTIALS", "message": "아이디 또는 비밀번호를 확인해 주세요." } }
+```
+
+가입 중복은 `409 / DUPLICATE_LOGIN_ID` 또는 `DUPLICATE_EMAIL`과 해당 `field`를 반환한다.
+형식 위반은 공통 `400 / VALIDATION_FAILED` 형식을 쓴다.
+
+### 세션·CSRF·로그아웃
+
+`GET /api/auth/session`은 앱 진입과 로그인·로그아웃 성공 후 호출한다. 응답은 `Cache-Control:
+no-store`이며, CSRF 토큰 준비를 위해 로그인 전에도 익명 서버 세션 쿠키가 생길 수 있다.
+**쿠키 존재만으로 로그인했다고 판단하지 않는다.** `authenticated`와 서버 인증 상태를 확인한다.
+
+```json
+{
+  "authenticated": false,
+  "user": null,
+  "csrfToken": "<서버가 발급한 CSRF 토큰>"
+}
+```
+
+로그인 후에는 `authenticated=true`, `user`는 위 본인 객체다. `csrfToken`은 항상 문자열이다.
+이 공개 응답은 다른 사람의 정보·여행·작업을 반환하지 않는다.
+
+- 서버 세션은 Spring Security·HttpSession을 사용한다. 단일 BE의 메모리에 보관하고 재시작 시
+  재로그인한다. 세션 테이블·JWT·Redis·Refresh Token을 추가하지 않는다.
+- 쿠키 `JSESSIONID`: `HttpOnly`, `SameSite=Lax`, `Path=/`, HTTPS에서는 `Secure`.
+  로컬 HTTP에서만 Secure를 해제한다. 세션 유휴 만료는 기본 30분(서버 환경 설정), 자동 로그인 없음.
+- FE는 쿠키를 JS로 읽거나 localStorage에 인증 정보를 보관하지 않고 `credentials: include`로
+  요청한다. 개발 프록시와 배포는 같은 사이트를 기준으로 한다. CORS는 지정 origin과 credentials만 허용한다.
+- 가입·로그인·로그아웃을 포함한 모든 POST/PATCH/DELETE는 세션 응답의 `csrfToken`을
+  `X-CSRF-TOKEN` 헤더로 보낸다. 프레임워크의 CSRF 검증을 유지하며 로그인이 성공하거나
+  로그아웃하면 토큰을 다시 조회한다. 토큰은 FE 메모리에만 보관한다.
+- `403 / CSRF_INVALID`이면 세션을 다시 조회한다. 미인증이면 화면·폴링·사용자 상태를 정리해
+  S-00으로 이동한다. 인증 상태면 새 토큰을 받고 입력을 유지해 사용자가 다시 제출하도록 한다.
+  승인·가입 같은 변경 요청을 자동 재전송하지 않는다.
+- `POST /api/auth/logout` 성공은 `204`, 서버 세션 폐기와 쿠키 만료다. FE는 본인 자료·사진 URL·
+  AI 작업 상태·폴링을 비우고 S-00으로 이동한다. 서버 실패 시 로그아웃 완료로 표시하지 않고 재시도한다.
+
+프레임워크 동작의 근거: [Spring Security CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html),
+[세션 관리](https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html),
+[비밀번호 저장](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html).
+쿠키 옵션·유휴 시간·입력 제한은 이 프로젝트의 설계 결정이다.
+
+### 모든 서비스 자료의 소유권
+
+| 대상 | 서버 확인 |
+| --- | --- |
+| 여행·체크리스트·검수 | `trips.user_id == 세션 userId`, 자식 항목이 URL의 tripId에 속하는지도 확인 |
+| 사진·인식·파일 | photoId → trip_photos → trips 소유권. 인식·사진 ID를 다른 여행과 조합해도 거부 |
+| AI 접수 | 요청 userId를 받지 않음. `ai_jobs.user_id`는 세션에서 채우고 tripId·photoIds·itemIds의 소유권을 검증 |
+| AI 결과 | `ai_jobs.user_id == 세션 userId`. 챗봇은 tripId가 null이어도 userId는 필수 |
+| 추천 채택 | jobId·candidateIndex와 대상 여행이 같은 사용자 소유인지 확인 |
+| 규정·무게 마스터 | 사용자별 소유 데이터는 아니지만 서비스 조회는 로그인 필수 |
+
+소유권 불일치는 존재 여부를 노출하지 않는 `404 / NOT_FOUND`다. 로그인 전 보호 GET은
+`401 / AUTH_REQUIRED`이며, 상태 변경 요청은 앞서 설명한 CSRF 거부 순서를 고려한다.
+401은 FE가 로그인 화면으로 전환할 JSON 응답이고 서버가 HTML 로그인 페이지로 리다이렉트하지 않는다.
+
+기존 `/uploads/**` 경로도 인증·소유권을 확인하는 서버 처리로 바꿔야 한다. 공개 정적 파일
+핸들러를 인증 규칙에서 제외하지 않으며, 경로만 아는 다른 회원에게도 파일을 주지 않는다.
+사진·본인 자료 응답은 `Cache-Control: private, no-store`로 브라우저에 보관되지 않게 한다.
+22개 JSON API와 별도로 **기존 사진 파일 조회 경로를 보호**하는 것이며 파일용 신규 API는 추가하지 않는다.
+
+### 수용 기준 — 실제 구현 후 검증
+
+- 비로그인 홈·챗봇·여행·AI 결과·사진 파일 접근이 차단된다. 세션 쿠키만 있고 인증되지 않은 경우도 같다.
+- 가입 필드는 4개, 로그인 필드는 2개이며 중복 아이디·이메일과 잘못된 비밀번호를 일관되게 처리한다.
+- A 계정의 tripId·photoId·itemId·jobId로 B가 조회·수정·채택해도 `404`이고 데이터는 변하지 않는다.
+- 로그아웃·만료 후 보호 요청은 거부되고 폴링·이전 사용자의 화면 데이터가 남지 않는다.
+- 로그인·로그아웃 뒤 CSRF 토큰을 새로 받아 정상 요청하고 누락·틀린 토큰은 거부한다.
+- 로그인 전에 접수하지 못하며, 로그인 중 접수한 AI 작업은 세션 만료 후에도 서버에 남는다.
+  본인이 다시 로그인한 뒤만 조회할 수 있다. 세션 만료를 AI 작업 자체의 `FAILED`로 바꾸지 않는다.
 
 ## AI 확장 지점 엔드포인트 (Mock)
 

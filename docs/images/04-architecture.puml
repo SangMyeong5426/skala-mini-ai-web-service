@@ -14,7 +14,7 @@ skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 12
 skinparam ArrowColor #46524E
 skinparam componentStyle rectangle
-title 시스템 목표 구조 — 사진 승인과 추천 채택 분리
+title 시스템 목표 구조 — 로그인 필수 · 사진 승인과 추천 채택 분리
 caption 개정 계약의 설계도 · 코드 반영 현황은 docs/README.md 참조
 
 skinparam component {
@@ -39,13 +39,16 @@ actor "사용자" as USER
 
 node "Frontend  :5173" as FE {
   component "React 19 + TypeScript\n(Vite 8)" as FEAPP
-  component "라우팅 · 화면 컴포넌트" as FEUI
-  component "API 클라이언트\n**폴링 훅**" as FEAPI
+  component "S-00 로그인·회원가입\nS-01~S-10 세션 확인 · 화면 가드" as FEUI
+  component "API 클라이언트\n쿠키 · CSRF · **폴링 훅**" as FEAPI
 }
 
 node "Backend  :8080" as BE {
+  component "Spring Security\n세션 인증 · CSRF 검증" as SECURITY
+  component "HttpSession\n서버 메모리 · 만료/로그아웃" as SESSION
   component "REST Controller" as CTRL
-  component "Service 로직\n사진 승인 · 추천 채택\n완료율 · 필수 후보 경고 · 무게 합산" as SVC
+  component "Auth Service\n가입 4개 필드 · 아이디 로그인\nBCrypt 해시 검증" as AUTH
+  component "Service 로직\n세션 사용자 소유권 확인\n사진 승인 · 추천 채택\n완료율 · 필수 후보 경고 · 무게 합산" as SVC
   component "Repository (JPA)" as REPO
   component "**규칙 엔진**\n반입 판정" as RULE
   component "AiClient (인터페이스)" as IFACE
@@ -73,13 +76,18 @@ USER --> FEAPP
 FEAPP --> FEUI
 FEUI --> FEAPI
 
-FEAPI -right-> CTRL : **HTTP / JSON**\nAI 작업: POST → 202 + 작업ID\nGET → 폴링
+FEAPI -right-> SECURITY : **쿠키 / JSON · 사진 요청**\n업무 API·사진 모두 로그인 필수\nAI 작업: POST → 202 · GET 폴링
+SECURITY --> CTRL : 인증·CSRF 통과
+SECURITY --> SESSION : 인증 상태
+CTRL --> AUTH : 가입 · 로그인 · 세션 · 로그아웃
+AUTH --> REPO : users 조회 · 가입
+AUTH --> SESSION : 로그인 시 교체 · 로그아웃 시 폐기
 CTRL --> SVC
 SVC --> REPO
 SVC --> RULE
 SVC --> IFACE
 REPO -right-> TABLES : SQL
-SVC --> UP : 사진 저장
+SVC --> UP : 소유권 확인 후 사진 저장·조회
 
 IFACE ..> MOCK : **데모 설계**
 IFACE ..> REAL : 나중\n<size:10>AI_PROVIDER 만 바꾼다</size>
@@ -100,6 +108,13 @@ note left of SVC
   추천 채택 → 선택분만 UNCHECKED · 중복 방지
   실제 PREPARED만 무게에 포함
   미채택 필수 후보는 별도 경고
+end note
+
+note right of SECURITY
+  공개: 가입 · 로그인 · 인증 상태 조회
+  서비스 기능·챗봇·사진은 모두 인증 대상
+  쿠키 존재만으로 로그인 판단 금지
+  다른 사용자의 자료는 404
 end note
 
 note right of RULE

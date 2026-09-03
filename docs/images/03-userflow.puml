@@ -3,15 +3,26 @@ digraph UserFlow {
   // docs/03-wireframe.md · 2026-09-03 개정. 사진 승인과 추천 채택을 분리한다.
   graph [rankdir=TB, splines=ortho, nodesep=0.5, ranksep=0.55, pad=0.3,
     bgcolor="#FFFFFF", fontname="Apple SD Gothic Neo", fontsize=20,
-    label="사용자 흐름 — 사진 승인 · 추천 선택 · 실제 준비 확인", labelloc=t]
+    label="사용자 흐름 — 로그인 후 사진 승인 · 추천 선택 · 준비 확인", labelloc=t]
   node [shape=box, style="rounded,filled", margin="0.18,0.12",
     color="#8A9A94", fillcolor="#F5F7F6", fontcolor="#14201C",
     fontname="Apple SD Gothic Neo", fontsize=13, penwidth=1]
   edge [color="#606B67", fontcolor="#34403B", fontname="Apple SD Gothic Neo",
     fontsize=11, arrowsize=0.7, penwidth=1]
 
+  entry [label="서비스 접속"]
+  session [shape=diamond, style=filled, fillcolor="#F3F1EA", label="로그인 상태가\n유효한가?"]
+  auth [label="S-00 로그인·회원가입 /login\n로그인: 아이디 · 비밀번호\n가입: 닉네임 · 아이디 · 비밀번호 · 이메일\n가입 후 로그인 / 실패 시 입력 수정", fillcolor="#E7EDF7", color="#728CAF"]
+  signout [label="공통 로그아웃 · 세션 만료\n사용자 데이터 · 사진 · 폴링 정리\n로그인 전 모든 서비스 기능 차단", fillcolor="#E7EDF7", color="#728CAF"]
+  entry -> session
+  session -> auth [xlabel="아니오"]
+  session -> home [xlabel="예"]
+  auth -> home [xlabel="로그인 성공"]
+  signout -> auth [xlabel="로그인으로", constraint=false]
+  home -> signout [xlabel="어느 서비스 화면에서든", style=dashed, constraint=false]
+
   subgraph cluster_main {
-    label="여행 준비 — 내 목록과 추천 후보를 따로 관리";
+    label="로그인 후 본인 여행 준비 — 내 목록과 추천 후보 분리";
     color="#C7D0C7"; fontcolor="#516059"; fontsize=15; style=rounded; margin=20;
 
     home [label="S-01 홈\n새 여행 · 과거 기록 · 이어가기\n이어가기: S-03~S-06 마지막 저장 화면 복귀"]
@@ -65,10 +76,10 @@ digraph UserFlow {
   }
 
   subgraph cluster_chat {
-    label="보조 흐름 — 어느 화면에서든 반입 규정 질문";
+    label="로그인 후 보조 흐름 — 반입 규정 질문";
     color="#E6B9C5"; fontcolor="#9B5669"; fontsize=15; style=rounded; margin=20;
     node [fillcolor="#FAE3E9", color="#D997AA"]
-    chat [label="S-09 챗봇\n여행 등록 없이 질문 가능"]
+    chat [label="S-09 챗봇\n로그인 필수 · 여행 등록 없이 질문 가능"]
     answer [label="답변 생성 중\n확인된 정보로 규정 조회", fillcolor="#F4CED9"]
     enough [shape=diamond, style=filled, label="판정 정보가\n충분한가?"]
     more [label="추가 질문에 답하기\n모르는 용량 · Wh는 추정하지 않음"]

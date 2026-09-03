@@ -15,7 +15,8 @@ skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 11
 skinparam linetype ortho
 skinparam ArrowColor #46524E
-title 데이터 모델 — 내 목록과 추천 후보의 저장 경계
+title 목표 데이터 모델 — 로그인 사용자 · 내 목록 · 추천 후보
+caption users.login_id 추가 설계 · SQL·시드·DB 적용은 후속 작업
 
 skinparam class {
   BackgroundColor #F5F7F6
@@ -32,11 +33,20 @@ skinparam class {
 entity "users" as users {
   * id : bigint <<PK>>
   --
+  * login_id : varchar(30) <<UQ>>
   * email : varchar(255) <<UQ>>
   * password_hash : varchar(255)
   * nickname : varchar(50)
   * created_at : timestamptz
 }
+
+note left of users
+  가입: 닉네임 · 아이디 · 비밀번호 · 이메일
+  login_id는 로그인용, id는 내부 PK
+  비밀번호는 해시만 저장
+  여행·AI 작업은 인증 사용자에게 귀속
+  세션은 서버 메모리 · 세션 테이블 없음
+end note
 
 entity "trips" as trips {
   * id : bigint <<PK>>

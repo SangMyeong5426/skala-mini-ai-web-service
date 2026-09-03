@@ -2,6 +2,16 @@
 
 > PM이 관리한다. 매일 아침 한 번, 저녁 한 번 확인한다.
 
+## 2026-09-03 로그인 필수 결정
+
+- [x] 기능정의서 작성, 가입 4개 필드·로그인 2개 필드와 서비스 전체 인증 설계 반영
+- [x] 01~07·Use-Case·User Flow·아키텍처·목표 ERD에 인증·소유권 반영
+- [x] 정적 교차 검증 — 화면 11개·API 22개·가입 4개/로그인 2개 필드, PNG·SVG 4쌍, 기존 AI 스키마 8개·예시 12개 확인. 인증 실행 검증은 아래 후속 항목
+- [ ] S-00 가입·로그인 폼, FE 세션 가드·로그아웃·CSRF·401 처리 구현
+- [ ] BE 회원가입·서버 세션·비밀번호 해시·소유권 검사·사진 파일 보호 구현
+- [ ] users.login_id의 SQL·시드·JPA 반영 및 기존 사용자 마이그레이션 검증
+- [ ] 06 인증 수용 기준 실행 — 미인증 차단·계정 간 접근 차단·만료·로그아웃·CSRF
+
 ## 2026-09-03 체크리스트 흐름 개정
 
 - [x] 개인 Notion 개정안의 사진 승인·추천 채택·실제 완료 구분을 `01`~`07` MD에 반영
@@ -28,8 +38,8 @@
 - [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 4종
 - [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개 + UC-07 부분 연동
 - [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema. 개정 예시 검증과 구현 검증을 구분
-- [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-01~10
-- [ ] **Figma 와이어프레임** — 1차 `S-01`~`S-06` 은 정성껏, 나머지는 스케치
+- [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-00~10 (인증 1개 + 업무 10개)
+- [ ] **Figma 와이어프레임** — 1차 `S-00`~`S-06` 은 정성껏, 나머지는 스케치
 
 ### 개발환경 세팅
 
@@ -65,7 +75,7 @@
 - [x] 스키마 SQL 작성 → [`database/schema.sql`](../database/schema.sql) — 로컬 DB에서 실행·제약 검증 완료
 - [x] 클라우드 DB(Supabase)에 실행 — 2026-09-03 `./scripts/db-apply`. `source` 에 `PHOTO` 추가와 `detected_objects` 의 `missing_info`·`label_text` 까지 반영 확인
 - [x] 데모용 시드 데이터 작성 → [`database/seed.sql`](../database/seed.sql) — 도쿄 3박4일 시나리오
-- [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
+- [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 22엔드포인트 (기존 업무 18 + 인증 4) · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{jobId}` · `jobType` 4종
 - [x] AI 입출력 JSON Schema 확정 → [`07-ai-ready.md`](07-ai-ready.md) — 06 예시·`schema.sql` enum 과 기계 대조
 - [ ] 프롬프트 설계 완료 확인 → [`07-ai-ready.md`](07-ai-ready.md) — 작성됨, PM 완료 확인 TBD
@@ -73,12 +83,12 @@
 - [ ] FE ↔ BE API 연동
 - [ ] BE ↔ DB 연결
 - [x] 시스템 아키텍처 다이어그램 완성 → [`04-architecture.md`](04-architecture.md) — PlantUML 원본 + PNG · SVG
-- [ ] **화면 구현 1차** — `S-01`~`S-06` 데모 주 경로 (Mock API 호출 → 데이터 렌더링)
+- [ ] **화면 구현 1차** — `S-00`~`S-06` 데모 주 경로 (Mock API 호출 → 데이터 렌더링)
 - [ ] 화면 구현 2차 — `S-07` 무게 상세 · `S-08` 반입 규정 상세
 - [ ] 화면 구현 3차 — `S-09` 챗봇 · `S-10` 여행 기록 상세
 - [ ] End-to-End 흐름 검증
 
-> 팀 결정으로 **화면 10개 전체**를 만든다. 다만 **1차 6개가 끊김 없이 도는 것**이
+> 팀 결정으로 **화면 11개 전체(S-00 인증 포함)**를 만든다. 다만 **필수 인증 포함 1차 7개가 끊김 없이 도는 것**이
 > 먼저다 — 채점은 화면 수가 아니라 *"Mock API를 활용한 실제 데이터 바인딩 및
 > 화면 시연"* 을 본다. 시간이 모자라면 3차부터 버린다.
 

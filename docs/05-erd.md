@@ -11,11 +11,12 @@
 
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
-- **PNG·SVG 는 2026-09-03 에 아래 DSL 기준으로 재렌더했다.** DSL · `.puml` · `schema.sql`
-  세 파일의 테이블 10개와 모든 컬럼이 일치한다. 정본은 아래 DSL 이다
+- **로그인 포함 목표 ERD:** 아래 DSL·`.puml`·PNG·SVG에 `users.login_id`를 추가 설계한다.
+  기존 SQL과의 차이는 이 컬럼이며 테이블 10개와 관계는 유지한다. 현재 `schema.sql`·DB에
+  적용된 것으로 보지 않는다. 인증 구현 시 SQL·시드·엔티티를 함께 반영해야 한다
 - dbdiagram.io 링크: TBD — 아래 DSL을 붙여 넣으면 즉시 생성된다
 
-> **2026-09-03 체크리스트 개정:** 테이블·컬럼은 유지하고 아래 저장 규약을 적용한다.
+> **2026-09-03 로그인 개정:** 체크리스트 저장 규약은 유지하며 회원의 로그인 아이디를 추가한다.
 > 원본·PNG·SVG에도 후보 JSON·채택 책임·사진 승인 트랜잭션과 조회 계산값을 반영했다.
 > SQL의 기존 시드는 개정 전 상태이므로 새 승인 흐름을 검증한 데이터로 보지 않는다.
 
@@ -33,8 +34,9 @@
 
 Table users {
   id            bigserial   [pk]
+  login_id      varchar(30) [not null, unique, note: '로그인용 아이디, 소문자 정규화. SQL 반영 예정']
   email         varchar(255)[not null, unique]
-  password_hash varchar(255)[not null]  // bcrypt 해시. 인증 흐름은 범위 밖 (01-service-plan.md)
+  password_hash varchar(255)[not null]  // bcrypt 해시. 평문 저장·응답 금지
   nickname      varchar(50) [not null]
   created_at    timestamptz [not null, default: `now()`]
 }
@@ -205,6 +207,19 @@ Table ai_jobs {
 
 ## 테이블 관계
 
+### 회원과 세션 — 로그인 포함 목표 설계
+
+- `users.id`는 기존 내부 PK, `users.login_id`는 새 로그인용 고유 아이디다. 이메일·닉네임과 구분한다.
+  아이디 정규화·입력 길이는 06을 따른다. `email`도 소문자 정규화 후 고유값이며 닉네임은 중복 허용한다.
+- `password_hash`만 저장하고 비밀번호 원문은 저장하지 않는다. 세션은 서버 메모리의 HttpSession에
+  두므로 10개 도메인 테이블에 세션 테이블을 추가하지 않는다.
+- `trips.user_id`·`ai_jobs.user_id`는 인증 사용자에서 채운다. 챗봇의 `trip_id=null`은 허용하지만
+  `user_id`가 없는 작업은 허용하지 않는다. 항목·사진은 소속 여행을 거쳐 본인 소유권을 검증한다.
+- **SQL·시드 후속:** 현재 `database/schema.sql`에는 `login_id`가 없다. 구현 단계에서 컬럼·고유 제약과
+  사용자 매핑을 추가하고 기존 회원·시드의 아이디를 정한 뒤 NOT NULL을 적용한다.
+  기존 시드 해시로 로그인이 가능하다고 가정하지 않고, 별도 가입으로 검증한다.
+  현재 DB를 초기화하는 schema.sql 재실행을 마이그레이션 대신 사용하지 않는다.
+
 ### 내 목록과 추천 후보의 저장 규약
 
 | 데이터 | 저장 위치 | 등록·변경 규칙 |
@@ -330,3 +345,6 @@ FK 두 개만으로 끝났을 것이다.
 데모용 초기 데이터는 [`database/seed.sql`](../database/seed.sql)에 둔다.
 
 **이 문서의 DSL과 `schema.sql`은 짝이다. 한쪽만 고치지 않는다.**
+
+현재 요청은 로그인 포함 설계 반영이다. `users.login_id`를 **목표 스키마의 미반영 차이**로
+명시해 두었으며 SQL·시드·JPA 변경과 DB 적용은 인증 구현 시 함께 수행한다.

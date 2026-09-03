@@ -2,7 +2,7 @@
 ' AI 여행가방 확인 플랫폼 — Use-Case 다이어그램
 ' 출처: docs/02-use-case.md · 2026-09-03 사진 승인·추천 채택 개정
 ' UC-01~UC-10은 F-01~F-10과 1:1로 대응한다.
-' UC-01은 범위 제외 — 회원·비회원을 구분하지 않기로 해 로그인을 두지 않는다.
+' UC-01 로그인 필수 확정 — UC-02~UC-10은 인증된 여행자의 기능이다.
 
 left to right direction
 skinparam backgroundColor #FFFFFF
@@ -41,7 +41,7 @@ skinparam rectangle {
 actor "여행자" as TRAVELER
 
 rectangle "AI 여행가방 확인 플랫폼" {
-  usecase "UC-01\n회원가입 및 로그인\n<size:11>(범위 제외)</size>" as UC01 <<제외>>
+  usecase "UC-01\n회원가입 및 로그인\n<size:11>가입: 닉네임·아이디·비밀번호·이메일</size>\n<size:11>로그인: 아이디·비밀번호</size>" as UC01
   usecase "UC-02\n여행 등록" as UC02
   usecase "UC-03\n짐 사진 등록" as UC03
   usecase "UC-04\nAI 사진 속 물품 인식\n<size:11>사용자 승인 → 내 목록 완료 등록</size>" as UC04 <<AI>>
@@ -58,6 +58,7 @@ actor "AI 서비스\n(현재 Mock)" as AI
 actor "날씨 서비스\n(Open-Meteo)" as WEATHER
 actor "공식 규정\n데이터 출처" as RULES
 
+TRAVELER -- UC01
 TRAVELER -- UC02
 TRAVELER -- UC03
 TRAVELER -- UC04
@@ -81,7 +82,7 @@ legend bottom
   |<#D9EAE6>| **AI 확장 지점** — 현재 Mock, 이후 실제 AI 연동 |
   |<#F5F7F6>| 일반 기능 |
   |<#FFF8D5>| **UC-07** — AI는 물품명 구조화, 최종 판정은 규칙 엔진 |
-  |<#EFEFEF>| **범위 제외** — 이번 프로젝트에서 만들지 않는다 |
+  |<#F5F7F6>| **UC-02~UC-10 공통 사전 조건: 로그인 필수 · 본인 자료만 이용** |
   |<#FFF8D5>| 미채택 필수 후보는 별도 경고 · 완료율과 무게에는 미포함 |
 endlegend
 @enduml
