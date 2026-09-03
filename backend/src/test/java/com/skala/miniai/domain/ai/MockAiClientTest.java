@@ -18,8 +18,9 @@ class MockAiClientTest {
     private final RuleCheckContract contract = new RuleCheckContract();
 
     @Test
-    void elevenRepresentativeChatbotQuestionsReturnTheirRuleResults() {
+    void twelveRepresentativeChatbotQuestionsReturnTheirRuleResults() {
         assertQuestion("20000mAh 보조배터리 기내 되나요?", "보조배터리", "NEED_MORE_INFO", "batteryMah", 20000);
+        assertFollowUp("보조배터리 용량을 모르겠어요", "보조배터리", "배터리 라벨에 표시된 정격 Wh는 얼마인가요?");
         assertQuestion("100Wh 보조배터리 기내 반입되나요?", "보조배터리", "CABIN_OK", "batteryWh", 100);
         assertQuestion("120Wh 보조배터리 기내 반입되나요?", "보조배터리", "ASK_AIRLINE", "batteryWh", 120);
         assertQuestion("200Wh 보조배터리 기내 반입되나요?", "보조배터리", "CHECKED_FORBIDDEN", "batteryWh", 200);
@@ -49,6 +50,8 @@ class MockAiClientTest {
                 .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
         assertThat(run("1200Wh 보조배터리 기내 반입되나요?").path("results").get(0)
                 .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+
+        assertQuestion("150ml 말고 50ml 화장품은 되나요?", "화장품", "CABIN_OK", "capacityMl", 50);
     }
 
     @Test
@@ -86,6 +89,21 @@ class MockAiClientTest {
         assertThat(result.path("detectionId").asLong()).isEqualTo(9);
         assertThat(result.path("name").asText()).isEqualTo("보조배터리");
         assertThat(result.path("attributes").path("batteryMah").asInt()).isEqualTo(20000);
+
+        JsonNode topicChangeInput = json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"화장품 용량을 모르겠어요","items":[{
+                  "itemId":11,"detectionId":17,"name":"가위","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}
+                }]}
+                """);
+        JsonNode topicChangeOutput = client.run(
+                Codes.JobType.RULE_CHECK, contract.validateInput(topicChangeInput));
+        contract.validateOutput(topicChangeInput, topicChangeOutput);
+
+        assertThat(topicChangeOutput.path("results").get(0).path("verdict").asText())
+                .isEqualTo("ASK_AIRLINE");
+        assertThat(topicChangeOutput.path("answer").asText()).contains("규정을 찾지 못했습니다");
+        assertThat(topicChangeOutput.path("followUpQuestion").isNull()).isTrue();
     }
 
     @Test

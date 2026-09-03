@@ -65,6 +65,7 @@ class ChatbotApiTest {
                 auth, question("45Wh예요", previousBattery), "ASK_AIRLINE", null);
         assertThat(unsupportedFollowUp.path("output").path("results").get(0).path("name").asText())
                 .isEqualTo("보조배터리");
+        assertAnswer(auth, question("화장품 용량을 모르겠어요", previousBattery), "ASK_AIRLINE", null);
 
         String previousCosmetic = """
                 [{"itemId":null,"detectionId":null,"name":"화장품","qty":1,
@@ -77,6 +78,16 @@ class ChatbotApiTest {
                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]
                 """;
         assertAnswer(auth, question("5cm예요", previousScissors), "CABIN_OK", null);
+        assertAnswer(auth, question("20000mAh 보조배터리는요?", previousScissors), "ASK_AIRLINE", null);
+        JsonNode topicChange = assertAnswer(
+                auth, question("화장품 용량을 모르겠어요", previousScissors), "ASK_AIRLINE", null);
+        assertThat(topicChange.path("output").path("answer").asText()).contains("규정을 찾지 못했습니다");
+
+        String previousLaptop = """
+                [{"itemId":null,"detectionId":null,"name":"노트북","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]
+                """;
+        assertAnswer(auth, question("가위 길이를 모르겠어요", previousLaptop), "ASK_AIRLINE", null);
 
         mvc.perform(post("/api/ai-jobs")
                         .session(auth.session()).cookie(auth.cookies())
