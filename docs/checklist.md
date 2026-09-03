@@ -2,6 +2,20 @@
 
 > PM이 관리한다. 매일 아침 한 번, 저녁 한 번 확인한다.
 
+## 2026-09-03 체크리스트 흐름 개정
+
+- [x] 개인 Notion 개정안의 사진 승인·추천 채택·실제 완료 구분을 `01`~`07` MD에 반영
+- [x] 내 목록·후보 저장 경계, 기존 API의 추천 참조, 반복 승인 방지 규약 작성
+- [x] 추천 이유·날씨 시점·채택 연결을 AI 스키마와 API 예시에 반영
+- [ ] 팀 개정안·개인 개정안의 관계와 팀 정본 지정, 원본 오타 교정 여부 확인 → 02
+- [ ] PM 확인 — 프롬프트 설계 완료 여부와 Playground 검증 일정 (아래 두 항목)
+- [ ] PNG·PUML·SVG 재생성 — 03 MD Mermaid가 최신 기준
+- [ ] FE 타입·S-04~S-06와 BE 승인·추천 채택·무게 Mock에 개정 계약 반영
+- [ ] 기존 시드를 개정 상태로 갱신 — 승인 가위 등록과 추천 채택 시점 구분
+- [ ] 07의 사용자 승인 수용 기준 실행 — 빈 목록, 선택분만 추가, 재승인, 완료 후 무게 재계산
+
+아래 완료 표시는 기존 작업 시점의 기록이다. 개정 기능의 구현·E2E 완료로 대신하지 않는다.
+
 ## 1일차 — 서비스 기획 & Architecture 정의
 
 **목표: AI 기능이 들어올 자리를 미리 비워 둔 웹 서비스를 기획한다.**
@@ -13,7 +27,7 @@
 - [x] Teaming, R&R 정의 → [`00-team.md`](00-team.md) — 7개 역할 전부 채움
 - [x] Actor 중심 Use-Case 정의 → [`02-use-case.md`](02-use-case.md) — UC-01~10, Actor 4종
 - [x] **AI 확장 지점 정의** → [`02-use-case.md`](02-use-case.md) — 4개 + UC-07 부분 연동
-- [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema, 기계 검증 45항목
+- [x] AI 입출력 스키마 → [`07-ai-ready.md`](07-ai-ready.md) — `jobType` 4종 입·출력 Schema. 개정 예시 검증과 구현 검증을 구분
 - [x] User Flow · 화면 목록 작성 → [`03-wireframe.md`](03-wireframe.md) — S-01~10
 - [ ] **Figma 와이어프레임** — 1차 `S-01`~`S-06` 은 정성껏, 나머지는 스케치
 
@@ -54,7 +68,8 @@
 - [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{jobId}` · `jobType` 4종
 - [x] AI 입출력 JSON Schema 확정 → [`07-ai-ready.md`](07-ai-ready.md) — 06 예시·`schema.sql` enum 과 기계 대조
-- [ ] 프롬프트 설계 및 Playground 검증 → [`07-ai-ready.md`](07-ai-ready.md) — 프롬프트는 작성됨, **Playground 실행은 TBD** (10분)
+- [ ] 프롬프트 설계 완료 확인 → [`07-ai-ready.md`](07-ai-ready.md) — 작성됨, PM 완료 확인 TBD
+- [ ] Playground 검증 → [`07-ai-ready.md`](07-ai-ready.md) — 미실행 TBD (기존 예상 10분). PM이 실행 시점을 확인한다. 앱의 AI는 Mock만 사용
 - [ ] FE ↔ BE API 연동
 - [ ] BE ↔ DB 연결
 - [x] 시스템 아키텍처 다이어그램 완성 → [`04-architecture.md`](04-architecture.md) — PlantUML 원본 + PNG · SVG

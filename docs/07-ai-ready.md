@@ -11,6 +11,10 @@
 대신 **AI가 들어올 자리를 정확히 어디에, 어떤 규격으로 비워 뒀는지**를 설계한다.
 그것이 이 프로젝트의 주제다.
 
+> **2026-09-03 개정 반영:** [Notion 기능 정의 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)의
+> 사진 승인 완료 등록·별도 추천·선택 후 미완료 등록을 적용했다. 아래 스키마는 개정 계약이며
+> 실제 Mock·화면 반영 완료 여부는 [문서 지도](README.md#개정안-반영-상태)에서 별도로 관리한다.
+
 ## AI 확장 지점
 
 네 곳이다. **엔드포인트는 하나**고 `jobType` 값만 다르다
@@ -19,7 +23,7 @@
 | ID | `jobType` | 하는 일 | Use-Case | 화면 | 지금 | 나중 |
 | --- | --- | --- | --- | --- | --- | --- |
 | AI-01 | `BAG_CHECK` | 사진에서 물품 후보·수량·신뢰도를 뽑는다 | UC-04 | `S-04` | Mock 고정 인식 결과 | 비전 모델 |
-| AI-02 | `PACKING_LIST` | 승인된 물품을 빼고 **부족한 것만** 추천한다 | UC-05 | `S-05` | Mock 고정 목록 | LLM |
+| AI-02 | `PACKING_LIST` | 현재 내 목록에 없는 **추가 후보와 이유만** 추천한다 | UC-05 | `S-05` | Mock 고정 목록 | LLM |
 | AI-03 | `WEIGHT_ESTIMATE` | 무게를 **범위**로 추정하고 한도와 비교한다 | UC-10 | `S-06` `S-07` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
 | AI-04 | `RULE_CHECK` | 질문·물품에서 **속성을 구조화**하고 판정을 **설명**한다 | UC-07 · UC-08 | `S-06` `S-08` `S-09` | Mock 고정 판정 | LLM 구조화 + **규칙 엔진** |
 
@@ -36,10 +40,10 @@
 - **표에 없는 물건의 무게를 가늠하는 일** — 대부분은 `item_weights` 마스터로 되지만,
   마스터에 없는 것은 상식으로 채워야 한다. AI가 없으면 그 물건은 계산에서 빠진다.
 - **자연어 질문에서 물품과 속성을 뽑는 일** — *"20000mAh 보조배터리 기내 되나요?"* 를
-  `보조배터리 · 74Wh` 로 바꾸는 건 표현이 매번 다르다. **판정은 AI가 하지 않는다.**
+  `보조배터리 · 20000mAh · Wh 미상`으로 구조화하는 일은 표현이 매번 다르다. **판정은 AI가 하지 않는다.**
 
 반대로 **AI를 두지 않은 곳**도 같은 기준으로 정했다. 반입 판정(`transport_rules` 를 보는
-규칙 엔진), 준비 상태 비교(체크리스트 ↔ 승인 물품 조인), 무게 `verdict`(산식). 규칙으로
+규칙 엔진), 사진 승인 등록·추천 채택·준비 상태 비교, 무게 합산과 `verdict`(산식). 규칙으로
 정확히 풀리는 일에 AI를 두면 틀릴 자리만 늘어난다.
 
 ### 무엇이 바뀌고 무엇이 안 바뀌는가
@@ -67,8 +71,8 @@
 
 | | 무엇 | 어디에 남나 |
 | --- | --- | --- |
-| **`input`** | FE가 **그 시점 화면에 이미 갖고 있는 사실**만 보낸다. FE가 모르는 값을 요구하지 않는다 | `ai_jobs.input_payload` 에 그대로 |
-| **서버 보강** | 모델을 부르기 전에 백엔드가 **마스터 데이터**를 덧붙인다 — 날씨(Open-Meteo), `item_weights` 범위, `transport_rules`. 프롬프트 템플릿에 `{{server:…}}` 로 표시 | 프롬프트에만. `output` 에 출처(`weatherSource` 등)를 남긴다 |
+| **`input`** | FE가 **그 시점 화면에 이미 갖고 있는 사실**만 보낸다. FE가 모르는 값을 요구하지 않는다 | 검증 후 `ai_jobs.input_payload`에 저장. PACKING_LIST의 `alreadyPacked`는 서버의 현재 PREPARED 목록으로 보정한 값을 저장 |
+| **서버 보강** | 현재 내 목록과 마스터 데이터(날씨, `item_weights`, `transport_rules`)를 읽어 프롬프트의 `{{server:…}}`에 넣는다 | 추천 output에 `weatherSource`·`weatherAsOf`를 남긴다. 날씨 원문 보관은 TBD |
 | **`output`** | `ai_jobs.output_payload` 에 저장돼 FE가 받는 **최종 형태**. 모델이 만드는 필드와 **서버가 규칙으로 채우는 필드**를 "누가 채우나" 표로 구분한다 | 검증은 합쳐진 최종 객체에 건다 |
 
 ### 작업이 끝나면 서버가 쓰는 곳
@@ -79,9 +83,15 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 | `jobType` | `COMPLETED` 때 서버가 하는 일 · 도메인 API 가 읽는 곳 |
 | --- | --- |
 | `BAG_CHECK` | detections[] 를 detected_objects 에 approved = false 로 넣는다(confidence_level 포함). 같은 photoId 에 이미 approved = false 행이 있으면 지우고 다시 넣고, approved = true 행은 건드리지 않는다. S-04 는 GET /api/trips/{tripId}/detections 로 id 를 받아 PATCH 한다. |
-| `PACKING_LIST` | items[] 를 checklist_items 에 source = AI, check_status = UNCHECKED 로 넣는다. 같은 여행에 이름이 같은 항목이 이미 있으면(시드·재실행·alreadyPacked) 넣지 않는다. S-05 는 GET /api/trips/{tripId}/items 로 다시 읽는다. |
-| `WEIGHT_ESTIMATE` | output_payload 에만 저장한다. 테이블에 쓰지 않는다. GET /api/trips/{tripId}/inspection 의 weight 는 그 여행의 가장 최근 COMPLETED 된 WEIGHT_ESTIMATE 의 output 을 투영한다 (excluded 제외, contributions 위 3개). S-07 은 GET /api/ai-jobs/{jobId} 로 전체를 읽는다. |
+| `PACKING_LIST` | 후보를 output_payload에만 저장한다. 현재 내 목록과 중복되는 후보를 제거하고 `source`·`acceptedItemId=null`·날씨 출처와 시점을 서버가 채운다. **checklist_items에는 쓰지 않는다.** S-05는 GET /api/ai-jobs/{jobId}로 후보를 읽고, 사용자의 채택 POST 때만 내 목록에 미완료로 등록한다(06). |
+| `WEIGHT_ESTIMATE` | output_payload에만 저장한다. inspection.weight는 **현재 입력과 일치하는** 가장 최근 완료 결과를 투영한다(excluded 제외, contributions 위 3개). 준비 상태·이름·수량·가방 정보·제외 목록이 달라지면 null로 반환하고 재계산한다. S-07도 현재 상태에 맞는 작업 ID의 결과만 표시한다(06). |
 | `RULE_CHECK` | results[] 중 itemId 가 있는 것을 item_rule_checks 에 (checklist_item_id, rule_id, verdict, missing_info) 로 넣는다 — 같은 (item, rule) 이 있으면 덮어쓴다. ruleId 가 null 인 결과(ASK_AIRLINE)는 output_payload 에만 남는다. inspection 의 customs 는 item_rule_checks 를 **항목별로 모아 가장 엄격한 verdict 하나**를 보여준다 (NEED_MORE_INFO 가 있으면 그것 — 시드의 보조배터리가 그 예다). 챗봇(tripId null)은 아무 테이블에도 쓰지 않는다. |
+
+사진 승인 PATCH가 `detected_objects`·`item_detections`와 내 목록 완료 등록을 한 번에 처리한다.
+이 단계는 `PACKING_LIST` 실행과 무관하다. 새 항목은 `PHOTO / PREPARED`, 추천 채택의 새
+항목은 `AI` 또는 `RULE / UNCHECKED`다. 추천 채택이 기존 항목과 연결되면 출처와 사용자가
+정한 값을 보존한다. 사진 승인 시 이름·수량 수정은 06의 승인 규약을 따른다. 후보의
+`acceptedItemId`는 서버가 채택·삭제 시에만 갱신하며 원래 후보 내용은 유지한다.
 
 ### 템플릿 표기
 
@@ -381,15 +391,17 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 ---
 
-## AI-02 `PACKING_LIST` — 부족한 준비물 추천
+## AI-02 `PACKING_LIST` — 별도 추가 준비물 추천
 
-**UC-05 · `S-05`.** 승인된 물품(`alreadyPacked`)을 빼고 **부족한 것만** 돌려준다.
-`COMPLETED` 시 **서버가** `output.items[]` 를 `source = AI` 로 `checklist_items` 에 넣는다 — 이름이 같은
-항목이 있으면 건너뛴다. FE 는 `GET /api/trips/{tripId}/items` 로 다시 읽는다. `POST …/items` 는 사용자가
-직접 추가할 때(`USER`)만 쓴다 (06).
+**UC-05 · `S-05`.** 실제 완료 물품(`alreadyPacked`)과 서버가 읽은 현재 내 목록을 고려해
+추가 후보만 반환한다. 사진 승인 물품은 이미 내 목록에 등록돼 있어야 한다. 추천 생성
+성공·실패와 무관하게 내 목록은 유지한다.
 
-`input` 은 [`06-api-spec.md`](06-api-spec.md)의 요청 예시와 같고, `output` 은 완료 예시와
-같다. 아래 스키마로 06의 두 예시가 그대로 통과한다 (기계 검증 항목).
+`COMPLETED` 시 후보는 `ai_jobs.output_payload`에만 저장한다. S-05는 위쪽 내 목록과 아래쪽
+추천 후보를 별도로 읽는다. 후보를 선택·승인하면 기존 `POST /trips/{tripId}/items`로
+`recommendation: {jobId, candidateIndex}`를 보내고 서버가 미완료로 등록한다(06).
+동일 후보의 재승인은 서버 필드 `acceptedItemId`로 판별한다. 후보 배열은 완료 후 순서를
+바꾸지 않으며, 사용자의 이름·수량 수정은 내 항목에 저장한다.
 
 ### 입력 Schema
 
@@ -440,7 +452,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
     "alreadyPacked": {
       "type": "array",
       "maxItems": 100,
-      "description": "사진에서 승인된 물품(detected_objects.approved = true). 없으면 빈 배열. 필드를 생략하지 않는다",
+      "description": "화면의 PREPARED 내 목록 항목. 없으면 빈 배열. 서버가 현재 PREPARED 목록으로 덮어쓴 뒤 저장·실행하며 요청값 차이만으로 실패하지 않음",
       "items": {
         "type": "object",
         "properties": {
@@ -466,7 +478,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
                 "type": "null"
               }
             ],
-            "description": "체크리스트에 연결된 인식 결과면 그 항목의 category, 연결이 없으면(추가 물품) null"
+            "description": "내 목록 항목의 category. 신규 사진 항목의 미분류 기본값은 ETC"
           },
           "qty": {
             "type": "integer",
@@ -496,8 +508,9 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 }
 ```
 
-`alreadyPacked` 는 **빈 배열이어도 반드시 보낸다.** 06의 규약이다 — 빈 배열과 미전송을
-구분하지 않으면 Mock과 실제 LLM의 동작이 갈린다.
+`alreadyPacked`는 기존 입력 스키마를 유지해 **빈 배열이어도 보낸다.** 추천의 최종 기준은
+서버 값이며, 보정된 동일 입력을 Mock과 실제 LLM에 사용한다. 요청값을 신뢰해 준비 상태를
+바꾸거나 값 차이만으로 실패시키지 않는다.
 
 ### 출력 Schema
 
@@ -510,7 +523,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
     "items": {
       "type": "array",
       "maxItems": 40,
-      "description": "부족한 것만. COMPLETED 시 서버가 checklist_items 에 source = AI 로 넣는다(이름이 같은 항목이 있으면 건너뜀). FE 는 GET /api/trips/{tripId}/items 로 다시 읽는다",
+      "description": "별도 추천 후보. 완료 시 내 목록에 자동 저장하지 않는다. 완료 후 배열 위치를 고정하고 사용자 채택 시 서버가 acceptedItemId만 갱신한다",
       "items": {
         "type": "object",
         "properties": {
@@ -540,13 +553,37 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
               "REQUIRED",
               "RECOMMENDED"
             ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "\\S"
+          },
+          "source": {
+            "enum": [
+              "AI",
+              "RULE"
+            ],
+            "description": "서버 필드. 모델 후보는 AI, 고정 필수 규칙 후보는 RULE"
+          },
+          "acceptedItemId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "서버 필드. 최초 null, 사용자 채택 시 같은 여행의 내 목록 ID. 항목 삭제 시 null로 해제"
           }
         },
         "required": [
           "name",
           "category",
           "qty",
-          "priority"
+          "priority",
+          "reason",
+          "source",
+          "acceptedItemId"
         ],
         "additionalProperties": false
       }
@@ -566,12 +603,18 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
         "SEASONAL"
       ],
       "description": "서버가 채운다. 출발일이 16일 이내면 FORECAST, 넘거나 조회 실패면 SEASONAL(계절 평균). S-05 가 SEASONAL 이면 안내 문구를 띄운다"
+    },
+    "weatherAsOf": {
+      "type": "string",
+      "format": "date",
+      "description": "서버가 실제 사용한 예보·계절 자료의 기준일을 넣는다"
     }
   },
   "required": [
     "items",
     "tips",
-    "weatherSource"
+    "weatherSource",
+    "weatherAsOf"
   ],
   "additionalProperties": false
 }
@@ -581,19 +624,27 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 | 누가 | 무엇을 |
 | --- | --- |
-| **모델** | `items[]` · `tips[]` |
-| **서버 (규칙)** | `weatherSource (어느 날씨를 프롬프트에 넣었는지 — 모델이 낸 값은 덮어쓴다)` |
+| **모델** | 후보의 `name/category/qty/priority/reason` · `tips[]` |
+| **서버 (규칙)** | 후보의 `source/acceptedItemId`, `weatherSource/weatherAsOf`. RULE 후보는 서버가 같은 스키마로 보강하고 중복을 제외한다 |
 
-**서버가 저장 전에 검증한다** — 하나라도 어긋나면 `FAILED` 로 돌리고 기본 문구를 보여준다.
+**작업 접수 전:** 입력 형식·여행 소유권을 검증한 뒤 서버가 현재 내 목록을 읽는다.
+그중 PREPARED 물품의 이름·분류·수량으로 `alreadyPacked`를 덮어써 `input_payload`에 저장한다.
+요청값이 오래됐거나 `[]`여도 값 차이로 `409`를 반환하지 않고 `202`로 접수한다.
+형식 위반은 기존대로 `400`이다. 전체 내 목록은 미완료까지 중복 제외에 사용한다.
 
-- items[].name 이 alreadyPacked 나 그 여행의 checklist_items 에 이미 있으면 그 항목을 버린다 (재추천·중복 방지)
+**작업 실행 후 저장 전:** 아래 규칙을 적용하고, 출력 검증 실패 시 `FAILED`로 처리한다.
+
+- 생성 완료 시 items[].name이 alreadyPacked나 현재 checklist_items에 이미 있으면 제외한다. 미완료·직접 추가 항목도 포함한다
+- 후보별 reason은 비어 있지 않아야 한다. source·acceptedItemId·날씨 메타데이터는 모델값을 버리고 서버가 채운다
+- 후보 생성은 내 목록·완료율을 변경하지 않는다. 채택 요청 때도 중복·소유 여행을 다시 검증한다(06)
 - 스키마 불통과(tips 120자 초과 등)면 재시도 1회, 그래도 실패면 FAILED — 06 의 FAILED 예시 문구로
 
 날씨는 FE가 모른다. 백엔드가 Open-Meteo에서 받아 프롬프트에 넣고, **어느 날씨였는지**를
-`weatherSource` 로 남긴다. `SEASONAL` 이면 `S-05` 가 *"실시간 예보가 아닌 계절 평균
-기준입니다"* 를 띄운다.
+`weatherSource`와 데이터 기준일 `weatherAsOf`로 남긴다. `SEASONAL`이면 `S-05`가
+*"실시간 예보가 아닌 계절 평균 기준입니다"*와 날짜를 표시한다. 조회 실패 시에도 실제로
+사용한 계절 자료의 기준일을 표시하며, 실행일로 임의 대체하지 않는다.
 
-### 예시 — 시드 여행 · 도쿄 3박4일 · 사진 승인 후 (출발 28일 전 → 계절 평균)
+### 예시 — 도쿄 3박4일 · 사진 승인 후 (출발 28일 전 → 계절 평균)
 
 ```json
 {
@@ -628,6 +679,11 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
       "name": "속옷",
       "category": "CLOTHING",
       "qty": 4
+    },
+    {
+      "name": "가위",
+      "category": "ETC",
+      "qty": 1
     }
   ]
 }
@@ -640,25 +696,46 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
       "name": "변환 플러그",
       "category": "ELECTRONIC",
       "qty": 1,
-      "priority": "REQUIRED"
+      "priority": "REQUIRED",
+      "reason": "여행지에서 충전기를 연결할 어댑터를 확인하세요.",
+      "source": "AI",
+      "acceptedItemId": null
     },
     {
       "name": "상비약",
       "category": "MEDICINE",
       "qty": 1,
-      "priority": "RECOMMENDED"
+      "priority": "RECOMMENDED",
+      "reason": "평소 사용하는 약이 있다면 여행 기간에 맞게 준비하세요.",
+      "source": "AI",
+      "acceptedItemId": null
     },
     {
       "name": "화장품",
       "category": "TOILETRY",
       "qty": 1,
-      "priority": "RECOMMENDED"
+      "priority": "RECOMMENDED",
+      "reason": "숙소 제공 여부에 따라 개인 세면용품을 검토하세요.",
+      "source": "AI",
+      "acceptedItemId": null
     },
     {
       "name": "우산",
       "category": "ETC",
       "qty": 1,
-      "priority": "RECOMMENDED"
+      "priority": "RECOMMENDED",
+      "reason": "여행 중 강수에 대비할 휴대용 우산을 검토하세요.",
+      "source": "AI",
+      "acceptedItemId": null
+    },
+    {
+      "name": "여권",
+      "category": "DOCUMENT",
+      "qty": 1,
+      "priority": "REQUIRED",
+      "reason": "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
+      "source": "RULE",
+      "acceptedItemId": null
     }
   ],
   "tips": [
@@ -666,13 +743,21 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
     "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다. 실시간 예보가 아닙니다.",
     "디즈니랜드는 하루 2만 보 이상 걷습니다."
   ],
-  "weatherSource": "SEASONAL"
+  "weatherSource": "SEASONAL",
+  "weatherAsOf": "2026-09-03"
 }
 ```
 
-`alreadyPacked` 의 다섯 개는 시드에서 `approved = true` 인 인식 결과다. 출력 네 개는 시드
-체크리스트의 `source = AI` 행과 같다 — 이 출력이 그 행들을 만든다. **여권은 AI 가 내지 않는다** —
-고정 필수 규칙(`RULE`)이 보강한다 (UC-05 5단계). 출발 28일 전이라 날씨는 계절 평균(`SEASONAL`)이다.
+예시는 사진 승인 물품을 내 목록에 등록한 뒤의 추천 후보다. `acceptedItemId`가 `null`인
+후보는 내 목록에 없으며 완료율에 영향을 주지 않는다. 기존 SQL 시드의 AI 행은 자동 채택
+흐름의 이전 데이터이므로 이 예시의 실행 결과로 보지 않는다.
+
+고정 필수 규칙도 추천 후보로 보강하며 `source=RULE`로 표시한다. `REQUIRED`는 추천의
+중요도이지 자동 채택 권한이 아니다. 필수 항목 자동 등록 예외와 동일 물품의 부족 수량
+추천은 **TBD**이며 이번 데모에서는 적용하지 않는다.
+미채택 필수 후보는 06의 조회 계산값 `unacceptedRequiredCount`에 포함해 S-05·S-06에서
+경고한다. 이는 AI 출력 필드가 아니며 모델이 계산하지 않는다. 예시의 여권은 내 목록에
+없을 때 경고 대상이고, 채택하면 미완료 항목으로 관리한다. 완료율 100%가 필수품 완비를 뜻하지 않는다.
 
 ### System Prompt
 
@@ -680,14 +765,14 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 너는 여행 준비물을 추천하는 보조자다. 사용자가 이미 챙긴 것은 다시 추천하지 않는다.
 
 규칙
-1. alreadyPacked 에 있는 물품 — 이름이 같거나 명백히 같은 종류("상의" 가 있으면 "티셔츠" 를 또 내지 않는다) — 은 items 에 넣지 않는다. category 가 null 이면 이름으로 판단한다.
-2. 여행지·기간·목적·이동수단·날씨에 맞는 부족분만 낸다. 최대 40개. 빠뜨리면 곤란한 것을 앞에 둔다.
-3. priority: 없으면 여행이 성립하지 않거나 현지에서 구하기 어려운 것(항공권·처방약·변환 플러그)은 REQUIRED, 나머지는 RECOMMENDED. 여권 같은 고정 필수 규칙 항목은 서버가 따로 보강하므로 내지 않아도 된다.
+1. alreadyPacked와 현재 내 목록에 있는 물품은 이름이 같거나 명백히 같은 종류면 items에 넣지 않는다("상의"가 있으면 "티셔츠"를 또 내지 않는다). 아직 미완료인 채택 항목도 제외한다. 같은 물품의 부족 수량은 추천하지 않는다.
+2. 여행지·기간·목적·이동수단·날씨에 맞는 추가 후보만 낸다. 최대 40개. 후보별 reason에 이 여행에서 검토할 이유를 1~200자 한국어로 쓴다. 사용자를 대신해 후보를 채택하거나 챙김 완료라고 하지 않는다.
+3. priority: 준비가 특히 중요한 것은 REQUIRED, 나머지는 RECOMMENDED. 고정 필수 규칙 항목은 서버가 RULE 후보로 보강하므로 중복으로 내지 않는다. 어떤 후보든 내 목록 추가는 사용자가 선택한다.
 4. category 는 DOCUMENT · CLOTHING · ELECTRONIC · TOILETRY · MEDICINE · ETC 중 하나만.
 5. qty 는 기간에 맞춘 1~99 정수. 정하기 어려우면 1.
 6. tips 는 최대 5개, 각 1~120자. 챙길 물건은 tips 가 아니라 items 에 넣는다 — tips 에는 날씨·콘센트·현지 사정 같은 사실만 쓴다. 날씨 근거가 있으면 수치를 그대로 인용한다(예: "낮 24도").
 7. 액체·배터리 같은 반입 규정 판정은 하지 않는다. 그건 다른 단계가 한다.
-8. 출력은 아래 JSON Schema 를 따르는 JSON 객체 하나뿐이다. 설명·마크다운·코드펜스를 붙이지 않는다. 스키마의 필드는 전부 낸다 — 값이 없으면 null 로 낸다. 빈 문자열은 쓰지 않는다. weatherSource 는 서버가 채워 덮어쓰므로 비워 두어도 된다.
+8. 출력은 아래 JSON Schema 를 따르는 JSON 객체 하나뿐이다. 설명·마크다운·코드펜스를 붙이지 않는다. 스키마의 필드는 전부 낸다 — 값이 없으면 null 로 낸다. 빈 문자열은 쓰지 않는다. source·acceptedItemId·weatherSource·weatherAsOf는 서버 필드다. 모델용 파생 스키마에서는 제외한다.
 ```
 
 ### User Prompt 템플릿
@@ -700,14 +785,18 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 이미 챙긴 것 (다시 추천하지 않는다):
 {{alreadyPacked as "- {{name}} ×{{qty}} ({{category | \"분류 미상\"}})" | "- 없음"}}
 
-부족한 준비물만 JSON 으로 답하라.
+현재 내 목록 (미완료라도 다시 추천하지 않는다):
+{{server:currentItems as "- {{name}} ×{{qty}} ({{checkStatus}})" | "- 없음"}}
+
+추가 후보와 각 추천 이유를 JSON으로 답하라. 목록에 자동 등록하지 않는다.
 ```
 
 ---
 
 ## AI-03 `WEIGHT_ESTIMATE` — 예상 무게 범위
 
-**UC-10 · `S-06` ② · `S-07`.** 승인된 물품의 무게를 **범위**로 추정한다. 단일 값을 내지 않는다.
+**UC-10 · `S-06` ② · `S-07`.** 내 목록에서 실제 챙김 완료(`PREPARED`)인 물품만
+**범위**로 추정한다. 사진 승인과 직접 완료 확인을 모두 포함한다. 추천 채택만으로는 포함하지 않는다.
 
 `GET /api/trips/{tripId}/inspection` 의 `weight` 는 이 출력의 **투영**이다 —
 `excluded[]` 를 빼고 `contributions[]` 를 위 3개로 자른 것. `S-06` 은 개수만, `S-07` 은
@@ -785,7 +874,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
     "excluded": {
       "type": "array",
       "maxItems": 100,
-      "description": "계산에서 뺀 것과 이유. check_status → reason: NOT_IN_PHOTO → NOT_IN_PHOTO · NEEDS_CHECK → PENDING_APPROVAL · UNCHECKED(직접 추가, 미확인) → UNCHECKED. 숨기지 않는다",
+      "description": "내 목록의 실제 미완료 항목은 UNCHECKED, 미승인 인식 후보는 PENDING_APPROVAL. 미채택 추천은 포함하지 않는다. NOT_IN_PHOTO는 기존 미완료 상태의 제외 사유다",
       "items": {
         "type": "object",
         "properties": {
@@ -822,9 +911,11 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 }
 ```
 
-계산에 넣는 것은 `check_status = PREPARED` 인 체크리스트 항목이다. 뺀 것은 **이유와 함께**
-`excluded` 로 보낸다 — `NOT_IN_PHOTO` → 사진에서 미확인, `NEEDS_CHECK` → 승인 전(`PENDING_APPROVAL`),
-`UNCHECKED` → 직접 추가했지만 미확인. *"계산에서 뺀 항목 수를 숨기지 않는다"* (06).
+계산에 넣는 것은 `check_status=PREPARED`인 내 목록이다. 사진에서 못 찾았더라도 실제
+완료 확인이 있으면 포함한다. 내 목록의 미완료 항목은 `excluded`에 `UNCHECKED`, 확인 전
+인식 후보는 `PENDING_APPROVAL`로 보내고 이유를 표시한다. 미채택 추천은 items·excluded
+어느 쪽에도 넣지 않는다. 구 데이터의 NOT_IN_PHOTO는 준비 미완료일 때만 제외 사유로 쓴다.
+이미 확인된 미완료 항목(UNCHECKED)은 현재 가방에 없으므로 무게 불확실성으로 세지 않는다.
 `category` 는 무게에 필요 없어 보내지 않는다 — `S-06` 이 그 시점에 갖고 있지 않은 값이기도 하다.
 
 ### 출력 Schema
@@ -878,7 +969,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
         "MEDIUM",
         "LOW"
       ],
-      "description": "서버가 개수로 채운다: excluded 가 계산 물품보다 많으면 LOW · 하나라도 있으면 MEDIUM · 없으면 HIGH"
+      "description": "서버가 불확실한 제외 항목(reason != UNCHECKED) 수로 채운다. contributions가 비었거나 불확실한 제외가 계산 항목보다 많으면 LOW, 하나라도 있으면 MEDIUM, 없으면 HIGH"
     },
     "confidenceReason": {
       "type": "string",
@@ -990,9 +1081,15 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 | 누가 | 무엇을 |
 | --- | --- |
 | **모델** | `contributions[].name · minG · typicalG · maxG · qty (계산에 넣은 물품마다 하나)` · `excluded[] 뒤에 덧붙이는 NO_WEIGHT_INFO 항목` · `confidenceReason` |
-| **서버 (규칙)** | `limitG · bagEmptyG (input 그대로)` · `contributions[].subtotalG = typicalG × qty, subtotalG 내림차순 정렬` · `minG / typicalG / maxG = bagEmptyG(null 이면 0) + Σ(항목 min/typical/max × qty)` · `excludedCount = excluded.length` · `confidence (개수 규칙 — 모델이 낸 값은 덮어쓴다)` · `verdict (산식 — 모델이 낸 값은 덮어쓴다)` |
+| **서버 (규칙)** | `limitG · bagEmptyG (input 그대로)` · `contributions[].subtotalG = typicalG × qty, subtotalG 내림차순 정렬` · `minG / typicalG / maxG = bagEmptyG(null 이면 0) + Σ(항목 min/typical/max × qty)` · `excludedCount = excluded.length` · `confidence (불확실한 제외 항목 수 규칙 — UNCHECKED 제외, 모델값은 덮어쓴다)` · `verdict (산식 — 모델이 낸 값은 덮어쓴다)` |
 
-**서버가 저장 전에 검증한다** — 하나라도 어긋나면 `FAILED` 로 돌리고 기본 문구를 보여준다.
+**작업 접수 전:** input.items가 해당 여행의 현재 PREPARED 항목 전체와 ID·이름·수량까지
+일치하는지 검증한다. 가방 정보·제외 목록도 현재 상태와 대조한다. 불일치하거나 승인 물품의
+내 목록 등록이 누락돼 있으면 작업을 만들지 않고 `409`로 재확인을 요청한다. 사진 승인과
+내 목록 등록은 06의 승인 API에서 한 번에 처리하며 무게 작업이 대신 등록하지 않는다.
+
+**작업 실행 후 저장 전:** 접수한 입력을 기준으로 아래를 검증한다. 실행 중 목록이 바뀌어도
+과거 입력의 결과로 보관할 수 있지만 현재 입력과 다르면 inspection과 S-07에 표시하지 않는다.
 
 - 항목마다 minG ≤ typicalG ≤ maxG — 아니면 그 항목을 NO_WEIGHT_INFO 로 excluded 로 옮긴다
 - contributions[].name ⊆ input.items[].name, 같은 이름 두 번 금지, qty == input 의 qty — 어긋나면 FAILED
@@ -1005,7 +1102,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 `typicalG ≥ 0.8 × limitG` → `NEAR` · 그 외 `ROOM`. 초과 가능성을 먼저 본다 — 정보가 부족해도 이미 넘는 건 넘는 거다.
 *"결과를 실측값처럼 표현하지 않는다"* (명세 F-10).
 
-### 예시 — 시드 여행 · 06-api-spec inspection.weight 와 같은 수치 (항목별 범위는 item_weights 시드)
+### 예시 — 사진 승인 물품 6개 · 채택 후 미완료 1개 (06 inspection.weight와 일치)
 
 ```json
 {
@@ -1037,27 +1134,24 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
       "itemId": 6,
       "name": "보조배터리",
       "qty": 1
+    },
+    {
+      "itemId": 11,
+      "name": "가위",
+      "qty": 1
     }
   ],
   "excluded": [
     {
-      "name": "여권",
-      "reason": "NOT_IN_PHOTO"
-    },
-    {
       "name": "변환 플러그",
-      "reason": "NOT_IN_PHOTO"
+      "reason": "UNCHECKED"
     },
     {
-      "name": "상비약",
-      "reason": "NOT_IN_PHOTO"
+      "name": "화장품 용기",
+      "reason": "PENDING_APPROVAL"
     },
     {
-      "name": "우산",
-      "reason": "NOT_IN_PHOTO"
-    },
-    {
-      "name": "화장품",
+      "name": "검정 파우치",
       "reason": "PENDING_APPROVAL"
     }
   ]
@@ -1066,34 +1160,26 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 
 ```json
 {
-  "minG": 4570,
-  "typicalG": 5410,
-  "maxG": 6890,
+  "minG": 4610,
+  "typicalG": 5480,
+  "maxG": 7010,
   "limitG": 10000,
   "bagEmptyG": 3200,
   "verdict": "ROOM",
   "confidence": "MEDIUM",
-  "confidenceReason": "사진에서 미확인 4개, 승인 전 1개",
-  "excludedCount": 5,
+  "confidenceReason": "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+  "excludedCount": 3,
   "excluded": [
     {
-      "name": "여권",
-      "reason": "NOT_IN_PHOTO"
-    },
-    {
       "name": "변환 플러그",
-      "reason": "NOT_IN_PHOTO"
+      "reason": "UNCHECKED"
     },
     {
-      "name": "상비약",
-      "reason": "NOT_IN_PHOTO"
+      "name": "화장품 용기",
+      "reason": "PENDING_APPROVAL"
     },
     {
-      "name": "우산",
-      "reason": "NOT_IN_PHOTO"
-    },
-    {
-      "name": "화장품",
+      "name": "검정 파우치",
       "reason": "PENDING_APPROVAL"
     }
   ],
@@ -1137,13 +1223,22 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
       "maxG": 180,
       "qty": 1,
       "subtotalG": 90
+    },
+    {
+      "name": "가위",
+      "minG": 40,
+      "typicalG": 70,
+      "maxG": 120,
+      "qty": 1,
+      "subtotalG": 70
     }
   ]
 }
 ```
 
-`3200 + (200×4 + 400×2 + 280 + 60×4 + 90) = 5410`. 항목별 `minG` · `maxG` 는 `item_weights` 시드
-값이고 최소·최대 합계도 같은 식이다. 06의 `inspection.weight` 와 g 단위까지 같다 (기계 검증 항목).
+`3200 + (200×4 + 400×2 + 280 + 60×4 + 90 + 70) = 5480`. 가위도 사진 승인 시
+내 목록에 등록돼 계산된다. 변환 플러그는 채택했지만 미완료라 합계에 없다. 품목별 범위는
+`item_weights` 시드값을 사용하되 기존 SQL 시드의 승인 가위 미등록 상태는 보완해야 한다.
 
 ### System Prompt
 
@@ -1155,7 +1250,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 2. weightRange 가 없으면 — 옷·종이·플라스틱처럼 가볍고 균일한 물품은 네 상식으로 g 단위 정수 범위(min ≤ typical ≤ max)를 적는다. 배터리·액체·금속·책·전자기기처럼 밀도가 높아 사진으로 무게를 가늠할 수 없는 것은 추정하지 말고 excluded 에 NO_WEIGHT_INFO 로 넣는다.
 3. contributions 에는 계산에 넣은 물품마다 정확히 하나. name 과 qty 는 입력 그대로. 빠뜨리지 않는다.
 4. excluded 는 입력의 excluded 를 순서 그대로 옮기고, 2번에서 네가 뺀 것을 뒤에 덧붙인다.
-5. confidenceReason 은 1~200자 한국어 한 문장. 뺀 이유를 개수로 적는다(예: "사진에서 미확인 4개, 승인 전 1개"). 입력 reason 코드는 이렇게 옮긴다 — NOT_IN_PHOTO → 사진에서 미확인 · PENDING_APPROVAL → 승인 전 · UNCHECKED → 미확인 · NO_WEIGHT_INFO → 무게 정보 없음.
+5. confidenceReason 은 1~200자 한국어 한 문장. 뺀 이유를 개수로 적는다(예: "사진에서 미확인 4개, 승인 전 1개"). 입력 reason 코드는 이렇게 옮긴다 — NOT_IN_PHOTO → 사진에서 미확인 · PENDING_APPROVAL → 승인 전 · UNCHECKED → 챙김 미완료 · NO_WEIGHT_INFO → 무게 정보 없음.
 6. 출력은 아래 JSON Schema 를 따르는 JSON 객체 하나뿐이다. 설명·마크다운·코드펜스를 붙이지 않는다. 스키마의 필드는 전부 낸다 — 값이 없으면 null 로 낸다. 무게는 전부 g 단위 정수. subtotalG·minG·typicalG·maxG(합계)·excludedCount·confidence·verdict·limitG·bagEmptyG 는 서버가 계산해 덮어쓰므로 비워 두어도 된다.
 ```
 
@@ -1164,7 +1259,7 @@ Mock 구현자가 이것 없이는 `S-04`·`S-05` 를 잇지 못한다. **Mock �
 ```text
 가방: {{bagType | "종류 미상"}} · 빈 무게 {{bagEmptyG | "미상"}} g · 한도 {{weightLimitG | "미상"}} g
 
-계산에 넣을 물품 (승인된 것만):
+계산에 넣을 물품 (내 목록의 실제 챙김 완료 항목만):
 {{items as "- {{name}} ×{{qty}} · 범위 {{server:weightRange | \"범위 없음\"}}" | "- 없음"}}
 (weightRange 는 item_weights 의 min/typical/max g. 마스터에 없는 물품은 "범위 없음")
 
@@ -1224,12 +1319,12 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       ],
       "minLength": 1,
       "maxLength": 500,
-      "description": "챗봇(S-09) 자연어 질문. 물품 목록으로 부를 때는 null. 후속 턴은 사용자의 답을 여기에, 직전 output.results[] 를 items 에 그대로 되돌려 보낸다"
+      "description": "챗봇(S-09) 자연어 질문. 물품 목록으로 부를 때는 null. 후속 턴은 사용자의 답을 여기에, 직전 output.results[]에서 itemId·detectionId·name·qty·attributes만 골라 items에 보낸다"
     },
     "items": {
       "type": "array",
       "maxItems": 50,
-      "description": "S-06/S-08 이 보내는 확인 대상. 챗봇 첫 턴은 빈 배열 — 모델이 질문에서 뽑는다. output.results[] 와 같은 꼴이라 후속 턴에 되돌려 보낼 수 있다",
+      "description": "S-06/S-08 이 보내는 확인 대상. 챗봇 첫 턴은 빈 배열 — 모델이 질문에서 뽑는다. 후속 턴에는 output.results[]에서 입력에 허용된 5개 필드만 골라 보낸다",
       "items": {
         "type": "object",
         "properties": {
@@ -1239,7 +1334,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
               "null"
             ],
             "minimum": 1,
-            "description": "checklist_items.id. 추가 물품(detection)이면 null"
+            "description": "checklist_items.id. 사진 승인 물품도 등록된 itemId를 사용한다. 챗봇에서 여행 없이 물은 물품만 null 허용"
           },
           "detectionId": {
             "type": [
@@ -1247,7 +1342,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
               "null"
             ],
             "minimum": 1,
-            "description": "detected_objects.id. S-06 readiness.extra 의 추가 물품이면 여기. 둘 다 null 이면 챗봇이 뽑은 물품"
+            "description": "detected_objects.id. 사진 승인 물품의 근거 ID를 선택적으로 전달한다. 둘 다 null이면 여행 없이 챗봇이 뽑은 물품"
           },
           "name": {
             "type": "string",
@@ -1277,7 +1372,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
                   "null"
                 ],
                 "minimum": 0,
-                "description": "명시된 Wh. 없고 batteryMah 만 있으면 서버가 mAh × 3.7 / 1000 으로 채운다"
+                "description": "사용자가 확인한 정격 Wh. 없으면 null을 유지하고 추가정보를 요청한다. mAh만으로 전압을 가정해 환산하지 않는다"
               },
               "batteryMah": {
                 "type": [
@@ -1285,7 +1380,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
                   "null"
                 ],
                 "minimum": 0,
-                "description": "mAh 만 적힌 경우 모델이 그대로 옮긴다. 환산은 서버"
+                "description": "mAh만 적힌 경우 그대로 보관한다. 판정에 필요한 Wh는 사용자가 별도로 확인한다"
               },
               "bladeCm": {
                 "type": [
@@ -1349,8 +1444,10 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 쓸 수 있으므로 봉투의 `tripId` 가 `null` 이고 `transport` 는 `FLIGHT` 를 보낸다
 — `ai_jobs.trip_id` 가 nullable 인 이유다.
 
-`items[]` 는 `output.results[]` 와 같은 꼴이다. 챗봇 후속 턴은 직전 `results[]` 를 `items` 에 그대로 되돌려
-보내고 사용자의 답을 `question` 에 넣는다 — 대화 이력 없이 문맥이 이어진다.
+챗봇 후속 턴은 직전 `results[]`에서 `itemId/detectionId/name/qty/attributes`만 골라
+`items[]`에 보내고 사용자 답을 `question`에 넣는다. `verdict`·`reason` 등 출력 전용 필드는
+입력의 `additionalProperties: false`에 걸리므로 보내지 않는다. 대화 이력을 저장하지 않고
+현재 질의의 구조화 문맥만 이어간다.
 
 ### 출력 Schema
 
@@ -1418,7 +1515,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
                   "null"
                 ],
                 "minimum": 0,
-                "description": "명시된 Wh. 없고 batteryMah 만 있으면 서버가 mAh × 3.7 / 1000 으로 채운다"
+                "description": "사용자가 확인한 정격 Wh. 없으면 null을 유지하고 추가정보를 요청한다. mAh만으로 전압을 가정해 환산하지 않는다"
               },
               "batteryMah": {
                 "type": [
@@ -1426,7 +1523,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
                   "null"
                 ],
                 "minimum": 0,
-                "description": "mAh 만 적힌 경우 모델이 그대로 옮긴다. 환산은 서버"
+                "description": "mAh만 적힌 경우 그대로 보관한다. 판정에 필요한 Wh는 사용자가 별도로 확인한다"
               },
               "bladeCm": {
                 "type": [
@@ -1604,7 +1701,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 | 누가 | 무엇을 |
 | --- | --- |
 | **모델 · 1차 구조화** | `results[].itemId · detectionId (입력 echo)` · `results[].name · qty` · `results[].ruleKeyword (서버가 준 규정 키워드 목록 중 하나, 없으면 null)` · `results[].attributes (명시된 값만. mAh 만 있으면 batteryMah 에)` |
-| **규칙 엔진** | `results[].verdict · ruleId · conditionNote · missingInfo · sourceUrl · checkedAt` · `results[].attributes.batteryWh (null 이고 batteryMah 가 있으면 mAh × 3.7 / 1000)` |
+| **규칙 엔진** | `results[].verdict · ruleId · conditionNote · missingInfo · sourceUrl · checkedAt` · `results[].attributes.batteryWh (미입력 시 null 유지·추가정보 요청)` |
 | **모델 · 2차 설명** | `results[].reason` · `answer` · `followUpQuestion` |
 
 **서버가 저장 전에 검증한다** — 하나라도 어긋나면 `FAILED` 로 돌리고 기본 문구를 보여준다.
@@ -1616,14 +1713,14 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 **규칙 엔진 판정 규칙**
 
 1. transport 와 모델이 낸 ruleKeyword 로 transport_rules 를 찾는다. ruleKeyword 가 null 이거나 규정이 없으면 ASK_AIRLINE, ruleId·conditionNote·sourceUrl·checkedAt 은 null
-2. 같은 키워드에 행이 여럿이면 attributes 로 조건을 판별한다. batteryWh 가 null 이고 batteryMah 가 있으면 mAh × 3.7 / 1000 으로 먼저 채운다
+2. 같은 키워드에 행이 여럿이면 확인된 attributes로 조건을 판별한다. batteryMah만 있고 batteryWh가 없으면 Wh 조건을 판정하지 않고 NEED_MORE_INFO로 둔다
 3. 판별에 필요한 attributes 가 null 이면 NEED_MORE_INFO + missingInfo. ruleId 는 같은 키워드 규정 중 첫 행(id 가 가장 작은 것) — 사용자가 확인할 첫 기준. 어느 조건이든 결론이 같은 경우만 그 verdict 로 확정한다 — 보조배터리는 160Wh 초과가 전면 금지라 Wh 미상이면 CABIN_OK 로 확정할 수 없다
 4. 규정이 충돌하면 더 엄격한 쪽: CHECKED_FORBIDDEN > RESTRICTED > CHECKED_OK > ASK_AIRLINE > CABIN_OK. reason 에 항공사 확인을 권한다
 
 `sourceUrl` 과 `checkedAt` 은 **항상 함께** 있거나 함께 `null` 이다 — 명세 9절 *"규정 최신성"*.
 서버가 둘을 같이 채우므로 어긋날 수 없다.
 
-### 예시 1 — S-06 · 시드 체크리스트 — 06 customs[] · extra[] 와 같은 판정
+### 예시 1 — S-06 · 내 목록의 승인 물품 — 반입 속성 추가 확인
 
 ```json
 {
@@ -1644,19 +1741,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       }
     },
     {
-      "itemId": 8,
-      "detectionId": null,
-      "name": "화장품",
-      "qty": 1,
-      "attributes": {
-        "capacityMl": null,
-        "batteryWh": null,
-        "batteryMah": null,
-        "bladeCm": null
-      }
-    },
-    {
-      "itemId": null,
+      "itemId": 11,
       "detectionId": 7,
       "name": "가위",
       "qty": 1,
@@ -1695,27 +1780,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       "checkedAt": "2026-09-02"
     },
     {
-      "itemId": 8,
-      "detectionId": null,
-      "name": "화장품",
-      "qty": 1,
-      "ruleKeyword": "액체",
-      "attributes": {
-        "capacityMl": null,
-        "batteryWh": null,
-        "batteryMah": null,
-        "bladeCm": null
-      },
-      "verdict": "NEED_MORE_INFO",
-      "ruleId": 4,
-      "conditionNote": "용기당 100ml 이하, 총 1L 이하",
-      "reason": "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
-      "missingInfo": "용량(ml)",
-      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
-      "checkedAt": "2026-09-02"
-    },
-    {
-      "itemId": null,
+      "itemId": 11,
       "detectionId": 7,
       "name": "가위",
       "qty": 1,
@@ -1729,7 +1794,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       "verdict": "NEED_MORE_INFO",
       "ruleId": 6,
       "conditionNote": "날 길이 6cm 초과",
-      "reason": "날 길이 6cm를 넘는 가위는 기내 반입이 제한됩니다. 위탁수하물로 부치세요.",
+      "reason": "날 길이를 확인해야 반입 조건을 비교할 수 있습니다. 라벨이나 실측 길이를 확인해 주세요.",
       "missingInfo": "날 길이(cm)",
       "sourceUrl": "https://www.airport.kr/ap_ko/907/subview.do",
       "checkedAt": "2026-09-02"
@@ -1740,10 +1805,9 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 }
 ```
 
-`itemId: null` 인 가위는 체크리스트에 없는 **추가 물품**(승인된 인식 결과, `detectionId: 7`)이다.
-세 판정은 06의 `customs[]` · `extra[]` 와 같다. 보조배터리가 `NEED_MORE_INFO` 인 이유 — 160Wh 초과는 기내·위탁
-모두 금지라 Wh 를 모른 채 기내 반입을 확정할 수 없다(원칙 ②). 시드 `item_rule_checks` 는 이 항목에 두 행
-(`CABIN_OK`·`NEED_MORE_INFO`)을 갖고, `inspection` 은 항목별로 엄격한 쪽을 보인다.
+가위는 사진 승인으로 내 목록에 생성된 `itemId: 11`과 인식 근거 `detectionId: 7`을 함께
+사용한다. 이름·수량·실제 준비 확인과 반입에 필요한 Wh·날 길이 확인은 별개다. 이 예시의
+보조배터리·가위는 준비 완료이지만 반입 판정 속성이 부족해 `NEED_MORE_INFO`다.
 
 ### 예시 2 — S-09 챗봇 · 여행 없이 질문 (tripId null)
 
@@ -1767,27 +1831,27 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       "ruleKeyword": "보조배터리",
       "attributes": {
         "capacityMl": null,
-        "batteryWh": 74,
+        "batteryWh": null,
         "batteryMah": 20000,
         "bladeCm": null
       },
-      "verdict": "CABIN_OK",
+      "verdict": "NEED_MORE_INFO",
       "ruleId": 1,
       "conditionNote": "100Wh 이하",
-      "reason": "20000mAh 는 3.7V 기준 약 74Wh 로 100Wh 이하입니다. 보조배터리는 기내 반입만 가능하고 위탁수하물로는 부칠 수 없습니다.",
-      "missingInfo": null,
+      "reason": "mAh만으로 정격 Wh를 확정하지 않습니다. 라벨의 Wh를 확인해 주세요.",
+      "missingInfo": "배터리 정격(Wh)",
       "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
       "checkedAt": "2026-09-02"
     }
   ],
-  "answer": "네, 기내 반입은 됩니다. 20000mAh 는 3.7V 기준 약 74Wh 로 100Wh 이하라 별도 승인 없이 기내에 가지고 탈 수 있습니다. 다만 위탁수하물에는 넣을 수 없으니 꼭 손가방에 두세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  "followUpQuestion": null
+  "answer": "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
 }
 ```
 
-`20000mAh` 만 있고 Wh가 없다. 모델은 `batteryMah: 20000` 만 옮기고(추정·환산 금지), **서버가**
-`3.7V` 기준 `74Wh` 를 `attributes.batteryWh` 에 채운 뒤 규정 1번(100Wh 이하)으로 `CABIN_OK` 를 정한다.
-모델은 2차에서 환산 근거를 `reason` 에 적는다. 판정을 가르는 산수를 모델에게 맡기지 않는다 (원칙 ④).
+`20000mAh`만 있고 Wh가 없다. `batteryMah: 20000`을 보관하되 전압을 가정하지 않는다.
+`batteryWh: null`, `NEED_MORE_INFO`로 두고 라벨의 정격 Wh를 확인하는 후속 질문을 한다.
+사용자가 확인값을 제공한 뒤 같은 규칙 엔진으로 다시 판단한다.
 
 ### System Prompt
 
@@ -1796,7 +1860,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 
 A. 구조화 (1차 호출)
 - 질문이나 물품 목록에서 물품 이름과 규정 판단에 필요한 속성을 뽑는다: capacityMl(액체 용량), batteryWh(배터리 정격), batteryMah(mAh 만 적힌 경우), bladeCm(날 길이).
-- 명시된 값만 쓴다. 없으면 null. 추정하지 않는다. 환산도 하지 않는다 — mAh 는 batteryMah 에 그대로 옮기면 서버가 Wh 로 바꾼다.
+- 명시된 값만 쓴다. 없으면 null. 추정하지 않는다. 환산도 하지 않는다. mAh는 batteryMah에 그대로 옮기고 Wh가 없으면 null로 둔다.
 - 물품마다 ruleKeyword 를 정한다: 서버가 준 규정 키워드 목록 중 그 물품이 해당하는 것(화장품 → 액체, 보조배터리 → 보조배터리). 해당하는 것이 없으면 null.
 - 물품 목록으로 받았으면 itemId·detectionId·name·qty 를 그대로 되돌려 보낸다. 빠뜨리거나 순서를 바꾸지 않는다. 질문에서 뽑았으면 itemId·detectionId 는 null, qty 는 언급 없으면 1.
 - name 은 한국어 일반명사 1~100자.
@@ -1808,7 +1872,7 @@ B. 설명 (2차 호출)
 
 공통
 - 출력은 아래 JSON Schema 를 따르는 JSON 객체 하나뿐이다. 설명·마크다운·코드펜스를 붙이지 않는다. 스키마의 필드는 전부 낸다 — 값이 없으면 null 로 낸다. 빈 문자열은 쓰지 않는다.
-- verdict · ruleId · conditionNote · missingInfo · sourceUrl · checkedAt · attributes.batteryWh(환산분) 는 서버가 채워 덮어쓰므로 비워 두어도 된다.
+- verdict · ruleId · conditionNote · missingInfo · sourceUrl · checkedAt · 사용자 미확인 attributes.batteryWh 는 서버가 채워 덮어쓰므로 비워 두어도 된다.
 ```
 
 ### User Prompt 템플릿
@@ -1838,59 +1902,67 @@ B. 설명 (2차 호출)
 
 ## Mock이 돌려주는 것
 
-`AI_PROVIDER=mock` 이면 `MockAiClient` 가 **위 예시 `output` 을 그대로** 돌려준다.
-`jobType` 마다 하나씩, `backend/src/main/resources/mock/<jobType>.json`.
+`AI_PROVIDER=mock`이면 인식·추천·품목 범위·문장 생성은 고정 예시를 재료로 사용한다.
+실제 AI 호출은 하지 않는다. **사용자의 선택·수량·완료 상태를 처리하는 서버 로직은 실제로 동작해야 한다.**
 
-- `AI_MOCK_DELAY_MS` 만큼 기다렸다가 `COMPLETED` 로 바꾼다. 발표에서 로딩 화면을
-  보여주려면 `1000`~`2000`.
-- **검증은 두 층이다.** ① output 스키마 검증 — Mock·Real 공통. ② `serverValidates`(입력 대조·산수) —
-  `RealAiClient` 경로에서만. Mock 은 서버 필드·엔진 필드까지 예시 JSON 에 들어 있으므로 서버 채움·검증을
-  거치지 않는다.
-- **id 만 입력에 맞춘다.** `BAG_CHECK` 의 `photoId` 1·2 → `input.photoIds[0]`·`[1]`, `RULE_CHECK` 의 `itemId` →
-  같은 이름의 입력 항목, `WEIGHT_ESTIMATE` 의 `limitG`·`bagEmptyG` → 입력 값. 새 여행에서도 Mock 이 깨지지 않는다.
-- **`COMPLETED` 뒤 저장은 Mock 도 똑같이 한다** — 위 "작업이 끝나면 서버가 쓰는 곳" 표. `S-04`·`S-05` 가
-  거기서 읽는다.
-- Mock 도 `ai_jobs` 에 기록한다. `202` → 폴링 → 상태 전이가 실제와 똑같이 돈다 (06).
-- 시드에는 완료된 `ai_jobs` 를 넣지 않는다. 화면에서 직접 만들어야 데모에서
-  `POST → 202 → 폴링 → 렌더링` 이 눈에 보인다 ([`seed.sql`](../database/seed.sql) 주석).
+- Mock과 실제 AI 모두 출력 스키마 검증·입력 대조·서버 필드 채움을 거친다. Mock이라는
+  이유로 중복 검사, 준비 완료 필터, 합산을 생략하지 않는다.
+- `BAG_CHECK`는 실제 입력 photoIds에 맞춰 후보를 만든다. 사진 한 장이면 존재하지 않는
+  두 번째 photoId를 사용하지 않는다. 결과 저장은 approved=false, 승인 PATCH에서 완료 등록한다.
+- `PACKING_LIST`는 현재 내 목록과 중복을 제거하고 reason을 포함한 후보만 반환한다.
+  source·acceptedItemId·날씨 메타데이터는 서버가 채운다. 내 목록에 자동 INSERT하지 않는다.
+- `WEIGHT_ESTIMATE`는 입력의 실제 완료 물품·수량과 품목별 Mock/마스터 범위로 계산한다.
+  bagEmptyG·limitG만 바꾼 고정 합계를 반환하지 않는다. 미완료·미채택 추천은 합산하지 않는다.
+- `RULE_CHECK`는 같은 여행의 승인 항목·확인된 속성만 사용한다. 출력 ID는 입력과 일치해야
+  하며 Wh가 없으면 추가정보를 요청한다. 챗봇은 여행 없이 질문한 별도 경로다.
+- `AI_MOCK_DELAY_MS` 후 완료되며 `202 → 폴링 → COMPLETED/FAILED`를 유지한다.
+  내 목록 등록·추천 채택은 각각의 도메인 API가 담당한다.
+- 기존 SQL 시드는 이전 합성 목록이다. 승인 가위 등록·추천 채택 시점이 반영된 시드와
+  빈 여행 시나리오는 **후속 구현·검증 필요**다. 시드만 보고 개정 흐름 구현을 완료 처리하지 않는다.
 
 ---
 
 ## 검증
 
-### 기계 검증 — 2026-09-03, 45항목 통과
+### 문서 계약 검증 — 2026-09-03 개정
 
-스키마와 예시를 손으로 대조하지 않았다. `jsonschema`(Draft 2020-12)로 아래를 확인했다.
+기존의 “45항목 통과”는 이전 계약의 검증 기록이다. 개정 후 아래 항목을 다시 검증해 통과했다.
+이번 검증은 문서 스키마·예시의 정합성 확인이며 실제 앱 E2E 통과를 뜻하지 않는다.
 
-| 항목 | 무엇을 |
+| 항목 | 확인 결과 |
 | --- | --- |
-| 메타스키마 | 8개 스키마가 Draft 2020-12 로 유효한가 |
-| 예시 ↔ 스키마 | 예시 5쌍의 `input` · `output` 이 자기 스키마를 통과하는가 |
-| 06 ↔ 스키마 | 06의 `PACKING_LIST` 요청·완료 예시가 그대로 통과하는가 |
-| enum ↔ `schema.sql` | 스키마의 enum 11곳이 `CHECK` 제약과 글자까지 같은가. 무게 `verdict` 는 06 정의와 |
-| 무게 산수 | `bagEmptyG + Σ subtotalG == typicalG` · `subtotalG == typicalG × qty` · `min ≤ typical ≤ max` · `excludedCount == excluded.length` · 06 `inspection.weight` 와 수치 일치 |
-| 투영 | 06 `inspection.weight` · `customs[]` 의 필드가 스키마 필드의 부분집합인가 |
-| 파생 스키마 | 예시 `output` 에서 서버 필드를 뺀 것(= 모델이 낼 것)이 파생 스키마를 통과하는가 |
+| JSON Schema | Draft 2020-12 스키마 8개 검사 및 날짜 형식 포함 AI 예시 10개·06 PACKING_LIST 예시 2개 검증 통과 |
+| 후보 분리 | 추천 예시의 acceptedItemId는 null, 후보별 reason·source·날씨 시점 포함 |
+| 완료율·필수 경고 | 06의 홈·내 목록·검수 예시는 동일한 7개 내 목록 기준 `0.857`(표시 `86%`). 미채택 여권 1건은 별도 경고이며 완료율·무게에서 제외 |
+| 무게 산수 | 준비 완료 6개, 미완료 1개·미승인 후보 2개 제외, 최소 4610g · 대표 5480g · 최대 7010g. 06과 일치 |
+| 후속 질문 | RULE_CHECK 결과에서 입력 허용 필드만 추린 객체가 입력 스키마를 통과 |
+| Wh 미상 | mAh만 있는 예시는 NEED_MORE_INFO, batteryWh=null, 추가 질문 포함 |
+| ERD | 기존 DBML·SQL·PUML의 테이블·컬럼명 유지 |
 
-> 검증 스크립트는 저장소 밖에 있다. BE 트랙이 Mock을 만들 때 같은 검증을 `AiClient`
-> 뒤에 넣는다 — 그게 로드맵 2번이다.
+### 사용자 승인 수용 기준 — 구현 후 실행 필요
 
-### Playground 검증 — TBD
+| 동작 | 기대 결과 |
+| --- | --- |
+| 빈 여행에서 충전기·상의·보조배터리 사진 승인 | 내 목록 3개 모두 완료, 완료율 3/3 |
+| 어댑터·세면도구 추천 생성 | 아래쪽 후보만 변경, 내 목록·완료율·무게 합계 불변 |
+| 어댑터만 채택 | 미완료 항목 1개 추가, 완료율 3/4, 현재 가방 무게 합계 불변 |
+| 같은 후보 재승인·동시 요청 | 같은 항목 반환, 중복 없음 |
+| 어댑터 실제 완료 확인 | 완료율 4/4, 무게 정보가 있으면 재계산에 포함 |
+| 사진 승인 물품명·수량 수정 | 내 목록·사진 연결·무게 입력을 같은 확인값으로 갱신 |
+| 추천 실패·미승인 인식 후보 | 기존 내 목록 유지, 미승인 후보는 확정 결과에 제외 |
+| 사진에 없는 물품을 직접 완료 확인 | 완료·무게 대상 유지, 사진 미확인 배지는 별도 표시 |
+| 내 목록은 모두 완료·여권 필수 후보는 미채택 | 완료율 `1`·표시 `100%`, S-05·S-06의 `미채택 필수 후보 1건` 유지. `확인하기`로 S-05 이동 |
+| 추천 작업이 없거나 후보 배열이 비어 있음 | 작업 없음은 `null`·`필수 추천 확인 전`, 완료된 빈 후보는 `0`. 생성 실패를 0건으로 표시하지 않음 |
+| 화면의 alreadyPacked가 과거 목록이거나 빈 배열 | 유효한 형식이면 서버 PREPARED 목록으로 보정·저장하고 `202`. 같은 값으로 Mock 실행, 차이만으로 `409`를 내지 않음 |
+| S-06 사진 확인 필요 항목을 선택 | S-04에서 미승인 인식 후보와 내 항목 연결·승인 후 S-06 복귀, 상태·무게 다시 조회 |
 
-실행하지는 않았다. **채점의 "타당성"이 여기서 갈린다** — 돌려 보지 않은 프롬프트는 대개
-스키마를 지키지 않는다. 발표 전에 한 번 돌린다. 10분이면 된다.
+### Playground·실제 모델 검증 — 미실행 TBD
 
-절차: OpenAI Playground 또는 Claude Console → System 칸에 System Prompt → User 칸에
-템플릿을 예시 `input` 으로 채운 것 → **JSON 출력 모드** → 결과를 위 출력 Schema 에 넣어
-검증 → 아래 표에 기록.
-
-| `jobType` | 입력 | 기대 | 결과 |
-| --- | --- | --- | --- |
-| `BAG_CHECK` | 예시 사진 2장 + 템플릿 | 스키마 통과, `photoId` 가 1·2 만, 보이지 않는 속성은 `missingInfo` | TBD |
-| `PACKING_LIST` | 예시 `input` | 스키마 통과, `alreadyPacked` 5개가 `items` 에 없음 | TBD |
-| `WEIGHT_ESTIMATE` | 예시 `input` + 시드 범위 | 스키마 통과, `typicalG = 5410`, `contributions` 5개 내림차순 | TBD |
-| `RULE_CHECK` 1차 | 예시 2 `question` | `results[0]` 가 보조배터리 · `batteryWh = 74` · 나머지 `null` | TBD |
-| `RULE_CHECK` 2차 | 엔진 결과 | `answer` 가 항공사 확인 문장으로 끝남, `followUpQuestion = null` | TBD |
+`checklist.md`의 기존 **Playground 검증(예상 10분)**을 별도 미완료 작업으로 유지한다.
+프롬프트는 작성됐지만 설계 완료 확인과 Playground 실행 시점은 PM 확인 TBD다.
+이 문서 개정에서는 실행하지 않았으며, 범위를 줄여 완료로 바꾸지 않는다.
+앱의 AI 호출은 계속 Mock이다. 실제 모델 검증 시 프롬프트와 모델용 파생 스키마를 확인하고,
+등록·채택·완료율·무게 합산은 서버가 담당하도록 같은 수용 기준을 적용한다.
 
 ---
 
@@ -1921,27 +1993,24 @@ B. 설명 (2차 호출)
 | 1 | `AI_PROVIDER` 분기와 `RealAiClient` — 텍스트 3종 먼저 | 낮음 | 인터페이스와 스키마가 있다. 프롬프트를 붙이고 JSON 모드로 부르면 된다 |
 | 2 | 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | 위 스키마를 그대로 쓴다. Mock 에도 같은 검증을 건다 |
 | 3 | `BAG_CHECK` 비전 입력 — 사진을 모델에 넘기는 파이프라인 | 중간 | 이미지 크기·장수 제한, 실패 사진 처리(`failedPhotoIds`) |
-| 4 | 폴링을 큐(메시지 브로커)로 교체 | 중간 | 봉투는 그대로. `pollAfterMs` 만 늘린다. FE 변경 없음 |
+| 4 | 서버 작업 실행에 큐(메시지 브로커) 도입 | 중간 | 작업 실행 방식만 변경하고 FE의 상태 조회·폴링 계약은 유지한다 |
 | 5 | `transport_rules` 갱신 잡 — 출처 재확인 날짜 자동 갱신 | 중간 | `checkedAt` 이 오래되면 판정 근거가 약해진다 |
 | 6 | 비용·토큰 사용량 모니터링 | 낮음 | `ai_jobs` 에 토큰 수 컬럼 추가 |
 
 ## 알려진 한계
 
-솔직하게 적는다. 발표 5번 섹션(회고)에서 그대로 쓴다.
-
-- **Playground 검증을 하지 않았다.** 프롬프트가 스키마를 지키는지는 돌려 봐야 안다. TBD.
-- **체크리스트에 없는 승인 물품(추가 물품)은 무게 계산에 들어가지 않는다.** 시드의 가위가
-  그렇다. `WEIGHT_ESTIMATE` 는 `check_status = PREPARED` 인 항목만 받는다. 승인 시 체크리스트
-  항목으로 등록하면 포함된다 — 그 흐름을 화면에 넣을지는 TBD.
-- **사진 사이의 같은 물품 병합 규칙이 없다.** `BAG_CHECK` 는 사진마다 따로 내고 "합치는 것은
-  서버가 한다" 고 했지만, 이름이 같으면 합산인지 별개인지 정하지 않았다. TBD.
-- **날씨가 `input_payload` 에 남지 않는다.** 서버가 프롬프트에 넣고 `weatherSource` 만 남긴다.
-  같은 작업을 나중에 재현하면 날씨가 달라질 수 있다. 데이터 시점(`asOf`)도 `output` 에 없다 —
-  넣으면 06 완료 예시가 깨져 TBD.
-- **`RULE_CHECK` 는 모델을 두 번 부른다.** 지연이 두 배다. Mock 은 한 번이라 데모에서는 안 보인다.
-- **챗봇의 사진 첨부**(`S-09` 주요 요소)는 `BAG_CHECK` → `RULE_CHECK` 두 작업이다. 화면에만
-  있고 흐름은 설계하지 않았다. 대화 이력도 저장하지 않는다 — 질문 하나에 답 하나.
-- **`confidenceLevel` 경계값 0.80 / 0.50 은 근거 없는 초기값이다.** 실제 모델을 붙인 뒤
-  승인율을 보고 조정한다. 설정에 두는 이유다.
-- **mAh → Wh 환산은 서버가 3.7V 를 가정해 한다.** 리튬이온 공칭 전압이지만 제품마다 다르다.
-  `reason` 에 가정을 적어 사용자가 라벨로 확인하게 한다.
+- **개정 문서와 실제 구현·시드 반영은 별개다.** 06 계약을 FE 타입·Mock·승인 저장 로직에
+  반영하고 위 수용 기준을 실행해야 한다([반영 상태](README.md#개정안-반영-상태)).
+- **이미지 재생성은 TBD다.** 03의 MD 흐름도가 개정 기준이며 PNG·PUML·SVG는 이전 참고본이다.
+- **자동으로 사진 간 동일 물품을 판별하는 정교한 병합은 TBD다.** 현재는 기존 항목 연결과
+  사용자 최종 수량 확인을 사용한다. 단순 인식 횟수 합산은 하지 않는다.
+- **동일 물품의 부족 수량 추천·필수 후보 자동 채택 예외는 TBD다.** 현재는 내 목록 중복 제외,
+  모든 후보 사용자 선택을 기본으로 한다.
+- **물품·전체 가방 실측값 저장은 데모 제외·TBD다.** 빈 가방 무게 입력은 기존대로 제공한다.
+- **날씨 원문 전체는 보관하지 않는다.** 출처·기준일은 output에 남기지만 과거 응답의 완전한
+  재현에 필요한 날씨 원문 스냅샷은 실제 연동 시 검토한다.
+- **RULE_CHECK의 실제 모델 호출은 두 단계다.** 현재는 Mock이며 지연·비용 검증은 향후 TBD다.
+- **챗봇 사진 첨부**는 BAG_CHECK → 사용자 인식 확인 → RULE_CHECK의 보조 흐름 설계가 TBD다.
+  주 경로의 사진 승인 게이트를 생략하지 않는다. 대화 영구 저장은 범위 밖이다.
+- **confidenceLevel 경계값 0.80 / 0.50은 초기값이다.** 실제 모델 승인율을 보고 조정한다.
+- **실제 모델 검증은 하지 않았다.** 스키마·예시 검증과 모델 정확도를 혼동하지 않는다.
