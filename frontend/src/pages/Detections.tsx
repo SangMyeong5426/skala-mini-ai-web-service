@@ -28,6 +28,8 @@ export default function Detections() {
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [photoIds, setPhotoIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
+  /** 조회 실패(error)와 구분한다. 수정·삭제가 거절당한 것은 다른 사건이다 */
+  const [actionError, setActionError] = useState<string | null>(null)
   const job = useAiJob<BagCheckOutput>()
   /** 자동 추천. 폴링해야 recommendationJobId 가 생긴다 */
   const rec = useAiJob()
@@ -122,10 +124,43 @@ export default function Detections() {
   }, [tripId])
 
 
-  /** 잘못 인식한 이름·수량을 고친다. 승인이 아니라 <b>사후 수정</b>이다 */
+  /**
+   * 잘못 인식한 이름·수량을 고친다. 승인이 아니라 <b>사후 수정</b>이다.
+   *
+   * <b>실패를 삼키지 않는다.</b> 06:113 이 이 PATCH 의 오류로 400·404·409 를
+   * 적어 뒀다 — 이름이 비었거나 100자를 넘거나, 수량이 1~99 밖이거나, 연결
+   * 항목이 여러 개라 무엇을 고칠지 모호할 때(409 AMBIGUOUS_LINK)다.
+   *
+   * 예전에는 catch 가 없어서 거절당하면 행이 옛 이름으로 되돌아가기만 했다.
+   * 사용자는 저장이 왜 안 됐는지 알 수 없었다.
+   */
   const edit = async (d: Detection, patch: { name?: string; qty?: number }) => {
-    await api.patch(`/trips/${tripId}/detections/${d.detectionId}`, patch)
-    load()
+    try {
+      await api.patch(`/trips/${tripId}/detections/${d.detectionId}`, patch)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '수정하지 못했습니다.')
+    }
+    void load()
+  }
+
+  /**
+   * 오인식은 <b>내 목록에서 지운다.</b> 03:257 의 `목록에서 삭제` 이고,
+   * 06:755 가 "오인식 삭제는 기존 item DELETE 를 사용한다" 로 정했다.
+   * 새 엔드포인트를 만들지 않는다.
+   *
+   * 인식 행 자체는 남는다 — 사진에 그렇게 찍혀 있었다는 사실은 사실이다.
+   * 지워지는 것은 그것 때문에 만들어진 내 목록 항목이고, 연결은 FK 로 함께
+   * 사라진다(schema.sql `ON DELETE CASCADE`).
+   */
+  const removeItem = async (itemId: number) => {
+    try {
+      await api.del(`/trips/${tripId}/items/${itemId}`)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
+    }
+    void load()
   }
 
   const list = dets ?? []
@@ -152,6 +187,10 @@ export default function Detections() {
 
       <div className="content">
         {error && <Failed title="인식 결과를 불러오지 못했습니다" detail={error} onRetry={load} />}
+        {/* 수정·삭제가 거절당한 것은 조회 실패와 다른 사건이다 */}
+        {actionError && (
+          <Failed title="저장하지 못했습니다" detail={actionError} onRetry={() => { void load() }} />
+        )}
 
         {rec.phase === 'running' && (
           <AiPending label="부족한 준비물을 추천하는 중" polls={rec.polls} />
@@ -203,7 +242,7 @@ export default function Detections() {
             </p>
             <ul>
               {list.map((d) => (
-                <DetectionRow key={d.detectionId} d={d} items={items} onEdit={edit} />
+                <DetectionRow key={d.detectionId} d={d} items={items} onEdit={edit} onRemove={removeItem} />
               ))}
             </ul>
           </div>
@@ -220,11 +259,12 @@ export default function Detections() {
  * 두지 않는다"</i> 로 못박았다. 이미 등록된 것이라 남는 일은 <b>고치는 것</b>뿐이다.
  */
 function DetectionRow({
-  d, items, onEdit,
+  d, items, onEdit, onRemove,
 }: {
   d: Detection
   items: ChecklistItem[]
   onEdit: (d: Detection, patch: { name?: string; qty?: number }) => void
+  onRemove: (itemId: number) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(d.name)
@@ -240,9 +280,16 @@ function DetectionRow({
     ? items.find((i) => i.itemId === linked.itemId)?.name ?? null
     : null
 
+  /**
+   * 06:746 — "이름 1~100자 · qty 1~99 등 item 검증 적용".
+   * 서버가 거절할 값은 보내지 않는다. 이름을 통째로 지우고 저장하면
+   * 예전에는 `name: ''` 이 그대로 나가 400 을 받았다.
+   */
   const save = () => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 100) { setName(d.name); setEditing(false); return }
     setEditing(false)
-    if (name.trim() !== d.name || qty !== d.qty) onEdit(d, { name: name.trim(), qty })
+    if (trimmed !== d.name || qty !== d.qty) onEdit(d, { name: trimmed, qty })
   }
 
   return (
@@ -252,8 +299,8 @@ function DetectionRow({
           <div className="edit-row">
             <input value={name} onChange={(e) => setName(e.target.value)} aria-label="물품 이름" />
             <input
-              type="number" min={1} value={qty}
-              onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+              type="number" min={1} max={99} value={qty}
+              onChange={(e) => setQty(Math.min(99, Math.max(1, Number(e.target.value))))}
               aria-label="수량"
             />
           </div>
@@ -266,20 +313,39 @@ function DetectionRow({
         {d.missingInfo && (
           <p className="row-sub">확인 필요 — <b>{d.missingInfo}</b></p>
         )}
-        {linked && (
+        {linked ? (
           <p className="row-sub">
             {linkedName ? <>내 목록의 <b>{linkedName}</b> 로 등록됨</> : '내 목록에 등록됨'}
           </p>
+        ) : (
+          /*
+           * <b>연결이 없으면 내 목록에 없다.</b> 06 에서 linkedItems 가 곧
+           * 등록됐다는 증거다. 빈 배열은 연결을 끊었거나(matchedItemIds: [])
+           * 목록에서 지운 뒤의 상태다.
+           *
+           * 예전에는 이 자리에 "내 목록에 새로 추가됨" 을 띄우고 오른쪽에는
+           * "자동 등록됨" 배지를 달았다. 뜻이 정반대였다. 실제로 시드의
+           * 인식 7번(가위)이 linkedItems: [] 인데 등록된 것처럼 보였다.
+           */
+          <p className="row-sub">내 목록에 없습니다</p>
         )}
-        {!linked && items.length > 0 && <p className="row-sub">내 목록에 새로 추가됨</p>}
       </div>
       <div className="row-right">
-        <span className="badge badge-ok">자동 등록됨</span>
+        {linked && <span className="badge badge-ok">자동 등록됨</span>}
         {editing ? (
           <button type="button" className="btn btn-sm" onClick={save}>저장</button>
         ) : (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
             수정
+          </button>
+        )}
+        {/* 03:257 — 오인식은 목록에서 지운다. 인식 행 자체는 남는다 */}
+        {linked && !editing && (
+          <button
+            type="button" className="btn btn-ghost btn-sm"
+            onClick={() => onRemove(linked.itemId)}
+          >
+            목록에서 삭제
           </button>
         )}
       </div>
