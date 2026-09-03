@@ -43,11 +43,57 @@ class MockAiClientTest {
                 """);
 
         JsonNode output = client.run(Codes.JobType.RULE_CHECK, contract.validateInput(input));
-        contract.validateChatbotOutput(input, output);
+        contract.validateOutput(input, output);
 
         assertThat(output.path("results").get(0).path("attributes").path("batteryWh").asInt()).isEqualTo(100);
         assertThat(output.path("results").get(0).path("verdict").asText()).isEqualTo("CABIN_OK");
         assertThat(output.path("followUpQuestion").isNull()).isTrue();
+    }
+
+    @Test
+    void unsupportedFollowUpKeepsPreviousItemAndAsksAirline() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"45Wh예요","items":[{
+                  "itemId":7,"detectionId":9,"name":"보조배터리","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":20000,"bladeCm":null}
+                }]}
+                """);
+
+        JsonNode output = client.run(Codes.JobType.RULE_CHECK, contract.validateInput(input));
+        contract.validateOutput(input, output);
+        JsonNode result = output.path("results").get(0);
+
+        assertThat(result.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        assertThat(result.path("itemId").asLong()).isEqualTo(7);
+        assertThat(result.path("detectionId").asLong()).isEqualTo(9);
+        assertThat(result.path("name").asText()).isEqualTo("보조배터리");
+    }
+
+    @Test
+    void firstQuestionWith100WhBatteryReturnsCabinOk() {
+        JsonNode output = run("100Wh 보조배터리 되나요?");
+
+        assertThat(output.path("results").get(0).path("verdict").asText()).isEqualTo("CABIN_OK");
+    }
+
+    @Test
+    void itemListOutputEchoesInputOrderAndIdentifiers() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":"대한항공","question":null,"items":[
+                  {"itemId":11,"detectionId":17,"name":"가위","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":6,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}
+                ]}
+                """);
+
+        JsonNode output = client.run(Codes.JobType.RULE_CHECK, contract.validateInput(input));
+        contract.validateOutput(input, output);
+
+        assertThat(output.path("results").get(0).path("itemId").asLong()).isEqualTo(11);
+        assertThat(output.path("results").get(0).path("detectionId").asLong()).isEqualTo(17);
+        assertThat(output.path("results").get(1).path("itemId").asLong()).isEqualTo(6);
+        assertThat(output.path("answer").isNull()).isTrue();
     }
 
     @Test
@@ -63,7 +109,7 @@ class MockAiClientTest {
                 {"transport":"FLIGHT","airline":null,"question":"삼각대 되나요?","items":[]}
                 """));
 
-        assertThatThrownBy(() -> contract.validateChatbotOutput(input, json.read("{}")))
+        assertThatThrownBy(() -> contract.validateOutput(input, json.read("{}")))
                 .isInstanceOf(com.skala.miniai.common.ApiException.class)
                 .hasMessageContaining("필수");
     }
@@ -83,7 +129,7 @@ class MockAiClientTest {
                 {"transport":"FLIGHT","airline":null,"question":"%s","items":[]}
                 """.formatted(question)));
         JsonNode output = client.run(Codes.JobType.RULE_CHECK, input);
-        contract.validateChatbotOutput(input, output);
+        contract.validateOutput(input, output);
         return output;
     }
 }

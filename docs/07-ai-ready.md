@@ -1470,7 +1470,8 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 챗봇 후속 턴은 직전 `results[]`에서 `itemId/detectionId/name/qty/attributes`만 골라
 `items[]`에 보내고 사용자 답을 `question`에 넣는다. `verdict`·`reason` 등 출력 전용 필드는
 입력의 `additionalProperties: false`에 걸리므로 보내지 않는다. 대화 이력을 저장하지 않고
-현재 질의의 구조화 문맥만 이어간다.
+현재 질의의 구조화 문맥만 이어간다. `items[]`가 있으면 출력 `results[]`는 같은 개수·순서이며
+각 위치의 `itemId`·`detectionId`·`name`·`qty`를 그대로 돌려준다.
 
 ### 출력 Schema
 
@@ -1729,7 +1730,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 
 **서버가 저장 전에 검증한다** — 하나라도 어긋나면 `FAILED` 로 돌리고 기본 문구를 보여준다.
 
-- results[] 의 itemId·detectionId·name·qty 가 input.items 와 순서까지 같아야 한다 (챗봇은 name 만) — 아니면 FAILED
+- input.items 가 있으면 results[] 의 개수·순서와 itemId·detectionId·name·qty 가 같아야 한다 — 아니면 FAILED
 - question 이 있으면 answer 는 string — 아니면 FAILED. question 이 null 이면 answer·followUpQuestion 은 null 로 덮어쓴다
 - sourceUrl ↔ checkedAt 동시, verdict ↔ missingInfo 결합은 스키마(if/then)가 잡는다
 
@@ -1930,7 +1931,7 @@ B. 설명 (2차 호출)
 `AI_PROVIDER=mock`이면 인식·추천·품목 범위·문장 생성은 고정 예시를 재료로 사용한다.
 실제 AI 호출은 하지 않는다. **사용자의 선택·수량·완료 상태를 처리하는 서버 로직은 실제로 동작해야 한다.**
 
-- `RULE_CHECK` 입력과 챗봇 출력은 실행 시점에 스키마의 필수 필드·타입·길이·결합 규칙을
+- `RULE_CHECK` 입출력은 실행 시점에 스키마의 필수 필드·타입·길이·결합 규칙을
   검증한다. 다른 AI 작업의 공통 출력 검증은 향후 로드맵에 남아 있다. Mock이라는 이유로
   중복 검사, 준비 완료 필터, 합산을 생략하지 않는다.
 - `BAG_CHECK`는 실제 입력 photoIds에 맞춰 후보를 만든다. 사진 한 장이면 존재하지 않는
@@ -2022,7 +2023,7 @@ B. 설명 (2차 호출)
 | 단계 | 할 일 | 예상 난이도 | 왜 |
 | --- | --- | --- | --- |
 | 1 | `AI_PROVIDER` 분기와 `RealAiClient` — 텍스트 3종 먼저 | 낮음 | 인터페이스와 스키마가 있다. 프롬프트를 붙이고 JSON 모드로 부르면 된다 |
-| 2 | 나머지 AI 3종 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | RULE_CHECK 입력·챗봇 출력 검증 패턴을 재사용한다 |
+| 2 | 나머지 AI 3종 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | RULE_CHECK 입출력 검증 패턴을 재사용한다 |
 | 3 | `BAG_CHECK` 비전 입력 — 사진을 모델에 넘기는 파이프라인 | 중간 | 이미지 크기·장수 제한, 실패 사진 처리(`failedPhotoIds`) |
 | 4 | 서버 작업 실행에 큐(메시지 브로커) 도입 | 중간 | 작업 실행 방식만 변경하고 FE의 상태 조회·폴링 계약은 유지한다 |
 | 5 | `transport_rules` 갱신 잡 — 출처 재확인 날짜 자동 갱신 | 중간 | `checkedAt` 이 오래되면 판정 근거가 약해진다 |

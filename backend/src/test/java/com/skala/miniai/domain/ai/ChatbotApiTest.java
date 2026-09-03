@@ -51,6 +51,10 @@ class ChatbotApiTest {
         JsonNode followUp = assertAnswer(auth, question("100Wh예요", previousBattery), "CABIN_OK", null);
         assertThat(followUp.path("output").path("results").get(0)
                 .path("attributes").path("batteryWh").asInt()).isEqualTo(100);
+        JsonNode unsupportedFollowUp = assertAnswer(
+                auth, question("45Wh예요", previousBattery), "ASK_AIRLINE", null);
+        assertThat(unsupportedFollowUp.path("output").path("results").get(0).path("name").asText())
+                .isEqualTo("보조배터리");
 
         mvc.perform(post("/api/ai-jobs")
                         .session(auth.session()).cookie(auth.cookies())

@@ -44,10 +44,8 @@ public class RuleCheckContract {
         return input;
     }
 
-    /** 챗봇 질문 출력만 검증한다. 물품 목록 RULE_CHECK는 기존 S-06 흐름을 유지한다. */
-    public void validateChatbotOutput(JsonNode input, JsonNode output) {
-        if (!input.path("question").isTextual()) return;
-
+    /** RULE_CHECK 출력 전체를 저장 전에 검증한다. */
+    public void validateOutput(JsonNode input, JsonNode output) {
         requireObject(output, "output", OUTPUT_FIELDS, true);
         JsonNode results = output.get("results");
         if (!results.isArray() || results.size() > 50) failOutput("results는 최대 50개의 배열이어야 합니다.");
@@ -60,10 +58,14 @@ public class RuleCheckContract {
         }
         matchInputItems(input.get("items"), results);
 
-        requireText(output.get("answer"), "output.answer", 600, true);
-        if (needsMoreInfo) requireText(output.get("followUpQuestion"), "output.followUpQuestion", 200, true);
-        else if (!output.get("followUpQuestion").isNull()) {
-            failOutput("추가 정보가 필요하지 않으면 followUpQuestion은 null이어야 합니다.");
+        if (input.path("question").isTextual()) {
+            requireText(output.get("answer"), "output.answer", 600, true);
+            if (needsMoreInfo) requireText(output.get("followUpQuestion"), "output.followUpQuestion", 200, true);
+            else if (!output.get("followUpQuestion").isNull()) {
+                failOutput("추가 정보가 필요하지 않으면 followUpQuestion은 null이어야 합니다.");
+            }
+        } else if (!output.get("answer").isNull() || !output.get("followUpQuestion").isNull()) {
+            failOutput("물품 목록 RULE_CHECK의 answer와 followUpQuestion은 null이어야 합니다.");
         }
     }
 
@@ -122,7 +124,7 @@ public class RuleCheckContract {
 
     private void matchInputItems(JsonNode items, JsonNode results) {
         if (items.isEmpty()) return;
-        if (items.size() != results.size()) failOutput("후속 질문의 items와 results 개수가 다릅니다.");
+        if (items.size() != results.size()) failOutput("RULE_CHECK items와 results 개수가 다릅니다.");
 
         for (int i = 0; i < items.size(); i++) {
             JsonNode item = items.get(i);
@@ -131,7 +133,7 @@ public class RuleCheckContract {
                     || !sameNullableLong(item.get("detectionId"), result.get("detectionId"))
                     || !item.get("name").asText().equals(result.get("name").asText())
                     || item.get("qty").asInt() != result.get("qty").asInt()) {
-                failOutput("후속 질문의 items와 results 식별값이 다릅니다.");
+                failOutput("RULE_CHECK items와 results 식별값이 다릅니다.");
             }
         }
     }
@@ -193,7 +195,7 @@ public class RuleCheckContract {
 
     private void fail(boolean output, String message, String field) {
         if (output) failOutput(message);
-        failInput(message, field);
+        else failInput(message, field);
     }
 
     private void failInput(String message, String field) {

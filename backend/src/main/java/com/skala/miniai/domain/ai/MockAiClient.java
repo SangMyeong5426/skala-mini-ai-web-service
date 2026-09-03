@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.skala.miniai.common.ApiException;
 import com.skala.miniai.common.Codes;
@@ -50,14 +51,15 @@ public class MockAiClient implements AiClient {
     @Override
     public JsonNode run(Codes.JobType jobType, JsonNode input) {
         if (jobType == Codes.JobType.RULE_CHECK && input.path("question").isTextual()) {
-            return load(ruleCheckFixture(input.path("question").asText(), input)).deepCopy();
+            JsonNode output = load(ruleCheckFixture(input.path("question").asText(), input)).deepCopy();
+            return alignRuleCheckItems(output, input);
         }
 
         JsonNode output = load(jobType.name()).deepCopy();
         return switch (jobType) {
             case BAG_CHECK -> alignPhotoIds(output, input);
             case WEIGHT_ESTIMATE -> alignBag(output, input);
-            case RULE_CHECK -> alignItemIds(output, input);
+            case RULE_CHECK -> alignRuleCheckItems(output, input);
             case PACKING_LIST -> output;
         };
     }
@@ -65,7 +67,8 @@ public class MockAiClient implements AiClient {
     /** S-09 빈 화면에 노출하는 대표 질문 3개와 그 밖의 안전한 기본 답변. */
     private String ruleCheckFixture(String question, JsonNode input) {
         String normalized = question.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-        if (normalized.contains("100wh") && hasItem(input, "보조배터리")) {
+        if (normalized.contains("100wh")
+                && (normalized.contains("보조배터리") || hasItem(input, "보조배터리"))) {
             return "RULE_CHECK_BATTERY_100WH";
         }
         if (normalized.contains("보조배터리") && normalized.contains("20000mah")) {
@@ -113,20 +116,26 @@ public class MockAiClient implements AiClient {
         return output;
     }
 
-    /** 07: 같은 이름의 입력 항목이 있으면 그 {@code itemId} 를 쓴다. 없으면 {@code null} 로 둔다. */
-    private JsonNode alignItemIds(JsonNode output, JsonNode input) {
-        Map<String, Long> idByName = new HashMap<>();
-        for (JsonNode i : input.path("items")) {
-            if (i.hasNonNull("name") && i.hasNonNull("itemId")) {
-                idByName.put(RecommendationStore.normalize(i.get("name").asText()), i.get("itemId").asLong());
-            }
-        }
-        for (JsonNode r : output.path("results")) {
-            if (r instanceof ObjectNode node) {
-                Long id = idByName.get(RecommendationStore.normalize(node.path("name").asText("")));
-                if (id != null) node.put("itemId", id);
-                else node.putNull("itemId");
-            }
+    /** 07: 입력 물품이 있으면 결과를 같은 개수·순서로 만들고 식별값을 그대로 돌려준다. */
+    private JsonNode alignRuleCheckItems(JsonNode output, JsonNode input) {
+        JsonNode items = input.path("items");
+        if (!items.isArray() || items.isEmpty() || !(output instanceof ObjectNode root)) return output;
+
+        Map<String, JsonNode> resultByName = new HashMap<>();
+        output.path("results").forEach(result -> resultByName.put(
+                RecommendationStore.normalize(result.path("name").asText("")), result));
+        JsonNode unknown = load("RULE_CHECK_UNKNOWN").path("results").get(0);
+
+        ArrayNode results = root.putArray("results");
+        for (JsonNode item : items) {
+            JsonNode template = resultByName.getOrDefault(
+                    RecommendationStore.normalize(item.path("name").asText("")), unknown);
+            ObjectNode result = (ObjectNode) template.deepCopy();
+            result.set("itemId", item.get("itemId"));
+            result.set("detectionId", item.get("detectionId"));
+            result.set("name", item.get("name"));
+            result.set("qty", item.get("qty"));
+            results.add(result);
         }
         return output;
     }

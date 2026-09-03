@@ -89,7 +89,7 @@ public class AiJobRunner {
             JsonNode input = json.read(job.getInputPayload());
             JsonNode output = aiClient.run(job.getJobType(), input);
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
-                ruleCheckContract.validateChatbotOutput(input, output);
+                ruleCheckContract.validateOutput(input, output);
             }
 
             // 순서가 중요하다. **부수 효과를 먼저 쓰고, 성공했을 때만 작업을 완료로 바꾼다.**
