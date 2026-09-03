@@ -19,10 +19,21 @@ interface Turn {
   followUp?: string | null
 }
 
+/**
+ * 03:328 이 빈 상태에 노출하라고 정한 예시 질문 <b>3개 그대로</b>다.
+ *
+ * 문구를 마음대로 바꾸지 않는다. 서버(MockAiClient.ruleCheckFixture)가 이
+ * 질문들의 <b>물품 이름과 수치를 함께</b> 보고 답할 규정을 고른다 —
+ * 보조배터리+20000mAh · 화장품+120ml · 가위+7cm. 하나라도 빠지면
+ * "규정을 찾지 못했습니다" 로 떨어진다.
+ *
+ * 실제로 그랬다. 예전 문구("화장품 100ml 넘으면…" · "손톱깎이 들고…")는
+ * 수치가 없어 셋 중 둘이 그 답을 받았다.
+ */
 const SAMPLES = [
   '20000mAh 보조배터리 기내 되나요?',
-  '화장품 100ml 넘으면 어떻게 하나요?',
-  '손톱깎이 들고 타도 되나요?',
+  '120ml 화장품 기내 반입되나요?',
+  '날 길이 7cm 가위 기내 반입되나요?',
 ]
 
 export function ChatModal({ onClose }: { onClose: () => void }) {
@@ -147,7 +158,7 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="예: 보조배터리 기내 반입 되나요?"
+            placeholder="예: 20000mAh 보조배터리 기내 되나요?"
             aria-label="질문 입력"
           />
           <button type="submit" className="btn btn-sm" disabled={!text.trim() || job.phase === 'running'}>
