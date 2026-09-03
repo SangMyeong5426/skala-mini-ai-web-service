@@ -47,7 +47,7 @@ public class TripController {
     }
 
     @PatchMapping("/{tripId}")
-    public TripDtos.Detail update(@PathVariable Long tripId, @RequestBody TripDtos.UpdateRequest req) {
+    public TripDtos.Detail update(@PathVariable Long tripId, @Valid @RequestBody TripDtos.UpdateRequest req) {
         return service.update(tripId, req);
     }
 

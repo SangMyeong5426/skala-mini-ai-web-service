@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.JsonNode;
@@ -76,6 +77,22 @@ public class AiJobService {
 
         return new AiJobDtos.Accepted(job.getId(), job.getJobType(), job.getStatus(),
                 job.getCreatedAt(), pollAfterMs);
+    }
+
+    /**
+     * 작업을 <b>별도 트랜잭션</b>에서 실패로 표시한다.
+     *
+     * <p>{@link AiJobRunner} 안에서 직접 {@code job.fail()} 을 부르면 안 된다. 예외가 DB 작업에서
+     * 났다면 그 트랜잭션은 이미 rollback-only 라, 커밋 시점에 통째로 되돌아가면서
+     * <b>실패 표시까지 사라진다.</b> 그러면 작업이 {@code PENDING} 에 남고 화면은 06 의 폴링
+     * 규약대로 끝없이 폴링한다 — {@code FAILED} 분기가 영영 실행되지 않는다.
+     *
+     * <p>{@code REQUIRES_NEW} 가 먹으려면 <b>다른 빈</b>에 있어야 한다. 같은 클래스 안에서
+     * 부르면 프록시를 타지 않아 전파 설정이 무시된다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markFailed(Long jobId, String message) {
+        jobs.findById(jobId).ifPresent(job -> job.fail(message));
     }
 
     @Transactional(readOnly = true)

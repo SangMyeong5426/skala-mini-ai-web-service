@@ -205,3 +205,19 @@ DATABASE_PASSWORD=devpass
 
 3일짜리 프로젝트이므로 마이그레이션 도구는 쓰지 않는다.
 스키마가 바뀌면 테이블을 다시 만든다.
+
+### 팀 DB 에 실데이터가 생긴 뒤로는 예외다
+
+**`schema.sql` 전체 재실행과 `scripts/db-apply` 는 맨 앞에서 모든 테이블을 DROP 한다.**
+팀 Supabase 에 이미 데이터가 있으므로 그것을 지운다.
+
+테이블을 **더하기만** 하는 변경은 `database/migrations/` 에 그 부분만 담은 SQL 을 두고,
+받는 사람은 그것만 실행한다. 기존 테이블은 건드리지 않는다.
+
+| 파일 | 무엇을 더하나 |
+| --- | --- |
+| `2026-09-03-add-itineraries-and-placements.sql` | `trip_itineraries` · `item_placements` |
+
+`ddl-auto=validate` 라 **DB 를 갱신하지 않으면 백엔드가 아예 뜨지 않는다.**
+오류는 `BeanCreationException` 안쪽에 묻혀 있어 원인을 찾는 데 시간이 걸린다.
+새 테이블이 들어온 PR 을 pull 했다면 이것부터 확인한다.

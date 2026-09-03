@@ -4,6 +4,16 @@
 
 스캐폴딩은 **끝나 있다.** clone 후 아래만 하면 빌드가 돈다.
 
+> **이 브랜치를 pull 했다면 DB 를 먼저 갱신한다.** 테이블 둘(`trip_itineraries` ·
+> `item_placements`)이 늘었고 `ddl-auto=validate` 라, 갱신하지 않으면 앱이 아예 뜨지 않는다.
+>
+> ```bash
+> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-itineraries-and-placements.sql
+> ```
+>
+> **`schema.sql` 전체 재실행·`scripts/db-apply` 는 쓰지 않는다** — 맨 앞에서 모든 테이블을
+> DROP 해 팀 DB 의 실데이터를 지운다. 자세한 내용은 [`database/README.md`](../database/README.md).
+
 처음 합류했다면 **[백엔드 환경·개발 가이드 (`SETUP.md`)](SETUP.md)**를 먼저 읽는다.
 JDK·IDE 설정, Supabase 연결, 환경 변수, 개발 순서와 검증 결과를 모아 두었다.
 

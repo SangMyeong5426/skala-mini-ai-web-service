@@ -54,12 +54,14 @@ public class PhotoService {
 
     @Transactional
     public PhotoDtos.PhotoListResponse upload(Long tripId, List<MultipartFile> files, Codes.BagKind bagKind) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         if (files == null || files.isEmpty()) {
             throw ApiException.badRequest("사진 파일이 없습니다.", "files");
         }
 
-        List<PhotoDtos.Photo> saved = new ArrayList<>();
+        // 검증을 **전부 먼저** 돌린다. 검사와 쓰기를 번갈아 하면 3장 중 3번째가 틀렸을 때
+        // 앞의 2장이 이미 디스크에 쓰인 뒤다. 트랜잭션이 되돌아가도 파일은 남아 고아가 된다.
+        List<String> paths = new ArrayList<>();
         for (MultipartFile file : files) {
             if (file.isEmpty()) {
                 throw ApiException.badRequest("빈 파일은 올릴 수 없습니다.", "files");
@@ -70,16 +72,21 @@ public class PhotoService {
                         "지원하지 않는 형식입니다: " + ext + " (jpg · png · webp 만 됩니다)", "files");
             }
             // 여행별 폴더에 UUID 이름으로 저장한다. 원본 이름은 경로 조작에 쓰일 수 있어 버린다.
-            String relative = "trips/" + tripId + "/" + UUID.randomUUID() + "." + ext;
-            writeFile(file, relative);
-            saved.add(toDto(photos.save(new TripPhoto(tripId, relative, bagKind))));
+            paths.add("trips/" + tripId + "/" + UUID.randomUUID() + "." + ext);
+        }
+
+        List<PhotoDtos.Photo> saved = new ArrayList<>();
+        for (int i = 0; i < files.size(); i++) {
+            writeFile(files.get(i), paths.get(i));
+            saved.add(toDto(photos.save(new TripPhoto(tripId, paths.get(i), bagKind))));
         }
         return new PhotoDtos.PhotoListResponse(saved);
     }
 
     @Transactional
     public void delete(Long tripId, Long photoId) {
-        tripService.mustOwn(tripId);
+        // 사진을 지우면 인식 결과가 CASCADE 로 함께 지워져 내 목록 집계가 바뀐다.
+        tripService.mustOwnForUpdate(tripId);
         TripPhoto photo = photos.findByIdAndTripId(photoId, tripId)
                 .orElseThrow(() -> ApiException.notFound("사진", photoId));
 

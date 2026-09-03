@@ -23,9 +23,17 @@ public final class ItineraryDtos {
             OffsetDateTime endAt,
             String note) { }
 
-    /** PATCH — 보낸 필드만 바꾼다. */
+    /**
+     * PATCH — 보낸 필드만 바꾼다.
+     *
+     * <p>nullable 이지만 <b>길이 제약은 그대로</b> 건다. 없으면 너무 긴 값이 DB 까지 가서
+     * {@code 409 CONSTRAINT_VIOLATION} 이 나온다 — 어느 필드가 문제인지 알려주지 못한다.
+     */
     public record UpdateRequest(
-            Codes.ItineraryKind kind, String title, String place, String code,
+            Codes.ItineraryKind kind,
+            @Size(max = 100, message = "일정 제목은 100자 이하입니다.") String title,
+            @Size(max = 100, message = "장소는 100자 이하입니다.") String place,
+            @Size(max = 50, message = "코드는 50자 이하입니다.") String code,
             OffsetDateTime startAt, OffsetDateTime endAt, String note) { }
 
     public record Item(

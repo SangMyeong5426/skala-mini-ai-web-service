@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -32,7 +33,8 @@ public class MockAiClient implements AiClient {
 
     private final Json json;
     private final String modelName;
-    private final Map<Codes.JobType, JsonNode> fixtures = new HashMap<>();
+    /** 가상 스레드에서 동시에 들어온다. HashMap 의 computeIfAbsent 는 스레드 안전하지 않다. */
+    private final Map<Codes.JobType, JsonNode> fixtures = new ConcurrentHashMap<>();
 
     public MockAiClient(Json json, @Value("${app.ai.model:mock}") String modelName) {
         this.json = json;

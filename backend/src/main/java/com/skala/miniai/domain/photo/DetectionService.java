@@ -60,7 +60,8 @@ public class DetectionService {
 
     @Transactional
     public PhotoDtos.ApproveResponse approve(Long tripId, Long detectionId, PhotoDtos.ApproveRequest req) {
-        tripService.mustOwn(tripId);
+        // 사진 승인도 내 목록을 건드리므로 같은 락으로 직렬화한다.
+        tripService.mustOwnForUpdate(tripId);
         DetectedObject detection = mustBelongToTrip(tripId, detectionId);
 
         if (req.name() != null) {

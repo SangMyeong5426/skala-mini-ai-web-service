@@ -43,6 +43,7 @@ public class AiJobRunner {
     private static final Logger log = LoggerFactory.getLogger(AiJobRunner.class);
 
     private final AiJobRepository jobs;
+    private final AiJobService jobService;
     private final AiClient aiClient;
     private final DetectedObjectRepository detections;
     private final ChecklistItemRepository items;
@@ -50,10 +51,12 @@ public class AiJobRunner {
     private final Json json;
     private final long mockDelayMs;
 
-    public AiJobRunner(AiJobRepository jobs, AiClient aiClient, DetectedObjectRepository detections,
-                       ChecklistItemRepository items, ItemRuleCheckRepository ruleChecks, Json json,
+    public AiJobRunner(AiJobRepository jobs, AiJobService jobService, AiClient aiClient,
+                       DetectedObjectRepository detections, ChecklistItemRepository items,
+                       ItemRuleCheckRepository ruleChecks, Json json,
                        @Value("${app.ai.mock-delay-ms:0}") long mockDelayMs) {
         this.jobs = jobs;
+        this.jobService = jobService;
         this.aiClient = aiClient;
         this.detections = detections;
         this.items = items;
@@ -74,16 +77,31 @@ public class AiJobRunner {
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
             JsonNode output = aiClient.run(job.getJobType(), json.read(job.getInputPayload()));
-            job.complete(json.write(output), aiClient.modelName());
+
+            // 순서가 중요하다. **부수 효과를 먼저 쓰고, 성공했을 때만 작업을 완료로 바꾼다.**
+            //
+            //   ① flush 를 여기서 한다 — 안 하면 INSERT 가 커밋 시점에 나가고,
+            //      그때 터지는 제약 위반은 아래 catch 를 못 탄다. 작업이 PENDING 에 갇힌다.
+            //   ② job.complete() 를 뒤에 둔다 — 앞에 두면 이 트랜잭션이 ai_jobs 행을
+            //      UPDATE 로 잠근 채 markFailed 의 새 트랜잭션이 같은 행을 기다려 **교착**한다.
             persistSideEffects(job, output);
+            jobs.flush();
+
+            job.complete(json.write(output), aiClient.modelName());
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            job.fail("작업이 중단됐습니다. 다시 시도해 주세요.");
+            // 실패 표시는 별도 트랜잭션이다. 여기서 job.fail() 을 부르면 이 트랜잭션이
+            // 되돌아갈 때 함께 사라져 작업이 PENDING 에 영원히 남는다.
+            jobService.markFailed(job.getId(), "작업이 중단됐습니다. 다시 시도해 주세요.");
         } catch (RuntimeException e) {
             log.warn("AI 작업 {} 실패", job.getId(), e);
             // 사용자에게 내부 오류를 그대로 보여주지 않는다. 내 목록은 그대로 유지된다.
-            job.fail("결과를 만들지 못했습니다. 내 체크리스트는 유지됩니다. 다시 시도하거나 직접 추가해 주세요.");
+            jobService.markFailed(job.getId(),
+                    "결과를 만들지 못했습니다. 내 체크리스트는 유지됩니다. 다시 시도하거나 직접 추가해 주세요.");
+            // 부분 결과가 커밋되지 않도록 이 트랜잭션은 되돌린다.
+            // (RULE_CHECK 에서 valueOf 가 던지기 전에 큐에 들어간 INSERT 가 그 예다)
+            throw e;
         }
     }
 

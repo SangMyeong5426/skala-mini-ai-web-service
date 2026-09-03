@@ -36,7 +36,7 @@ public class ItineraryService {
 
     @Transactional
     public ItineraryDtos.Item create(Long tripId, ItineraryDtos.CreateRequest req) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         validateRange(req.startAt(), req.endAt());
 
         TripItinerary e = new TripItinerary(tripId, req.kind(), req.title().trim(), req.startAt());
@@ -49,7 +49,7 @@ public class ItineraryService {
 
     @Transactional
     public ItineraryDtos.Item update(Long tripId, Long itineraryId, ItineraryDtos.UpdateRequest req) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         TripItinerary e = itineraries.findByIdAndTripId(itineraryId, tripId)
                 .orElseThrow(() -> ApiException.notFound("일정", itineraryId));
 
@@ -68,7 +68,7 @@ public class ItineraryService {
 
     @Transactional
     public void delete(Long tripId, Long itineraryId) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         TripItinerary e = itineraries.findByIdAndTripId(itineraryId, tripId)
                 .orElseThrow(() -> ApiException.notFound("일정", itineraryId));
         itineraries.delete(e);

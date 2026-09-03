@@ -41,7 +41,7 @@ public class ItineraryController {
 
     @PatchMapping("/{itineraryId}")
     public ItineraryDtos.Item update(@PathVariable Long tripId, @PathVariable Long itineraryId,
-                                     @RequestBody ItineraryDtos.UpdateRequest req) {
+                                     @Valid @RequestBody ItineraryDtos.UpdateRequest req) {
         return service.update(tripId, itineraryId, req);
     }
 

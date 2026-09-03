@@ -37,6 +37,19 @@ public class TripService {
                 .orElseThrow(() -> ApiException.notFound("여행", tripId));
     }
 
+    /**
+     * 쓰기 전에 부른다. 소유권 확인과 함께 <b>여행 행에 락을 건다.</b>
+     *
+     * <p>같은 여행의 항목 추가·수정·삭제·사진 승인·추천 채택이 이 락 하나로 직렬화된다.
+     * 락 대상을 여행으로 잡은 이유는 그 단위로 동시성이 생기기 때문이다 — 한 사용자가
+     * 한 화면에서 여러 번 누르는 상황이다.
+     */
+    @Transactional
+    public Trip mustOwnForUpdate(Long tripId) {
+        return trips.findWithLockByIdAndUserId(tripId, currentUser.id())
+                .orElseThrow(() -> ApiException.notFound("여행", tripId));
+    }
+
     @Transactional(readOnly = true)
     public TripDtos.ListResponse list() {
         List<TripDtos.Summary> summaries = trips.findByUserIdOrderByCreatedAtDesc(currentUser.id()).stream()
@@ -90,7 +103,7 @@ public class TripService {
 
     @Transactional
     public TripDtos.Detail update(Long tripId, TripDtos.UpdateRequest req) {
-        Trip t = mustOwn(tripId);
+        Trip t = mustOwnForUpdate(tripId);
 
         if (req.origin() != null) t.setOrigin(req.origin().trim());
         if (req.destination() != null) t.setDestination(req.destination().trim());
@@ -117,7 +130,7 @@ public class TripService {
 
     @Transactional
     public void delete(Long tripId) {
-        Trip t = mustOwn(tripId);
+        Trip t = mustOwnForUpdate(tripId);
         // 체크리스트·사진·일정·AI 작업은 FK 의 ON DELETE CASCADE 로 함께 지워진다.
         trips.delete(t);
     }

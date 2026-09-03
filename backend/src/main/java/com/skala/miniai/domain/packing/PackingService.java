@@ -63,7 +63,8 @@ public class PackingService {
 
     @Transactional
     public PackingDtos.Response save(Long tripId, PackingDtos.SaveRequest req) {
-        tripService.mustOwn(tripId);
+        // 전체 교체라 동시 저장이 겹치면 배치가 섞인다.
+        tripService.mustOwnForUpdate(tripId);
         List<PackingDtos.Placement> incoming = req.placements() == null ? List.of() : req.placements();
 
         Set<Long> ownIds = items.findByTripIdOrderById(tripId).stream()
@@ -99,7 +100,7 @@ public class PackingService {
     /** "정리 초기화" — 배치만 지운다. 체크리스트 항목과 완료 상태는 그대로다. */
     @Transactional
     public void reset(Long tripId) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         Set<Long> ownIds = items.findByTripIdOrderById(tripId).stream()
                 .map(ChecklistItem::getId)
                 .collect(Collectors.toSet());

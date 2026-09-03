@@ -49,7 +49,7 @@ public class ChecklistController {
 
     @PatchMapping("/{itemId}")
     public ChecklistDtos.Item update(@PathVariable Long tripId, @PathVariable Long itemId,
-                                     @RequestBody ChecklistDtos.UpdateRequest req) {
+                                     @Valid @RequestBody ChecklistDtos.UpdateRequest req) {
         return service.update(tripId, itemId, req);
     }
 

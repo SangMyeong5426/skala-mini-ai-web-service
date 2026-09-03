@@ -40,13 +40,22 @@ public final class TripDtos {
             @Positive(message = "무게 한도는 0보다 커야 합니다.") Integer weightLimitG,
             String note) { }
 
-    /** PATCH — <b>보낸 필드만</b> 바꾼다. 전부 nullable 이라 검증은 서비스에서 한다. */
+    /**
+     * PATCH — <b>보낸 필드만</b> 바꾼다. 전부 nullable 이지만 길이·범위 제약은 그대로 건다.
+     * 날짜 역전처럼 <b>필드 사이의</b> 규칙만 서비스에서 검사한다.
+     */
     public record UpdateRequest(
-            String origin, String destination, String countryCode,
+            @Size(max = 100) String origin,
+            @Size(max = 100) String destination,
+            @Size(min = 2, max = 2, message = "국가 코드는 2자입니다.") String countryCode,
             LocalDate startDate, LocalDate endDate,
             Codes.Purpose purpose, Codes.Transport transport,
-            String airline, String departureAirport, String arrivalAirport,
-            Codes.BagType bagType, Integer bagEmptyG, Integer weightLimitG,
+            @Size(max = 50) String airline,
+            @Size(min = 3, max = 3, message = "공항 코드는 3자입니다.") String departureAirport,
+            @Size(min = 3, max = 3, message = "공항 코드는 3자입니다.") String arrivalAirport,
+            Codes.BagType bagType,
+            @Positive(message = "빈 가방 무게는 0보다 커야 합니다.") Integer bagEmptyG,
+            @Positive(message = "무게 한도는 0보다 커야 합니다.") Integer weightLimitG,
             String note, Codes.TripStatus status) { }
 
     /** S-01 홈 카드. {@code completionRate} 는 조회 시 계산값이다. */

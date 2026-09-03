@@ -87,7 +87,8 @@ public class ChecklistService {
 
     @Transactional
     public Added add(Long tripId, ChecklistDtos.CreateRequest req) {
-        tripService.mustOwn(tripId);
+        // 여행 행에 락을 걸어 같은 후보가 항목 두 개를 만드는 것을 막는다 (06 동시 클릭 규약).
+        tripService.mustOwnForUpdate(tripId);
         String name = RecommendationStore.normalize(req.name());
         if (name.isEmpty()) {
             throw ApiException.badRequest("물품 이름은 공백일 수 없습니다.", "name");
@@ -165,7 +166,7 @@ public class ChecklistService {
 
     @Transactional
     public ChecklistDtos.Item update(Long tripId, Long itemId, ChecklistDtos.UpdateRequest req) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         ChecklistItem item = items.findByIdAndTripId(itemId, tripId)
                 .orElseThrow(() -> ApiException.notFound("체크리스트 항목", itemId));
 
@@ -194,7 +195,7 @@ public class ChecklistService {
      */
     @Transactional
     public void delete(Long tripId, Long itemId) {
-        tripService.mustOwn(tripId);
+        tripService.mustOwnForUpdate(tripId);
         ChecklistItem item = items.findByIdAndTripId(itemId, tripId)
                 .orElseThrow(() -> ApiException.notFound("체크리스트 항목", itemId));
 

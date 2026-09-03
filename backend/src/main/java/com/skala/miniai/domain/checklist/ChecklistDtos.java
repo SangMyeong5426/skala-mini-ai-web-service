@@ -38,7 +38,10 @@ public final class ChecklistDtos {
 
     /** PATCH — 보낸 필드만 바꾼다. {@code photoStatus} 는 조회 전용이라 받지 않는다. */
     public record UpdateRequest(
-            String name, Codes.Category category, Integer qty,
+            @Size(max = 100, message = "물품 이름은 100자 이하입니다.") String name,
+            Codes.Category category,
+            @Min(value = 1, message = "수량은 1 이상입니다.")
+            @Max(value = 99, message = "수량은 99 이하입니다.") Integer qty,
             Codes.Priority priority, Codes.CheckStatus checkStatus) { }
 
     public record Item(
