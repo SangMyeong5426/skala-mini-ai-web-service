@@ -24,7 +24,7 @@
  * 끄는 법: frontend/.env 의 VITE_USE_MOCK 를 false 로.
  */
 import * as fx from './fixtures'
-import { LOGIN_ID_RE } from '../types/api'
+import { LOGIN_ID_RE, PASSWORD_MAX_BYTES, PASSWORD_MIN } from '../types/api'
 import type {
   BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto, User,
 } from '../types/api'
@@ -113,11 +113,13 @@ interface TripState {
   recommendationJobId: number | null
   /** 채택된 후보 위치. 같은 후보를 두 번 채택해도 항목이 하나만 생긴다. */
   accepted: Map<number, number>
+  /** 사람이 손댄 연결. 06 의 confirmedByUser 가 이것이다 */
+  confirmed: Set<number>
 }
 
 function emptyTrip(detail: TripDetail, ownerId = 1): TripState {
   return {
-    ownerId, detail, items: [], detections: [], photos: [],
+    ownerId, detail, items: [], detections: [], photos: [], confirmed: new Set(),
     links: new Map(), recommendationJobId: null, accepted: new Map(),
   }
 }
@@ -149,6 +151,7 @@ trips.set(1, {
   // 비워 두면 같은 물건이 체크리스트와 추천에 <b>두 번</b> 보이고,
   // 미채택 필수 수도 2 가 되어 fx.ITEMS_META 의 1 과 어긋난다.
   accepted: new Map([[0, 7]]),
+  confirmed: new Set(),
 })
 for (const t of fx.TRIPS.slice(1)) trips.set(t.tripId, emptyTrip({ ...t }))
 
@@ -171,12 +174,14 @@ const jobs = new Map<number, {
   photoIds?: number[]
   /** RULE_CHECK 이 챗봇 호출인지 가른다. 07 이 출력을 다르게 정했다. */
   question?: string
+  /** 06:278 — ai_jobs.user_id == 세션 userId. 없으면 남의 작업을 폴링할 수 있다 */
+  ownerId: number
   /** 완료 결과를 도메인에 한 번만 반영한다. 반복 GET 으로 중복 삽입하지 않는다. */
   applied: boolean
 }>()
 
 jobs.set(fx.ITEMS_META.recommendationJobId, {
-  left: 0, jobType: 'PACKING_LIST', tripId: 1, applied: true,
+  left: 0, jobType: 'PACKING_LIST', tripId: 1, applied: true, ownerId: 1,
 })
 
 /**
@@ -206,10 +211,14 @@ function idsIn(path: string): number[] {
  * 06 의 항목 PATCH 는 보낸 체크 상태를 그대로 바꾸는 계약이다.
  *
  * 그래서 상태는 <b>사건이 일어날 때만</b> 쓴다.
- *   승인된 인식이 연결됨 → PREPARED (사진에서 확인)
- *   연결은 있는데 승인 전 → NEEDS_CHECK
- *   연결이 하나도 없음    → NOT_IN_PHOTO
+ *   인식이 연결됨      → PREPARED (사진에서 확인됨)
+ *   연결이 하나도 없음 → NOT_IN_PHOTO
  * 그 뒤 사용자가 PATCH 로 바꾸면 그 값이 남는다.
+ *
+ * <b>승인 여부를 보지 않는다.</b> 승인 게이트가 폐기됐기 때문이다. 예전 코드는
+ * "연결은 있는데 승인 전 → NEEDS_CHECK" 를 두었는데, 그러면 S-04 에서 이름을
+ * 한 번 고칠 때마다 자동 등록된 물품이 준비 완료에서 강등된다.
+ * 06:728 은 "이름·수량 수정 시 기존 준비 상태·출처 유지" 다.
  */
 function syncStatus(t: TripState, itemIds: number[]) {
   for (const itemId of itemIds) {
@@ -222,10 +231,7 @@ function syncStatus(t: TripState, itemIds: number[]) {
       item.checkStatus = 'NOT_IN_PHOTO'
       continue
     }
-    const approved = linked.some(
-      (id) => t.detections.find((d) => d.detectionId === id)?.approved,
-    )
-    item.checkStatus = approved ? 'PREPARED' : 'NEEDS_CHECK'
+    item.checkStatus = 'PREPARED'
   }
 }
 
@@ -236,15 +242,17 @@ function itemsOf(t: TripState): ChecklistItem[] {
 function completionRate(t: TripState): number {
   if (t.items.length === 0) return 0
   const done = t.items.filter((i) => i.checkStatus === 'PREPARED').length
-  return Math.round((done / t.items.length) * 100) / 100
+  // 06 예시가 0.889 다. 2자리로 자르면 0.89 가 되어 계약값과 달라진다.
+  return Math.round((done / t.items.length) * 1000) / 1000
 }
 
 function linkedItems(t: TripState, detectionId: number) {
-  const approved = t.detections.find((d) => d.detectionId === detectionId)?.approved ?? false
+  // 06:700 — 자동 연결은 confirmedByUser=false 여도 유효하다. 사람이 고친
+  // 연결만 true 다. 승인 게이트가 없으므로 approved 로 판단하지 않는다.
   return (t.links.get(detectionId) ?? []).map((itemId) => ({
     itemId,
     name: t.items.find((i) => i.itemId === itemId)?.name ?? '',
-    confirmedByUser: approved,
+    confirmedByUser: t.confirmed.has(detectionId),
   }))
 }
 
@@ -257,10 +265,21 @@ function linkedItems(t: TripState, detectionId: number) {
  * 재분석이면 그 사진의 <b>미승인 행을 교체</b>한다. 승인 행은 보존한다 —
  * 사용자가 확인한 것을 AI 재실행이 지우면 안 된다.
  */
-function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds?: number[]) {
-  const target = photoIds?.length ? out.detections.filter((d) => photoIds.includes(d.photoId))
-                                  : out.detections
-  const scope = new Set(target.map((d) => d.photoId))
+function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
+  /*
+   * ② 고정 출력의 photoId 는 1·2 뿐이라, 새로 올린 사진(100번대)으로 분석하면
+   *    걸리는 것이 하나도 없었다. 요청한 사진에 <b>순서대로 배정</b>한다.
+   *    실제 서버는 그 사진을 실제로 분석하므로 이 매핑이 필요 없다.
+   *
+   * ③ 예전에는 photoIds 가 비면 전체를 넣었다. 사진 0장인 여행에서 분석을
+   *    누르면 남의 사진 결과 8건이 등록됐다. 빈 요청은 빈 결과다.
+   */
+  if (!photoIds.length) return
+
+  const source = [...new Set(out.detections.map((d) => d.photoId))].sort((a, b) => a - b)
+  const map = new Map(source.map((src, i) => [src, photoIds[i % photoIds.length]]))
+  const target = out.detections.map((d) => ({ ...d, photoId: map.get(d.photoId) ?? photoIds[0] }))
+  const scope = new Set(photoIds)
 
   // 대상 사진의 미승인 행과 그 연결을 먼저 걷어낸다.
   const dropped = t.detections.filter((d) => scope.has(d.photoId) && !d.approved)
@@ -344,11 +363,11 @@ export function mockRequest(
     const bad =
       nickname.length < 2 || nickname.length > 50 ? ['nickname', '닉네임은 2~50자로 입력해 주세요.'] :
       !LOGIN_ID_RE.test(loginId) ? ['loginId', '아이디는 영문 소문자·숫자·밑줄 4~30자입니다.'] :
-      password.length < 8 ? ['password', '비밀번호는 8자 이상이어야 합니다.'] :
+      password.length < PASSWORD_MIN ? ['password', `비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`] :
       // 06:190 — UTF-8 72바이트 이하. BCrypt 가 잘리는 지점이라 서버가 실제로 막는다.
       // .length 는 UTF-16 코드유닛 수라 한글에서 어긋난다. 바이트로 센다.
-      new TextEncoder().encode(password).length > 72
-        ? ['password', '비밀번호는 72바이트 이하여야 합니다.'] :
+      new TextEncoder().encode(password).length > PASSWORD_MAX_BYTES
+        ? ['password', `비밀번호는 ${PASSWORD_MAX_BYTES}바이트 이하여야 합니다.`] :
       !EMAIL_RE.test(email) || email.length > 255 ? ['email', '이메일 형식을 확인해 주세요.'] :
       null
     if (bad) return delay(new MockError(400, 'VALIDATION_FAILED', bad[1], bad[0]))
@@ -403,7 +422,12 @@ export function mockRequest(
     const jobType = b.jobType as JobType
     const jobId = nextJobId++
     const input = (b.input ?? {}) as Record<string, unknown>
+    // 06:278 — 남의 여행에 작업을 걸 수 없다. tripId 소유권을 먼저 본다.
+    const target = b.tripId ? trips.get(b.tripId as number) : undefined
+    if (b.tripId !== undefined && (!target || target.ownerId !== me)) return NOT_FOUND
+
     jobs.set(jobId, {
+      ownerId: me,
       left: 2,
       jobType,
       tripId: b.tripId as number | undefined,
@@ -417,7 +441,8 @@ export function mockRequest(
   if (method === 'GET' && p.startsWith('/ai-jobs/')) {
     const [jobId] = idsIn(p)
     const job = jobs.get(jobId)
-    if (!job) return NOT_FOUND
+    // 소유자가 다르면 존재 여부도 알려 주지 않는다(06:282)
+    if (!job || job.ownerId !== me) return NOT_FOUND
     if (job.left > 0) {
       job.left -= 1
       return delay(fx.AI_JOB(jobId, job.jobType, false))
@@ -427,7 +452,7 @@ export function mockRequest(
       job.applied = true
       const t = job.tripId ? trips.get(job.tripId) : undefined
       if (t && job.jobType === 'BAG_CHECK') {
-        applyBagCheck(t, fx.AI_OUTPUT.BAG_CHECK, job.photoIds)
+        applyBagCheck(t, fx.AI_OUTPUT.BAG_CHECK, job.photoIds ?? [])
       }
       // PACKING_LIST 는 **후보만** 만든다. 채택(POST /items)해야 내 목록에 들어간다.
       // 개정안 4·5단계: "생성만으로 내 체크리스트에 등록하지 않는다".
@@ -602,6 +627,17 @@ export function mockRequest(
     }
     if (b.name !== undefined) d.name = String(b.name)
     if (b.qty !== undefined) d.qty = Number(b.qty)
+
+    // 06:716-724 — 같은 요청에서 연결된 체크리스트 항목도 함께 갱신한다.
+    // 안 하면 S-04 에서 고친 이름이 S-05 에 안 보이고, 재분석 때 이름 매칭이
+    // 어긋나 같은 물건이 하나 더 생긴다.
+    for (const itemId of t.links.get(detectionId) ?? []) {
+      const item = t.items.find((i) => i.itemId === itemId)
+      if (!item) continue
+      if (b.name !== undefined) item.name = String(b.name)
+      if (b.qty !== undefined) item.qty = Number(b.qty)
+    }
+    t.confirmed.add(detectionId)
 
     // 06 연결 수정 규약 — **전체 교체**다.
     //   [8]    → 연결을 [8] 하나로 교체

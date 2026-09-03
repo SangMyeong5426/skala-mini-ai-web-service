@@ -98,6 +98,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // Mock 이 오류 봉투를 돌려준 경우 — 로그인 실패·중복 가입 등.
     // 실제 서버의 4xx 와 같은 예외로 바꿔서 화면이 한 가지 방식으로만 다루게 한다.
     if (value instanceof MockError) {
+      // 실서버 경로와 같은 처리를 태운다. 안 그러면 Mock 모드(기본값)에서는
+      // 세션이 끊겨도 화면이 로그인으로 안 가고 오류 카드만 뜬다.
+      if (value.status === 401) { csrf = null; onUnauthorized?.() }
       throw new ApiFailure(value.status, value.code, value.message, value.field)
     }
     return value as T

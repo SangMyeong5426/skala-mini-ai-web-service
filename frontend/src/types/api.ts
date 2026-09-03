@@ -375,3 +375,5 @@ export interface SessionResponse {
 /** 06 의 입력 규칙. 서버가 최종 판정하지만 화면에서 먼저 걸러 왕복을 줄인다. */
 export const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
 export const PASSWORD_MIN = 8
+/** BCrypt 가 잘리는 지점. 06:190 */
+export const PASSWORD_MAX_BYTES = 72

@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from 'react'
 import { Link } from 'react-router-dom'
 import { SiteHeader } from './Shell'
 
@@ -57,12 +58,17 @@ export function Field({
         * 오류를 회색 안내문으로 바꿔치기하지 않는다. 그러면 평소 문구와 똑같이
         * 생겨서 무엇이 잘못됐는지 눈에도 스크린리더에도 남지 않는다.
         */}
-      <div
-        className={error ? 'field-in is-bad' : 'field-in'}
-        aria-invalid={error ? true : undefined}
-      >
-        {children}
-      </div>
+      {/*
+        * aria-invalid·aria-describedby 를 <b>입력 자체에</b> 실어야 한다.
+        * 래퍼 div 에 붙이면(그것도 display:contents 라) 보조기술이 못 읽는다.
+        */}
+      {isValidElement(children)
+        ? cloneElement(children as React.ReactElement<Record<string, unknown>>, {
+            'aria-invalid': error ? true : undefined,
+            'aria-describedby': msgId,
+            className: error ? 'is-bad' : undefined,
+          })
+        : children}
       {error
         ? <p id={msgId} className="field-error" role="alert">{error}</p>
         : hint && <p id={msgId} className="field-hint">{hint}</p>}

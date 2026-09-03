@@ -128,6 +128,9 @@ export default function Login() {
           <div className="pw">
             <input
               id="password" name="password"
+              aria-invalid={errFor('password') ? true : undefined}
+              aria-describedby="password-msg"
+              className={errFor('password') ? 'is-bad' : undefined}
               type={showPw ? 'text' : 'password'}
               autoComplete={isLogin ? 'current-password' : 'new-password'}
               value={password} onChange={(e) => setPassword(e.target.value)}

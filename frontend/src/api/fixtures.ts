@@ -167,14 +167,16 @@ export const INSPECTION: Inspection = {
   readiness: {
     prepared: [{ itemId: 5, name: '충전기', qty: 1 }],
     needsCheck: [
-      { itemId: 8, name: '화장품', qty: 1,
+      { itemId: 8, name: '화장품 용기', qty: 1,
         candidates: [
           { detectionId: 6, name: '화장품 용기', matchConfidence: 0.71 },
           { detectionId: 8, name: '검정 파우치', matchConfidence: 0.31 },
         ] },
     ],
-    notInPhoto: [{ itemId: 1, name: '여권', priority: 'REQUIRED' }],
-    extra: [{ detectionId: 7, name: '가위', confidence: 0.91,
+    // 여권은 아직 채택 전이라 내 목록에 없다. 06 의 notInPhoto 는 내 목록
+    // 항목이므로 여기에 두지 않는다 — 미채택 필수는 unacceptedRequiredCount 다.
+    notInPhoto: [{ itemId: 7, name: '변환 플러그', priority: 'REQUIRED' }],
+    extra: [{ detectionId: 8, name: '검정 파우치', confidence: 0.43,
               verdict: 'NEED_MORE_INFO', missingInfo: '날 길이(cm)' }],
     completionRate: 0.5,
   },
@@ -197,7 +199,7 @@ export const INSPECTION: Inspection = {
       reason: '보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.',
       sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do',
       checkedAt: '2026-09-02' },
-    { itemId: 8, name: '화장품', verdict: 'NEED_MORE_INFO',
+    { itemId: 8, name: '화장품 용기', verdict: 'NEED_MORE_INFO',
       missingInfo: '용량(ml)',
       reason: '액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.',
       sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do',
@@ -376,11 +378,11 @@ export const AI_OUTPUT: {
       },
       {
         name: "화장품 용기",
-        reason: "PENDING_APPROVAL"
+        reason: "NO_WEIGHT_INFO"
       },
       {
         name: "검정 파우치",
-        reason: "PENDING_APPROVAL"
+        reason: "NO_WEIGHT_INFO"
       }
     ],
     contributions: [

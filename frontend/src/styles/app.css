@@ -1025,8 +1025,6 @@ select:focus-visible, textarea:focus-visible {
 }
 
 /* 입력 칸 — 오류일 때 테두리와 메시지를 함께 바꾼다 */
-.field-in { display: contents; }
-.field-in.is-bad input { border-color: var(--danger); }
 .field-error { font-size: 12.5px; font-weight: 600; color: var(--danger); }
 
 /* 비밀번호 표시/숨기기 — 03-wireframe S-00 요구 */
@@ -1046,3 +1044,6 @@ select:focus-visible, textarea:focus-visible {
   color: var(--accent); font: inherit; font-weight: 700; cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px;
 }
+
+/* 오류 입력 — aria-invalid 와 짝이다 */
+.field input.is-bad, .pw input.is-bad { border-color: var(--danger); }

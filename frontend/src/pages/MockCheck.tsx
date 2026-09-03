@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { api, ApiFailure } from '../api/client'
+import { SCREENS } from '../routes'
 import { USE_MOCK } from '../api/mock'
 import { useAiJob } from '../hooks/useAiJob'
 import { AiPending, Failed, Skeleton } from '../components/States'
@@ -49,11 +50,21 @@ export function MockCheck() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // routes.tsx 의 SCREENS 가 03-wireframe 과 코드를 잇는 표다.
+  // 여기서 실제로 세어야 죽은 표가 되지 않는다.
+  const left = SCREENS.filter((x) => x.todo)
+
   return (
     <section className="page">
       <h1 className="page-title">Mock 계약 확인</h1>
       <p className="page-note">
         VITE_USE_MOCK = <strong>{String(USE_MOCK)}</strong>
+      </p>
+
+      {/* 03-wireframe 의 화면 13개 중 무엇이 남았는지. SCREENS 가 정본이다 */}
+      <p className="page-note">
+        화면 <strong>{SCREENS.length - left.length} / {SCREENS.length}</strong> 구현
+        {left.length > 0 && <> — 남은 것: {left.map((x) => x.id).join(' · ')}</>}
       </p>
 
       {err && <Failed title="조회 실패" detail={err} />}
@@ -64,7 +75,7 @@ export function MockCheck() {
       ) : (
         <ul>
           <li>여행 {trips.length}건 — {trips.map((t) => t.destination).join(' · ')}</li>
-          <li>인식 물품 {detections?.length}건 — 승인 {detections?.filter((d) => d.approved).length}건</li>
+          <li>인식 물품 {detections?.length}건 — 전부 자동 등록됨(승인 게이트 폐기)</li>
           <li>
             검수 — 준비완료 {inspection?.readiness?.prepared.length} · 확인필요{' '}
             {inspection?.readiness?.needsCheck.length} · 미확인{' '}

@@ -43,8 +43,8 @@ AI API 키 같은 것은 백엔드에만 둔다.
 ```
 src/
   main.tsx            BrowserRouter 마운트
-  App.tsx             공통 셸(헤더 + 라우트)
-  routes.tsx          화면 목록(SCREENS) — 03-wireframe 의 S-ID 와 경로를 잇는 정본
+  App.tsx             라우트 정의 (화면마다 Private 여부가 달라 배열로 접지 않는다)
+  routes.tsx          SCREENS — 03-wireframe 의 S-ID 와 경로를 잇는 대조표. 상단 내비(NAV)와 3단계(STEPS)
   types/api.ts        06·07 규격을 TypeScript 로
   api/client.ts       fetch 래퍼 하나
   hooks/useAiJob.ts   AI 작업 폴링
@@ -59,7 +59,8 @@ src/
 ## 화면 하나 만드는 법
 
 1. `src/pages/` 에 컴포넌트를 만든다. 예: `pages/Home.tsx`
-2. `src/App.tsx` 의 해당 `<Route>` 에서 화면만 바꿔 끼운다 (`SCREENS` 의 `todo` 도 지운다)
+2. `src/App.tsx` 의 해당 `<Route>` 에서 `Todo` 를 실제 화면으로 바꾸고,
+   `src/routes.tsx` 의 `SCREENS` 에서 그 화면의 `todo: true` 를 지운다
 3. 데이터는 `api/client.ts` 의 `api.get/post/patch/del` 로 가져온다
 4. **로딩·빈 상태·오류를 반드시 그린다.** `components/States.tsx` 를 쓴다
 
@@ -78,7 +79,7 @@ await job.start('PACKING_LIST', input, tripId)
 // job.polls 로 진행 표시를 그린다
 ```
 
-`routes.tsx` 의 `tier` 가 우선순위다. `1` 이 데모 주 경로(`S-01`~`S-06`)고,
+`routes.tsx` 의 `SCREENS[].tier` 가 우선순위다. `1` 이 데모 주 경로(`S-00`~`S-06`)고,
 시간이 모자라면 `3` 부터 버린다.
 
 ## 사진 URL 은 `/api` 밑이 아니다

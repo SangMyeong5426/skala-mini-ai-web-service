@@ -45,7 +45,8 @@ export function SiteHeader() {
     setSignOutError(false)
     try {
       await logout()
-      nav('/', { replace: true })
+      // 03:214 — 로그아웃 후 S-00 으로 간다. 랜딩이 아니다.
+      nav('/login', { replace: true })
     } catch {
       setSignOutError(true)
     } finally {
