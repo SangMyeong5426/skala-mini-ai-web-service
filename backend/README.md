@@ -9,8 +9,8 @@
 > 갱신하지 않으면 앱이 아예 뜨지 않는다.
 >
 > ```bash
-> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-itineraries-and-placements.sql
-> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-users-login-id.sql
+> # 순서를 가리지 않는다
+> for f in database/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
 > ```
 >
 > 데모 계정은 `jiwoo28` / `skala1234` 다 (`database/seed.sql`).
