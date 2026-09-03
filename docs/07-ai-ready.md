@@ -1778,10 +1778,16 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 
 **규칙 엔진 판정 규칙**
 
-1. transport 와 모델이 낸 ruleKeyword 로 transport_rules 를 찾는다. ruleKeyword 가 null 이거나 규정이 없으면 ASK_AIRLINE, ruleId·conditionNote·sourceUrl·checkedAt 은 null
+1. transport 와 모델이 낸 ruleKeyword 로 transport_rules 를 찾는다. ruleKeyword 가 null 이거나 규정이 없으면 ASK_AIRLINE, ruleId·conditionNote·sourceUrl·checkedAt 은 null. **속성을 다 알지만 어느 조건에도 걸리지 않을 때도 같은 모양이다** — 적용하지 않기로 한 규정의 출처를 붙이면 화면에서 그 링크가 "항공사에 확인하세요" 를 뒷받침하는 것처럼 보인다. 키워드는 정확히 같은 값을 먼저 찾고, 없을 때만 부분 일치로 떨어진다
 2. 같은 키워드에 행이 여럿이면 확인된 attributes로 조건을 판별한다. batteryMah만 있고 batteryWh가 없으면 Wh 조건을 판정하지 않고 NEED_MORE_INFO로 둔다
 3. 판별에 필요한 attributes 가 null 이면 NEED_MORE_INFO + missingInfo. ruleId 는 같은 키워드 규정 중 첫 행(id 가 가장 작은 것) — 사용자가 확인할 첫 기준. 어느 조건이든 결론이 같은 경우만 그 verdict 로 확정한다 — 보조배터리는 160Wh 초과가 전면 금지라 Wh 미상이면 CABIN_OK 로 확정할 수 없다
-4. 규정이 충돌하면 더 엄격한 쪽: CHECKED_FORBIDDEN > RESTRICTED > CHECKED_OK > ASK_AIRLINE > CABIN_OK. reason 에 항공사 확인을 권한다
+4. 규정이 충돌하면 더 엄격한 쪽: CHECKED_FORBIDDEN > NEED_MORE_INFO > ASK_AIRLINE > RESTRICTED > CHECKED_OK > CABIN_OK. reason 에 항공사 확인을 권한다
+
+> **2026-09-03 정정.** 처음에는 `ASK_AIRLINE` 을 `CHECKED_OK` 보다 **덜** 엄격하게 적었다.
+> 그러면 두 규정이 겹칠 때 *"항공사 승인 필요"* 가 *"위탁 가능"* 에 밀려, 사용자에게 승인
+> 절차가 안 보이고 *"부치면 된다"* 만 남는다. `transport_rules` 에 `ASK_AIRLINE` 행이 실제로
+> 있으므로(`100Wh 초과 160Wh 이하`) 규정이 늘면 드러날 문제였다.
+> `InspectionService.STRICTNESS` 와 같은 순서로 맞췄다.
 
 **`condition_note` 를 읽는 규약 — 구현하며 정했다. 확인이 필요하다.**
 
@@ -2091,6 +2097,12 @@ Open-Meteo 가 **오류가 아니라 빈 결과**를 돌려줘 날씨 없이 추
 | 판정을 모델이 못 건드린다 | 모델이 `verdict: CABIN_OK` · `ruleId: 999` · 지어낸 `sourceUrl` 을 내도 규칙 엔진이 전부 덮어쓴다 (`RuleEngineTest`) |
 | 경계값 | 100Wh `CABIN_OK` · 120Wh `ASK_AIRLINE` · 170Wh `CHECKED_FORBIDDEN` · 100ml `CABIN_OK` · 120ml `CHECKED_OK` |
 | 모르면 확정하지 않는다 | 결론이 갈리는 규정에서 속성이 비면 `NEED_MORE_INFO`. 조건 문장을 못 읽어도 마찬가지다 |
+| 조건 문장 일부만 읽힘 | `"100Wh 이하, 1인 2개까지"` 는 확정하지 않는다. `"용기당 100ml 이하, 총 1L 이하"` 는 확정한다 |
+| 엄격도 | 조건이 겹칠 때 `ASK_AIRLINE` 이 `CHECKED_OK` 를 이긴다 — 승인 절차가 "부치면 됨" 에 가려지지 않는다 |
+| 조건 미해당 | 속성을 다 알아도 어느 조건에도 안 걸리면 `ASK_AIRLINE` + 출처 `null`. 적용하지 않은 규정의 링크를 붙이지 않는다 |
+| 키워드 대응 | 모델이 물품 순서를 바꾸거나 빠뜨려도 **각 물품에 자기 규정이** 붙는다. 짝을 못 찾으면 키워드를 버려 `ASK_AIRLINE` 이 된다 (`OpenAiRuleCheckTest`) |
+| 속성 출처 | 질문에 없는 `batteryWh` 를 모델이 내면 버린다. 입력에 확인된 값과 `"100Wh예요"` 처럼 질문에 적힌 값만 판정에 쓴다 |
+| 판정 후 답변 정렬 | 엔진이 판정을 바꾸면 `followUpQuestion` 도 그 판정에 맞춘다. 규정을 못 찾은 결과의 `reason` 은 07 문장으로 채운다 (`RuleCheckMockPathTest`) |
 | 기동 | `./gradlew build` 통과. 기존 테스트도 그대로 통과한다 |
 
 아직 확인하지 못한 것 — **앱을 띄운 상태의 전 구간(사진 업로드 → 폴링 → 내 목록 등록)**.
@@ -2169,6 +2181,16 @@ Open-Meteo 가 **오류가 아니라 빈 결과**를 돌려줘 날씨 없이 추
   같은 값을 두 곳이 다르게 정렬하므로 **어느 쪽이 맞는지 정해야 한다 — TBD.**
 - **Mock의 고정 판정은 이제 쓰이지 않는다.** `RULE_CHECK_*.json`의 `verdict`·`ruleId`·`sourceUrl`
   은 규칙 엔진이 덮어쓴다. 픽스처가 남아 있는 것은 **물품·속성 구조화 결과**를 흉내 내기 위해서다.
+  칸 자체는 지우지 않는다 — 계약이 결과의 열세 칸을 전부 요구한다.
+- **Mock 경로는 규정표를 고쳐도 답변 문장이 따라오지 않는다.** 실제 모델 경로는 2차 설명이
+  규칙 엔진 결과를 보고 문장을 쓰지만, Mock 에는 그 단계가 없다. `transport_rules` 의
+  `100Wh 이하` 를 `120Wh 이하` 로 고치면 **`verdict` 는 바뀌고 `answer`·`reason` 은 안 바뀐다.**
+  발표 데모가 `AI_PROVIDER=mock` 이라 이 경로가 기본이다 — **규정을 고칠 때 픽스처 문장도 함께 본다.**
+  다만 규정을 못 찾은 결과의 `reason` 은 서버가 07 의 문장으로 맞춘다.
+- **`condition_note` 의 일부만 읽히는 경우를 막았다.** 문장의 `숫자+단위` 조각 수와 실제로 읽은
+  절 수가 다르면 확정하지 않는다. `"100Wh 이하, 1인 2개까지"` 처럼 지원하지 않는 단위가 섞이면
+  `NEED_MORE_INFO` 다. 가방 전체 조건(`총 1L 이하`)만 세지 않는다 — 물품 하나로 판정할 수 없어
+  **일부러** 읽지 않는 것이라 구분해 뒀다.
 - **챗봇 사진 첨부**의 별도 저장·연결 흐름은 TBD다. 여행 사진의 BAG_CHECK 완료 시 자동 등록 정책과 구분하며, 사진 사전 승인 단계를 다시 추가하지 않는다. 대화 영구 저장은 범위 밖이다.
 - **confidenceLevel 경계값 0.80 / 0.50은 초기값이다.** 실제 모델 인식 정확도·사후 수정률을 보고 조정한다.
 - **실제 모델을 한 번 돌려 본 것이지 정확도를 잰 것이 아니다.** 사진 2장·입력 1건이다.

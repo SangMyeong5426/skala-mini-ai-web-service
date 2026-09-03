@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -357,73 +358,166 @@ public class OpenAiClient implements AiClient {
         return output;
     }
 
-    /** 입력 물품이 있으면 그 개수·순서·식별값을 서버가 확정한다. 없으면 모델이 낸 물품을 쓴다. */
+    /**
+     * 입력 물품이 있으면 그 개수·순서·식별값을 서버가 확정한다. 없으면 모델이 낸 물품을 쓴다.
+     *
+     * <p><b>모델 응답을 위치로 짝짓지 않는다.</b> 예전에는 {@code structured[i]} 의 키워드·속성을
+     * {@code items[i]} 에 그대로 붙이고 식별값만 입력 값으로 덮어썼다. 모델이 순서를 바꾸거나
+     * 중간 물품을 빠뜨리면 <b>다른 물품의 규정이 적용되는데도</b> 식별값이 맞으니 계약 검증이
+     * 통과했다. 리뷰에서 재현된 결함이다 — 200Wh 배터리에 가위 규정이 붙어 위탁 가능이 됐다.
+     *
+     * <p>지금은 모델이 <b>되돌려 준 식별값</b>으로 찾는다. {@code itemId} → {@code detectionId} →
+     * 이름 순이고, 어느 것으로도 못 찾으면 <b>그 물품의 키워드를 버린다.</b> 키워드가 없으면
+     * 규칙 엔진이 {@code ASK_AIRLINE} 을 낸다 — 틀린 규정을 붙이는 것보다 항공사에 물으라고
+     * 하는 편이 낫다.
+     */
     private void buildResults(ArrayNode results, JsonNode input, JsonNode structured) {
         JsonNode items = input.path("items");
         boolean fromItems = items.isArray() && !items.isEmpty();
-        int size = fromItems ? items.size() : Math.min(structured.size(), MAX_RULE_RESULTS);
 
-        for (int i = 0; i < size; i++) {
-            JsonNode model = i < structured.size() ? structured.get(i) : json.newObject();
-            ObjectNode result = results.addObject();
-
-            if (fromItems) {
-                JsonNode item = items.get(i);
-                result.set("itemId", item.get("itemId"));
-                result.set("detectionId", item.get("detectionId"));
-                result.set("name", item.get("name"));
-                result.set("qty", item.get("qty"));
-            } else {
+        if (!fromItems) {
+            int size = Math.min(structured.size(), MAX_RULE_RESULTS);
+            for (int i = 0; i < size; i++) {
+                JsonNode model = structured.get(i);
+                String name = text(model.path("name"), MAX_NAME_LENGTH);
+                if (name == null) continue;
+                ObjectNode result = results.addObject();
                 result.putNull("itemId");
                 result.putNull("detectionId");
-                String name = text(model.path("name"), MAX_NAME_LENGTH);
-                if (name == null) { results.remove(results.size() - 1); continue; }
                 result.put("name", name);
                 result.put("qty", Math.clamp(model.path("qty").asInt(1), 1, 99));
+                fillFromModel(result, model, null, input);
             }
+            return;
+        }
 
-            String keyword = text(model.path("ruleKeyword"), MAX_NAME_LENGTH);
-            if (keyword == null) result.putNull("ruleKeyword");
-            else result.put("ruleKeyword", keyword);
-            result.set("attributes", attributesOf(model.path("attributes"),
-                    fromItems ? items.get(i).path("attributes") : null));
-
-            // 규칙 엔진이 곧 덮어쓴다. 계약이 요구하는 칸을 먼저 만들어 둔다.
-            result.putNull("verdict");
-            result.putNull("ruleId");
-            result.putNull("conditionNote");
-            result.putNull("reason");
-            result.putNull("missingInfo");
-            result.putNull("sourceUrl");
-            result.putNull("checkedAt");
+        for (JsonNode item : items) {
+            if (results.size() >= MAX_RULE_RESULTS) break;
+            ObjectNode result = results.addObject();
+            result.set("itemId", item.get("itemId"));
+            result.set("detectionId", item.get("detectionId"));
+            result.set("name", item.get("name"));
+            result.set("qty", item.get("qty"));
+            fillFromModel(result, matchModelResult(item, structured), item.path("attributes"), input);
         }
     }
 
     /**
-     * 07: 명시된 값만 쓰고 추정·환산하지 않는다.
+     * 이 입력 물품에 대응하는 모델 응답을 찾는다. 못 찾으면 빈 객체다.
      *
-     * <p>입력에 이미 확인된 속성이 있으면 <b>그쪽이 이긴다.</b> 사용자가 라벨을 보고 답한 값이라
-     * 모델이 질문 문장에서 다시 뽑은 값보다 믿을 만하다.
+     * <p>{@code itemId} · {@code detectionId} 는 07 이 "그대로 되돌려 보낸다" 고 정한 값이라
+     * 대응의 근거가 된다. 질문에서 뽑은 물품은 둘 다 {@code null} 이라 이름으로 찾는다.
      */
-    private ObjectNode attributesOf(JsonNode model, JsonNode confirmed) {
+    private JsonNode matchModelResult(JsonNode item, JsonNode structured) {
+        JsonNode byId = findModelResult(structured, "itemId", item.path("itemId"));
+        if (byId != null) return byId;
+        JsonNode byDetection = findModelResult(structured, "detectionId", item.path("detectionId"));
+        if (byDetection != null) return byDetection;
+
+        String name = RecommendationStore.normalize(item.path("name").asText(""));
+        for (JsonNode model : structured) {
+            if (name.equals(RecommendationStore.normalize(model.path("name").asText("")))) return model;
+        }
+
+        log.warn("모델 응답에서 '{}' 를 찾지 못했습니다. 규정 키워드 없이 판정합니다.", name);
+        return json.newObject();
+    }
+
+    private static JsonNode findModelResult(JsonNode structured, String field, JsonNode value) {
+        if (value == null || !value.isIntegralNumber()) return null;
+        for (JsonNode model : structured) {
+            JsonNode candidate = model.path(field);
+            if (candidate.isIntegralNumber() && candidate.asLong() == value.asLong()) return model;
+        }
+        return null;
+    }
+
+    /** 모델에게서 받는 것은 {@code ruleKeyword} 와 {@code attributes} 뿐이다. */
+    private void fillFromModel(ObjectNode result, JsonNode model, JsonNode confirmed, JsonNode input) {
+        String keyword = text(model.path("ruleKeyword"), MAX_NAME_LENGTH);
+        if (keyword == null) result.putNull("ruleKeyword");
+        else result.put("ruleKeyword", keyword);
+        result.set("attributes", attributesOf(model.path("attributes"), confirmed, input));
+
+        // 규칙 엔진이 곧 덮어쓴다. 계약이 요구하는 칸을 먼저 만들어 둔다.
+        result.putNull("verdict");
+        result.putNull("ruleId");
+        result.putNull("conditionNote");
+        result.putNull("reason");
+        result.putNull("missingInfo");
+        result.putNull("sourceUrl");
+        result.putNull("checkedAt");
+    }
+
+    /** 07 {@code attributes} 의 단위. 질문에 이 단위로 적힌 수만 사용자가 말한 값으로 인정한다. */
+    private static final Map<String, String> ATTRIBUTE_UNITS = Map.of(
+            "capacityMl", "ml",
+            "batteryWh", "wh",
+            "batteryMah", "mah",
+            "bladeCm", "cm");
+
+    /**
+     * 07: 명시된 값만 쓰고 추정·환산하지 않는다. <b>이 규칙을 프롬프트에만 맡기지 않는다.</b>
+     *
+     * <p>모델이 {@code 20000mAh} 를 보고 {@code batteryWh: 74} 로 환산해 내면, 그 숫자가
+     * <b>공식 규정 판정의 근거</b>가 된다. 리뷰에서 재현된 결함이다 — Wh 를 물어야 할 질문이
+     * {@code CABIN_OK} 로 확정돼 나갔다. 07 「누가 채우나」는 미입력 Wh 를 {@code null} 로
+     * 유지하는 책임을 <b>서버</b>에 뒀다.
+     *
+     * <p>그래서 값의 출처를 둘로만 인정한다.
+     *
+     * <ol>
+     *   <li><b>입력 {@code items[].attributes}</b> — 사용자가 이미 확인해 보낸 값이다. 가장 세다.
+     *   <li><b>질문에 그 단위로 적힌 수</b> — {@code "100Wh예요"} 의 {@code 100} 이 그렇다.
+     * </ol>
+     *
+     * <p>둘 다 아니면 {@code null} 로 둔다. 그러면 규칙 엔진이 {@code NEED_MORE_INFO} 와
+     * 되물을 것을 만든다 — 07 이 원래 그리려던 흐름이다.
+     */
+    private ObjectNode attributesOf(JsonNode model, JsonNode confirmed, JsonNode input) {
+        String question = input.path("question").isTextual() ? input.path("question").asText() : "";
         ObjectNode attributes = json.newObject();
+
         for (String field : List.of("capacityMl", "batteryWh", "batteryMah", "bladeCm")) {
             JsonNode fromInput = confirmed == null ? null : confirmed.path(field);
-            JsonNode value = fromInput != null && fromInput.isNumber() ? fromInput : model.path(field);
-            if (!value.isNumber()) {
-                attributes.putNull(field);
+            if (fromInput != null && fromInput.isNumber()) {
+                putNumber(attributes, field, fromInput.asDouble());
+                continue;
+            }
+
+            JsonNode fromModel = model.path(field);
+            if (fromModel.isNumber() && statedInQuestion(question, fromModel.asDouble(), field)) {
+                putNumber(attributes, field, fromModel.asDouble());
             } else {
-                // 20000.0 이 아니라 20000 으로 남긴다. 07 예시와 Mock 픽스처가 정수이고,
-                // 후속 턴이 이 값을 그대로 items[] 로 되보내므로 모양이 오가며 달라지지 않게 한다.
-                double number = value.asDouble();
-                if (number == Math.rint(number) && Math.abs(number) < Long.MAX_VALUE) {
-                    attributes.put(field, (long) number);
-                } else {
-                    attributes.put(field, number);
+                if (fromModel.isNumber()) {
+                    log.warn("모델이 낸 {}={} 는 질문에 없는 값이라 버립니다.", field, fromModel.asDouble());
                 }
+                attributes.putNull(field);
             }
         }
         return attributes;
+    }
+
+    /**
+     * 질문에 {@code <숫자><단위>} 로 적혀 있는가. 공백과 대소문자는 무시한다.
+     *
+     * <p>단위까지 붙여 찾으므로 {@code "20000mAh"} 가 {@code 20000Wh} 로 읽히지 않는다.
+     */
+    private static boolean statedInQuestion(String question, double value, String field) {
+        String unit = ATTRIBUTE_UNITS.get(field);
+        String normalized = question.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        String number = value == Math.rint(value)
+                ? String.valueOf((long) value)
+                : String.valueOf(value);
+
+        return normalized.contains(number + unit);
+    }
+
+    private static void putNumber(ObjectNode node, String field, double value) {
+        // 20000.0 이 아니라 20000 으로 남긴다. 07 예시와 Mock 픽스처가 정수이고,
+        // 후속 턴이 이 값을 그대로 items[] 로 되보내므로 모양이 오가며 달라지지 않게 한다.
+        if (value == Math.rint(value) && Math.abs(value) < Long.MAX_VALUE) node.put(field, (long) value);
+        else node.put(field, value);
     }
 
     /** 2차 결과를 붙인다. {@code answer}·{@code followUpQuestion} 규칙은 07 계약 그대로 서버가 건다. */

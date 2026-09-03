@@ -31,24 +31,29 @@ import com.skala.miniai.common.Codes;
 public class RuleEngine {
 
     /**
-     * 07 규칙 4의 엄격도 — {@code CHECKED_FORBIDDEN > RESTRICTED > CHECKED_OK > ASK_AIRLINE > CABIN_OK}.
+     * 엄격도 — {@code CHECKED_FORBIDDEN > NEED_MORE_INFO > ASK_AIRLINE > RESTRICTED > CHECKED_OK > CABIN_OK}.
      * 숫자가 작을수록 엄격하다.
      *
-     * <p>{@code NEED_MORE_INFO} 는 07 목록에 없다. "아직 못 정했다" 는 뜻이라 <b>전면 금지 바로
-     * 다음</b>에 뒀다 — 모르는 채로 반입 가능 쪽으로 기울면 안 된다.
+     * <p>07 이 처음 적은 순서는 {@code ASK_AIRLINE} 을 {@code CHECKED_OK} 보다 <b>덜</b> 엄격하게
+     * 봤다. 그러면 두 규정이 겹칠 때 <b>"항공사 승인 필요" 가 "위탁 가능" 에 밀린다</b> —
+     * 사용자에게 승인 절차가 안 보이고 "부치면 된다" 만 남는다. 판정을 실제보다 확정적으로
+     * 보이게 하는 것이라 이 클래스가 막으려던 것과 같은 종류의 문제다.
      *
-     * <p><b>{@code InspectionService.STRICTNESS} 와 순서가 다르다.</b> 그쪽은
-     * {@code ASK_AIRLINE} 을 {@code RESTRICTED}·{@code CHECKED_OK} 보다 엄격하게 본다.
-     * 07 이 정한 순서가 이쪽이라 여기서는 07 을 따랐고, 어느 쪽이 맞는지는 작성자 확인이 필요하다.
+     * <p>리뷰 결정에 따라 <b>07 의 표를 고치고</b> {@code InspectionService.STRICTNESS} 와 같은
+     * 순서를 쓴다. 두 곳이 하는 일은 다르지만(여기는 겹치는 규정 중 하나를 고르고, 그쪽은
+     * 물품별 판정을 화면 요약으로 접는다) 이 순서가 두 용도 모두에 안전하다.
+     *
+     * <p>{@code NEED_MORE_INFO} 는 "아직 못 정했다" 는 뜻이라 전면 금지 바로 다음이다 —
+     * 모르는 채로 반입 가능 쪽으로 기울면 안 된다.
      */
     private static final Map<Codes.RuleVerdict, Integer> STRICTNESS = new EnumMap<>(Codes.RuleVerdict.class);
 
     static {
         STRICTNESS.put(Codes.RuleVerdict.CHECKED_FORBIDDEN, 0);
         STRICTNESS.put(Codes.RuleVerdict.NEED_MORE_INFO, 1);
-        STRICTNESS.put(Codes.RuleVerdict.RESTRICTED, 2);
-        STRICTNESS.put(Codes.RuleVerdict.CHECKED_OK, 3);
-        STRICTNESS.put(Codes.RuleVerdict.ASK_AIRLINE, 4);
+        STRICTNESS.put(Codes.RuleVerdict.ASK_AIRLINE, 2);
+        STRICTNESS.put(Codes.RuleVerdict.RESTRICTED, 3);
+        STRICTNESS.put(Codes.RuleVerdict.CHECKED_OK, 4);
         STRICTNESS.put(Codes.RuleVerdict.CABIN_OK, 5);
     }
 
@@ -109,8 +114,7 @@ public class RuleEngine {
             return null;
         }
 
-        List<TransportRule> candidates = rules
-                .findByTransportAndKeywordContainingIgnoreCaseOrderById(transport, keyword.asText());
+        List<TransportRule> candidates = candidatesFor(transport, keyword.asText());
         if (candidates.isEmpty()) {
             askAirline(result, null);
             return null;
@@ -139,9 +143,12 @@ public class RuleEngine {
                 return strictest.getDescription();
             }
             // 속성은 다 알지만 어느 조건에도 걸리지 않는다 — 규정표에 빈 구간이 있다는 뜻이다.
-            // 지어내지 않고 항공사 확인으로 넘기되, 사용자가 볼 수 있게 출처는 붙인다.
-            askAirline(result, first);
-            return first.getDescription();
+            //
+            // **출처를 붙이지 않는다.** 붙이면 화면에 "항공사에 확인하세요" 옆으로 공식 링크와
+            // 확인 날짜가 뜨는데, 그 링크는 그렇게 말하지 않는다 — 조건이 안 맞아서 적용하지
+            // 않기로 한 규정이다. 규정을 못 찾은 경우와 같은 모양으로 내보낸다.
+            askAirline(result, null);
+            return null;
         }
 
         // 07 규칙 3 — 어느 조건이든 결론이 같은 경우만 그 verdict 로 확정한다.
@@ -161,6 +168,23 @@ public class RuleEngine {
                 : String.join(" · ", missing.stream().map(RuleCondition.Attribute::label).toList());
         apply(result, first, missingInfo, Codes.RuleVerdict.NEED_MORE_INFO);
         return first.getDescription();
+    }
+
+    /**
+     * 이 키워드에 걸리는 규정들. <b>정확히 같은 키워드를 먼저</b> 보고, 없을 때만 부분 일치로 떨어진다.
+     *
+     * <p>저장소 메서드가 부분 일치다 — {@code "보조배터리 2개"} 같은 이름도 걸리라고 그렇게 뒀다.
+     * 그런데 {@link #keywordsOf} 가 모델에게 정확한 목록을 주므로, 돌아온 값은 보통 목록 안의
+     * 값이다. 규정이 늘어 {@code 배터리} 류가 둘 이상이 되면 부분 일치가 서로를 끌어온다.
+     * 정확 일치를 먼저 보면 그때도 의도한 규정만 남는다.
+     */
+    private List<TransportRule> candidatesFor(Codes.Transport transport, String keyword) {
+        List<TransportRule> partial = rules
+                .findByTransportAndKeywordContainingIgnoreCaseOrderById(transport, keyword);
+        List<TransportRule> exact = partial.stream()
+                .filter(rule -> rule.getKeyword().equalsIgnoreCase(keyword))
+                .toList();
+        return exact.isEmpty() ? partial : exact;
     }
 
     /** 후보 규정들이 보는 속성 중 아직 값이 없는 것. 07 규칙 2의 "mAh 만 있는 경우" 가 여기 걸린다. */
