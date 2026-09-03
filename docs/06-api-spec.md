@@ -452,9 +452,15 @@ Location: /api/trips/12
 ```json
 {
   "trips": [
-    { "tripId": 12, "origin": "서울", "destination": "도쿄",
+    { "tripId": 1, "origin": "서울", "destination": "도쿄",
       "startDate": "2026-10-01", "endDate": "2026-10-04",
-      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 }
+      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 },
+    { "tripId": 2, "origin": "서울", "destination": "오사카",
+      "startDate": "2026-05-02", "endDate": "2026-05-04",
+      "transport": "FLIGHT", "status": "DONE", "completionRate": 1.0 },
+    { "tripId": 3, "origin": "서울", "destination": "부산",
+      "startDate": "2026-03-14", "endDate": "2026-03-15",
+      "transport": "TRAIN", "status": "DONE", "completionRate": 1.0 }
   ]
 }
 ```
