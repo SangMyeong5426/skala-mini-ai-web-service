@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { Failed, Skeleton } from '../components/States'
+import { AiPending, Failed, Skeleton } from '../components/States'
+import { useAiJob } from '../hooks/useAiJob'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { pct } from '../lib/format'
-import type { Inspection, RuleVerdict, WeightVerdict } from '../types/api'
+import type { Inspection, PhotoStatus, RuleVerdict, WeightVerdict } from '../types/api'
 
 /**
  * S-06 검수 결과 ★AI — 준비 상태 · 예상 무게 · 반입 판정을 한 화면에서 본다.
@@ -41,14 +42,52 @@ export default function InspectionPage() {
   const nav = useNavigate()
   const [data, setData] = useState<Inspection | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const weightJob = useAiJob()
+  const ruleJob = useAiJob()
+  const kicked = useRef(false)
 
-  const load = () => {
-    setError(null)
+  const load = () =>
     api.get<Inspection>(`/trips/${tripId}/inspection`)
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : '알 수 없는 오류'))
-  }
-  useEffect(load, [tripId])
+      .then((r) => { setData(r); setError(null); return r })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : '알 수 없는 오류')
+        return null
+      })
+
+  /*
+   * 06:1029 · 03 S-06 — 무게·판정이 없으면 <b>여기서 작업을 시작하고 폴링</b>한다.
+   * 조회만 하고 "아직 계산하지 않았습니다" 로 두면 사용자가 할 수 있는 일이 없다.
+   *
+   * 둘을 따로 돌린다. 03 이 "세 영역이 각각 따로 로딩된다" 로 정했고,
+   * 무게가 실패해도 반입 판정은 보여야 한다.
+   */
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const r = await load()
+      if (!alive || !r || kicked.current) return
+      kicked.current = true
+
+      const items = [
+        ...(r.readiness?.prepared ?? []),
+        ...(r.readiness?.unprepared ?? []),
+      ].map((i) => ({ name: i.name, qty: i.qty }))
+
+      if (!r.weight && items.length > 0) {
+        void weightJob.start('WEIGHT_ESTIMATE', { items }, Number(tripId)).then((done) => {
+          if (done && alive) void load()
+        })
+      }
+      if (!r.customs && items.length > 0) {
+        void ruleJob.start('RULE_CHECK', {
+          transport: 'FLIGHT', airline: null, question: null, items,
+        }, Number(tripId)).then((done) => {
+          if (done && alive) void load()
+        })
+      }
+    })()
+    return () => { alive = false }
+  }, [tripId])
 
   const r = data?.readiness
   const w = data?.weight
@@ -68,7 +107,7 @@ export default function InspectionPage() {
       <Steps current={3} tripId={tripId} />
 
       <div className="content">
-        {error && <Failed title="검수 결과를 불러오지 못했습니다" detail={error} onRetry={load} />}
+        {error && <Failed title="검수 결과를 불러오지 못했습니다" detail={error} onRetry={() => { void load() }} />}
 
         {/* ── ① 준비 상태 ── */}
         <div className="card">
@@ -85,58 +124,56 @@ export default function InspectionPage() {
                 <span style={{ width: `${Math.round(r.completionRate * 100)}%` }} />
               </div>
 
+              {r.unacceptedRequiredCount !== 0 && (
+                <div className="notice-warn">
+                  <span>
+                    {r.unacceptedRequiredCount === null
+                      ? '필수 추천 확인 전입니다'
+                      : <>아직 채택하지 않은 <b>필수 후보 {r.unacceptedRequiredCount}건</b>이 있습니다</>}
+                  </span>
+                  <button
+                    type="button" className="btn btn-sm"
+                    onClick={() => nav(`/trips/${tripId}/items`)}
+                  >확인하기</button>
+                </div>
+              )}
+
               <Group title="챙김 완료" count={r.prepared.length} tone="ok"
                 empty="현재 챙김 완료된 물품이 없습니다">
                 {r.prepared.map((i) => (
                   <li key={i.itemId} className="row">
-                    <span className="row-name">{i.name} <span className="card-sub">× {i.qty}</span></span>
-                    <span className="row-right"><span className="badge badge-ok">확인됨</span></span>
+                    <div className="row-main">
+                      <p className="row-name">{i.name} <span className="card-sub">× {i.qty}</span></p>
+                    </div>
+                    <div className="row-right">
+                      <PhotoBadge status={i.photoStatus} />
+                      {i.photoStatus === 'NEEDS_CHECK' && (
+                        <button
+                          type="button" className="btn btn-ghost btn-sm"
+                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                        >사진 확인</button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </Group>
 
-              <Group title="확인 필요" count={r.needsCheck.length} tone="warn">
-                {r.needsCheck.map((i) => (
+              <Group title="아직 안 챙김" count={r.unprepared.length} tone="warn"
+                empty="모두 챙기셨습니다">
+                {r.unprepared.map((i) => (
                   <li key={i.itemId} className="row">
                     <div className="row-main">
                       <p className="row-name">{i.name} <span className="card-sub">× {i.qty}</span></p>
-                      {i.candidates.length > 0 && (
-                        <p className="row-sub">
-                          사진 후보 — {i.candidates.map((x) => `${x.name} ${Math.round(x.matchConfidence * 100)}%`).join(' · ')}
-                        </p>
-                      )}
                     </div>
                     <div className="row-right">
-                      <button
-                        type="button" className="btn btn-ghost btn-sm"
-                        onClick={() => nav(`/trips/${tripId}/detections`)}
-                      >사진 확인</button>
+                      <PhotoBadge status={i.photoStatus} />
+                      {i.photoStatus === 'NEEDS_CHECK' && (
+                        <button
+                          type="button" className="btn btn-ghost btn-sm"
+                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                        >사진 확인</button>
+                      )}
                     </div>
-                  </li>
-                ))}
-              </Group>
-
-              <Group title="사진에서 미확인" count={r.notInPhoto.length} tone="">
-                {r.notInPhoto.map((i) => (
-                  <li key={i.itemId} className="row">
-                    <span className="row-name">
-                      {i.name}
-                      {i.priority === 'REQUIRED' && <span className="badge badge-warn" style={{ marginLeft: 6 }}>필수</span>}
-                    </span>
-                    <span className="row-right"><span className="badge">직접 확인</span></span>
-                  </li>
-                ))}
-              </Group>
-
-              <Group title="목록에 없던 물품" count={r.extra.length} tone="">
-                {r.extra.map((i) => (
-                  <li key={i.detectionId} className="row">
-                    <span className="row-name">
-                      {i.name} <span className="card-sub">신뢰도 {i.confidence.toFixed(2)}</span>
-                    </span>
-                    <span className="row-right">
-                      {i.verdict && <span className={`badge ${RULE[i.verdict].cls}`}>{RULE[i.verdict].label}</span>}
-                    </span>
                   </li>
                 ))}
               </Group>
@@ -154,7 +191,13 @@ export default function InspectionPage() {
             </div>
 
             {!data && !error && <Skeleton rows={3} />}
-            {data && !w && <p className="card-sub">아직 계산하지 않았습니다.</p>}
+            {weightJob.phase === 'running' && <AiPending label="예상 무게를 계산하는 중" polls={weightJob.polls} />}
+            {weightJob.phase === 'failed' && (
+              <Failed title="무게를 계산하지 못했습니다" detail={weightJob.error ?? ''} />
+            )}
+            {data && !w && weightJob.phase === 'idle' && (
+              <p className="card-sub">계산할 물품이 없습니다.</p>
+            )}
             {w && (
               <>
                 <p className="range">
@@ -197,7 +240,13 @@ export default function InspectionPage() {
             </div>
 
             {!data && !error && <Skeleton rows={3} />}
-            {data && !c && <p className="card-sub">아직 판정하지 않았습니다.</p>}
+            {ruleJob.phase === 'running' && <AiPending label="반입 규정을 확인하는 중" polls={ruleJob.polls} />}
+            {ruleJob.phase === 'failed' && (
+              <Failed title="판정하지 못했습니다" detail={ruleJob.error ?? ''} />
+            )}
+            {data && !c && ruleJob.phase === 'idle' && (
+              <p className="card-sub">판정할 물품이 없습니다.</p>
+            )}
             {c?.length === 0 && <p className="card-sub">확인할 물품이 없습니다.</p>}
             {c?.map((x) => (
               <div key={x.itemId} className="verdict">
@@ -226,7 +275,20 @@ export default function InspectionPage() {
   )
 }
 
-/** 준비 상태의 네 묶음. 비면 접어 둔다 — 없는 것을 자리로 알리지 않는다 */
+/**
+ * 사진에서의 상태. <b>준비 완료와 다른 축이다.</b>
+ * `NOT_IN_PHOTO` 는 "없다" 가 아니라 "사진에서 못 찾았다" 다.
+ */
+function PhotoBadge({ status }: { status: PhotoStatus }) {
+  const m = {
+    CONFIRMED: { label: '사진에서 확인', cls: 'badge-ok' },
+    NEEDS_CHECK: { label: '확인 필요', cls: 'badge-warn' },
+    NOT_IN_PHOTO: { label: '사진에서 미확인', cls: '' },
+  }[status]
+  return <span className={`badge ${m.cls}`}>{m.label}</span>
+}
+
+/** 준비 상태의 두 묶음. 비어도 자리를 남겨 "없다" 를 말해 준다 */
 function Group({
   title, count, tone, empty, children,
 }: {

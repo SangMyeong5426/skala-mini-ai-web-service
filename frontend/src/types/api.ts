@@ -131,30 +131,21 @@ export type RuleVerdict =
   | 'CABIN_OK' | 'CHECKED_OK' | 'CHECKED_FORBIDDEN'
   | 'RESTRICTED' | 'NEED_MORE_INFO' | 'ASK_AIRLINE'
 
+/**
+ * 검수 결과의 내 목록 항목.
+ *
+ * <b>06:1018 — `prepared` 와 `unprepared` 는 내 목록을 완료 여부로 나눈다.</b>
+ * 예전에는 needsCheck·notInPhoto·extra 로 넷이었는데, 승인 게이트가 폐기되면서
+ * 두 묶음으로 정리됐다. 백엔드(InspectionDtos.Readiness)도 이 모양이다.
+ *
+ * `photoStatus` 는 준비 완료와 <b>독립된 축</b>이다 — 신뢰도가 낮아
+ * `NEEDS_CHECK` 여도 자동 등록된 PREPARED 면 완료로 센다(06:1019).
+ */
 export interface ReadyItem {
   itemId: number
   name: string
   qty: number
-}
-
-export interface NeedsCheckItem extends ReadyItem {
-  /** 유사 후보. 사용자가 어느 것인지 고른다. */
-  candidates: { detectionId: number; name: string; matchConfidence: number }[]
-}
-
-export interface NotInPhotoItem {
-  itemId: number
-  name: string
-  priority: Priority
-}
-
-/** 사진에는 있는데 체크리스트에 없던 승인 물품. */
-export interface ExtraItem {
-  detectionId: number
-  name: string
-  confidence: number
-  verdict?: RuleVerdict
-  missingInfo?: string | null
+  photoStatus: PhotoStatus
 }
 
 export interface Inspection {
@@ -162,11 +153,11 @@ export interface Inspection {
   /** 아직 계산 전이면 `null`. 프런트는 그 영역만 로딩으로 그린다. */
   readiness: {
     prepared: ReadyItem[]
-    needsCheck: NeedsCheckItem[]
-    /** **`missing` 이 아니다.** 사진에서 못 찾았을 뿐 없다는 뜻이 아니다. */
-    notInPhoto: NotInPhotoItem[]
-    extra: ExtraItem[]
+    /** **`missing` 이 아니다.** 아직 안 챙겼을 뿐이고 사진 상태는 따로 있다. */
+    unprepared: ReadyItem[]
     completionRate: number
+    /** 아직 채택하지 않은 필수 추천 수. 추천 전이면 `null` — "확인 전" 으로 쓴다. */
+    unacceptedRequiredCount: number | null
   } | null
   weight: {
     /** 단일 값이 아니라 **범위**다. 실측값처럼 표현하지 않는다. */

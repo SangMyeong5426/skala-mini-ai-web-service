@@ -77,12 +77,11 @@ export function MockCheck() {
           <li>여행 {trips.length}건 — {trips.map((t) => t.destination).join(' · ')}</li>
           <li>인식 물품 {detections?.length}건 — 전부 자동 등록됨(승인 게이트 폐기)</li>
           <li>
-            검수 — 준비완료 {inspection?.readiness?.prepared.length} · 확인필요{' '}
-            {inspection?.readiness?.needsCheck.length} · 미확인{' '}
-            {inspection?.readiness?.notInPhoto.length} · 추가물품{' '}
-            {inspection?.readiness?.extra.length}
+            검수 — 준비완료 {inspection?.readiness?.prepared.length} · 미완료{' '}
+            {inspection?.readiness?.unprepared.length} · 미채택 필수{' '}
+            {String(inspection?.readiness?.unacceptedRequiredCount)}
           </li>
-          <li>무게 {inspection?.weight?.typicalG}g / 한도 {inspection?.weight?.limitG}g ({inspection?.weight?.verdict})</li>
+          <li>무게 {inspection?.weight ? `${inspection.weight.typicalG}g / 한도 ${inspection.weight.limitG}g (${inspection.weight.verdict})` : '미계산 — 화면이 작업을 시작한다'}</li>
           <li>없는 경로 → {missErr ?? '확인 중'}</li>
         </ul>
       )}

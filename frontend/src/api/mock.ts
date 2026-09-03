@@ -26,7 +26,7 @@
 import * as fx from './fixtures'
 import { LOGIN_ID_RE, PASSWORD_MAX_BYTES, PASSWORD_MIN } from '../types/api'
 import type {
-  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto, User,
+  BagCheckOutput, ChecklistItem, Detection, JobType, TripDetail, TripPhoto, User,
 } from '../types/api'
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
@@ -292,6 +292,12 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
 
   for (const d of target) {
     if (t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)) continue
+    /*
+     * 06:702 — "사용자가 사후 수정한 이름·수량·준비 상태는 덮어쓰지 않는다".
+     * 이름이 같은지로만 보면, S-04 에서 이름을 고친 뒤 다시 분석할 때 원래
+     * 이름으로 하나 더 생긴다. 사후 확인된 인식이 그 사진에 이미 있으면 건너뛴다.
+     */
+    if (t.detections.some((x) => x.photoId === d.photoId && t.confirmed.has(x.detectionId))) continue
     const detectionId = nextDetectionId++
     t.detections.push({
       detectionId,
@@ -423,8 +429,9 @@ export function mockRequest(
     const jobId = nextJobId++
     const input = (b.input ?? {}) as Record<string, unknown>
     // 06:278 — 남의 여행에 작업을 걸 수 없다. tripId 소유권을 먼저 본다.
-    const target = b.tripId ? trips.get(b.tripId as number) : undefined
-    if (b.tripId !== undefined && (!target || target.ownerId !== me)) return NOT_FOUND
+    const target = b.tripId != null ? trips.get(b.tripId as number) : undefined
+    // `tripId: null` 을 명시하는 클라이언트도 있다(챗봇). != null 이어야 둘 다 통과한다.
+    if (b.tripId != null && (!target || target.ownerId !== me)) return NOT_FOUND
 
     jobs.set(jobId, {
       ownerId: me,
@@ -647,8 +654,14 @@ export function mockRequest(
     if (Array.isArray(b.matchedItemIds)) {
       t.links.set(detectionId, (b.matchedItemIds as number[]).slice())
     }
-    // 연결이 끊긴 항목과 새로 붙은 항목 양쪽을 갱신한다.
-    syncStatus(t, [...new Set([...before, ...(t.links.get(detectionId) ?? [])])])
+    /*
+     * 06:726-737 — <b>이름·수량 수정은 준비 상태를 건드리지 않는다.</b>
+     * syncStatus 는 연결만 있으면 PREPARED 로 만들기 때문에, 사용자가 해제한
+     * 항목을 이름 수정만으로 되살렸다. 연결이 실제로 바뀐 때만 다시 계산한다.
+     */
+    if (Array.isArray(b.matchedItemIds)) {
+      syncStatus(t, [...new Set([...before, ...(t.links.get(detectionId) ?? [])])])
+    }
     return delay({ ...d, linkedItems: linkedItems(t, detectionId) })
   }
 
@@ -656,39 +669,40 @@ export function mockRequest(
   if (method === 'GET' && /^\/trips\/\d+\/inspection$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND
-    const insp: Inspection = structuredClone(fx.INSPECTION)
-    insp.tripId = t.detail.tripId          // 요청한 여행이어야 한다
-    const items = itemsOf(t)
 
-    if (insp.readiness) {
-      const pick = (st: string) =>
-        items.filter((i) => i.checkStatus === st)
-          .map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty }))
+    /*
+     * 06:1018 — readiness 는 내 목록을 <b>완료 여부로만</b> 나눈다.
+     * 예전 네 묶음(needsCheck·notInPhoto·extra)은 승인 게이트의 잔재였고,
+     * UNCHECKED 를 받는 묶음이 없어 미완료 물품이 화면에서 통째로 사라졌다.
+     *
+     * photoStatus 는 준비 완료와 <b>독립된 축</b>이라 항목의 값을 그대로 낸다.
+     * 신뢰도가 낮아 NEEDS_CHECK 여도 PREPARED 면 완료로 센다(06:1019).
+     */
+    const row = (i: ChecklistItem) => ({
+      itemId: i.itemId, name: i.name, qty: i.qty, photoStatus: i.photoStatus,
+    })
 
-      insp.readiness.prepared = pick('PREPARED')
-      insp.readiness.needsCheck = items
-        .filter((i) => i.checkStatus === 'NEEDS_CHECK')
-        .map((i) => ({
-          itemId: i.itemId, name: i.name, qty: i.qty,
-          candidates: [...t.links.entries()]
-            .filter(([, ids]) => ids.includes(i.itemId))
-            .map(([detectionId]) => {
-              const d = t.detections.find((x) => x.detectionId === detectionId)
-              return { detectionId, name: d?.name ?? '', matchConfidence: d?.confidence ?? 0 }
-            }),
-        }))
-      insp.readiness.notInPhoto = items
-        .filter((i) => i.checkStatus === 'NOT_IN_PHOTO')
-        .map((i) => ({ itemId: i.itemId, name: i.name, priority: i.priority }))
-      // 승인됐는데 어느 항목에도 연결되지 않은 인식 물품 = 추가 물품.
-      insp.readiness.extra = t.detections
-        .filter((d) => d.approved && (t.links.get(d.detectionId) ?? []).length === 0)
-        .map((d) => ({ detectionId: d.detectionId, name: d.name, confidence: d.confidence }))
-      insp.readiness.completionRate = completionRate(t)
-    }
-    // weight·customs 는 AI 결과라 fixture 를 그대로 둔다.
-    // 고정 무게 계산을 새로 만들라는 요구는 리뷰에도 없었다.
-    return delay(insp)
+    /*
+     * 06:1026 — 무게는 "현재 입력과 같은 결과" 만 낸다. 없으면 null 이고 화면이
+     * 그때 WEIGHT_ESTIMATE 를 요청한다. 고정값을 늘 돌려주면 물품이 하나도 없는
+     * 여행에도 5.5kg 이 떠서 화면의 누락을 가린다.
+     */
+    const doneJob = (jobType: JobType) => [...jobs.values()].some(
+      (j) => j.jobType === jobType && j.tripId === t.detail.tripId && j.left === 0 && j.applied,
+    )
+
+    return delay({
+      tripId: t.detail.tripId,
+      readiness: {
+        prepared: t.items.filter((i) => i.checkStatus === 'PREPARED').map(row),
+        unprepared: t.items.filter((i) => i.checkStatus !== 'PREPARED').map(row),
+        completionRate: completionRate(t),
+        unacceptedRequiredCount: unacceptedRequired(t),
+      },
+      weight: doneJob('WEIGHT_ESTIMATE') ? fx.INSPECTION.weight : null,
+      customs: doneJob('RULE_CHECK') ? fx.INSPECTION.customs : null,
+      notice: fx.INSPECTION.notice,
+    })
   }
 
   return undefined

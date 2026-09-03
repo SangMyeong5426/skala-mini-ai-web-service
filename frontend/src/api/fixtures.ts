@@ -165,20 +165,18 @@ export const DETECTIONS: Detection[] = [
 export const INSPECTION: Inspection = {
   tripId: 1,
   readiness: {
-    prepared: [{ itemId: 5, name: '충전기', qty: 1 }],
-    needsCheck: [
-      { itemId: 8, name: '화장품 용기', qty: 1,
-        candidates: [
-          { detectionId: 6, name: '화장품 용기', matchConfidence: 0.71 },
-          { detectionId: 8, name: '검정 파우치', matchConfidence: 0.31 },
-        ] },
+    // 06:541·591 — 내 목록을 완료 여부로만 나눈다. Mock 이 여행 상태로 덮어쓰므로
+    // 여기는 모양을 보여주는 예시다.
+    prepared: [
+      { itemId: 5, name: '충전기', qty: 1, photoStatus: 'CONFIRMED' },
+      { itemId: 8, name: '화장품 용기', qty: 1, photoStatus: 'CONFIRMED' },
+      { itemId: 9, name: '검정 파우치', qty: 1, photoStatus: 'NEEDS_CHECK' },
     ],
-    // 여권은 아직 채택 전이라 내 목록에 없다. 06 의 notInPhoto 는 내 목록
-    // 항목이므로 여기에 두지 않는다 — 미채택 필수는 unacceptedRequiredCount 다.
-    notInPhoto: [{ itemId: 7, name: '변환 플러그', priority: 'REQUIRED' }],
-    extra: [{ detectionId: 8, name: '검정 파우치', confidence: 0.43,
-              verdict: 'NEED_MORE_INFO', missingInfo: '날 길이(cm)' }],
-    completionRate: 0.5,
+    unprepared: [
+      { itemId: 7, name: '변환 플러그', qty: 1, photoStatus: 'NOT_IN_PHOTO' },
+    ],
+    completionRate: 0.889,
+    unacceptedRequiredCount: 1,
   },
   weight: {
     minG: 4570, typicalG: 5410, maxG: 6890,

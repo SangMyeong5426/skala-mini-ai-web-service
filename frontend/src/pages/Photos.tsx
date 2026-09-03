@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { USE_MOCK } from '../api/mock'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { Failed, Skeleton } from '../components/States'
 import type { TripPhoto } from '../types/api'
@@ -50,9 +51,24 @@ export default function Photos() {
     setBusy(true)
     setError(null)
     try {
-      await api.post(`/trips/${tripId}/photos`, {
-        files: picked.map((f) => ({ fileUrl: URL.createObjectURL(f), bagKind })),
-      })
+      /*
+       * 06:1032-1040 — 실제 계약은 <b>multipart</b>다. `files` 파트에 파일
+       * 바이트를, `bagKind` 를 파라미터로 보낸다. `blob:` URL 은 이 브라우저
+       * 안에서만 유효한 미리보기 주소라 서버가 읽을 수 없다.
+       *
+       * Mock 은 파일 본문을 다루지 못하므로 <b>API 경계에서만</b> 갈라
+       * 미리보기 URL 을 넘긴다. 화면 코드는 한 갈래다.
+       */
+      if (USE_MOCK) {
+        await api.post(`/trips/${tripId}/photos`, {
+          files: picked.map((f) => ({ fileUrl: URL.createObjectURL(f), bagKind })),
+        })
+      } else {
+        const form = new FormData()
+        for (const f of picked) form.append('files', f)
+        form.append('bagKind', bagKind)
+        await api.post(`/trips/${tripId}/photos`, form)
+      }
       load()
     } catch (e) {
       setError(e instanceof Error ? e.message : '사진을 올리지 못했습니다')

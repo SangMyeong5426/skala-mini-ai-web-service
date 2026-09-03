@@ -29,6 +29,8 @@ export default function Detections() {
   const [photoIds, setPhotoIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const job = useAiJob<BagCheckOutput>()
+  /** 자동 추천. 폴링해야 recommendationJobId 가 생긴다 */
+  const rec = useAiJob()
 
   /** 재조회. 갱신된 내 목록을 돌려준다 — 추천 요청이 그 값을 써야 한다 */
   const load = (): Promise<ChecklistItem[]> => {
@@ -53,8 +55,10 @@ export default function Detections() {
   const analyze = async () => {
     // 사진 ID 를 박아 두면 다른 여행에서 남의 사진을 분석하려 든다.
     // 06 의 소유권 검증에서 거절되는 요청이다.
-    await job.start('BAG_CHECK', { photoIds }, Number(tripId))
+    // 완료를 확인하고 넘어간다. FAILED·timeout 이면 후속 추천을 걸지 않는다.
+    const ok = await job.start('BAG_CHECK', { photoIds }, Number(tripId))
     const fresh = await load()
+    if (!ok) return
 
     /*
      * 06:705 · 03:262 — 자동 등록 뒤 <b>곧바로 추가 추천을 요청</b>한다.
@@ -65,21 +69,26 @@ export default function Detections() {
      */
     try {
       const t = await api.get<TripDetail>(`/trips/${tripId}`)
-      await api.post('/ai-jobs', {
-        jobType: 'PACKING_LIST',
-        tripId: Number(tripId),
-        input: {
-          destination: t.destination,
-          startDate: t.startDate,
-          endDate: t.endDate,
-          transport: t.transport,
-          purpose: t.purpose ?? null,
-          note: t.note ?? null,
-          alreadyPacked: fresh
-            .filter((i) => i.checkStatus === 'PREPARED')
-            .map((i) => ({ name: i.name, category: i.category, qty: i.qty })),
-        },
-      })
+      // 07 은 destination·startDate 에 minLength 1 을 요구한다. 폴백을 만들지 않고
+      // 값이 없으면 요청 자체를 걸지 않는다 — "FE 가 모르는 값을 요구하지 않는다".
+      if (!t.destination || !t.startDate || !t.endDate) return
+
+      /*
+       * <b>폴링까지 해야 완료된다.</b> POST 만 하고 작업 ID 를 버리면
+       * GET items 의 recommendationJobId 가 계속 null 이라 S-05 가 후보를
+       * 찾지 못한다. 기존 폴링 경로를 그대로 쓴다.
+       */
+      await rec.start('PACKING_LIST', {
+        destination: t.destination,
+        startDate: t.startDate,
+        endDate: t.endDate,
+        transport: t.transport,
+        purpose: t.purpose ?? 'TOUR',
+        note: t.note ?? null,
+        alreadyPacked: fresh
+          .filter((i) => i.checkStatus === 'PREPARED')
+          .map((i) => ({ name: i.name, category: i.category, qty: i.qty })),
+      }, Number(tripId))
     } catch {
       /* 추천 실패는 S-05 에서 다시 시도한다 */
     }
@@ -115,6 +124,10 @@ export default function Detections() {
 
       <div className="content">
         {error && <Failed title="인식 결과를 불러오지 못했습니다" detail={error} onRetry={load} />}
+
+        {rec.phase === 'running' && (
+          <AiPending label="부족한 준비물을 추천하는 중" polls={rec.polls} />
+        )}
 
         {job.phase === 'running' && (
           <div className="card">
