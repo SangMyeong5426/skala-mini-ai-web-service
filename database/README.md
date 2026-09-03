@@ -19,15 +19,24 @@ PostgreSQL. **팀 공용 DB는 클라우드에 둔다** — Supabase 또는 Neon
 | --- | --- |
 | `schema.sql` | 테이블 정의(DDL). `docs/05-erd.md`의 ERD와 짝이다 |
 | `seed.sql` | 데모용 초기 데이터. **3일차 시연에서 빈 화면을 피하려면 필요하다** |
+| [`demo-photos/`](demo-photos/) | 데모용 짐 사진 2장. `seed.sql` 의 `trip_photos` 가 가리킨다 |
 
 | 스크립트 | 하는 일 |
 | --- | --- |
 | [`scripts/db-password`](../scripts/db-password) | `backend/.env` 의 비밀번호만 안전하게 채운다. 편집기 저장을 깜빡하는 사고를 막는다 |
-| [`scripts/db-apply`](../scripts/db-apply) | `schema.sql` · `seed.sql` 을 순서대로 적용한다 |
+| [`scripts/db-apply`](../scripts/db-apply) | `schema.sql` · `seed.sql` 을 적용하고 **데모 사진을 배치**한다 |
 | [`scripts/check-db`](../scripts/check-db) | 접속·테이블·제약·시드를 확인한다 |
 
-둘 다 `backend/.env` 의 접속 정보를 읽는다. 호스트에 `psql` 을 설치하지 않고
+셋 다 `backend/.env` 의 접속 정보를 읽는다. 호스트에 `psql` 을 설치하지 않고
 Docker 컨테이너 안의 `psql` 을 쓴다.
+
+### 데모 사진은 왜 두 곳에 있나
+
+`backend/uploads/` 는 `.gitignore` 가 막는다 — 사용자가 올린 짐 사진이 공개
+저장소에 올라가는 것을 막는 규칙이다. 그래서 원본은 `database/demo-photos/` 에
+두고 `./scripts/db-apply` 가 `backend/uploads/demo/` 로 복사한다.
+
+이게 없으면 `S-03` 미리보기와 `S-04` 사진 태그가 깨진 이미지로 나온다.
 
 ## DB 생성 (팀 공용)
 
