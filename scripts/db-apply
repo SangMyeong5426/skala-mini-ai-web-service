@@ -69,5 +69,18 @@ apply() {
 apply database/schema.sql
 apply database/seed.sql
 
+# ── 데모 사진 배치 ────────────────────────────────────────
+# seed.sql 의 trip_photos 가 demo/bag-01.jpg · demo/bag-02.jpg 를 가리킨다.
+# backend/uploads/ 는 .gitignore 가 막으므로(사용자가 올린 사진이 공개 저장소에
+# 올라가는 것을 막는 규칙) 원본은 database/demo-photos/ 에 두고 여기서 복사한다.
+# 이게 없으면 S-03 미리보기와 S-04 사진 태그가 깨진 이미지로 나온다.
+if [ -d database/demo-photos ]; then
+  mkdir -p backend/uploads/demo
+  cp database/demo-photos/*.jpg backend/uploads/demo/
+  printf '%s\n' ""
+  printf '%s\n' "── 데모 사진 배치 ──"
+  printf '%s\n' "  backend/uploads/demo/ 에 $(ls database/demo-photos/*.jpg | wc -l | tr -d ' ')장"
+fi
+
 printf '%s\n' ""
 printf '%s\n' "확인하려면:  ./scripts/check-db"
