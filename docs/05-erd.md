@@ -11,6 +11,8 @@
 
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
+- **PNG·SVG 는 재렌더 전이다 (TBD).** `.puml` 에 `trips` 의 `origin` · `country_code` · `departure_airport` ·
+  `arrival_airport` · `bag_type` 을 2026-09-03 에 추가했다. 아래 DSL 과 `schema.sql` 이 정본이다
 - dbdiagram.io 링크: TBD — 아래 DSL을 붙여 넣으면 즉시 생성된다
 
 > 다이어그램은 **PlantUML로 그렸다.** Use-Case·User Flow·아키텍처와 같은 도구라
@@ -68,7 +70,7 @@ Table checklist_items {
   category      varchar(20) [not null, note: 'DOCUMENT | CLOTHING | ELECTRONIC | TOILETRY | MEDICINE | ETC']
   qty           integer     [not null, default: 1]
   priority      varchar(20) [not null, note: 'REQUIRED | RECOMMENDED']
-  source        varchar(10) [not null, note: 'RULE | AI | USER — 누가 넣었는지']
+  source        varchar(10) [not null, note: 'RULE | PHOTO | AI | USER — 누가 넣었는지']
 
   check_status  varchar(20) [not null, default: 'UNCHECKED',
                  note: 'UNCHECKED | PREPARED | NEEDS_CHECK | NOT_IN_PHOTO']
@@ -96,6 +98,8 @@ Table detected_objects {
   qty           integer     [not null, default: 1]
   confidence    numeric(4,3)[not null, note: '0.000 ~ 1.000']
   confidence_level varchar(10)[not null, note: 'HIGH | MEDIUM | LOW — 화면 표시용']
+  missing_info  varchar(100) [note: '보이지 않아 못 정한 속성. 예: 용량(ml). BAG_CHECK output.missingInfo']
+  label_text    varchar(200) [note: '라벨 OCR 원문. BAG_CHECK output.labelText']
   approved      boolean     [not null, default: false,
                  note: '사용자 승인 전에는 다음 단계에 반영하지 않는다']
   created_at    timestamptz [not null, default: `now()`]

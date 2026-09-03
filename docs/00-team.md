@@ -7,7 +7,7 @@
 
 ## 팀 정보
 
-- 조: TBD
+- 조: **5조** (Notion 「SKALA 5조 MINI PROJECT」)
 - 인원: 5명
 - 저장소: <https://github.com/SangMyeong5426/skala-mini-ai-web-service>
 
@@ -16,12 +16,12 @@
 | 역할 | 담당자 | 주요 책임 | 담당 산출물 |
 | --- | --- | --- | --- |
 | **PM** | 박상명 | 전체 일정·진행 추적, 발표 총괄, 데모 시연 준비 | 최종 발표 슬라이드 |
-| **Product/UX Designer** | 문성도, 박현수 | Use-Case 정의, User Flow 설계, 와이어프레임 | `02-use-case.md`, `03-wireframe.md`, Figma |
+| **Product/UX Designer** | 문성도, 박현수 | Use-Case 정의, User Flow 설계, 와이어프레임 | `01-service-plan.md`, `02-use-case.md`, `03-wireframe.md`, Figma |
 | **Data Architect** | 최인서, 손현아, 박현수 | DB 데이터 모델링, 테이블 관계(1:N, N:M) 정의 | `05-erd.md`, `database/`, DB 생성 (`01`~`03` 확정 후) |
 | **API Architect** | 박상명, 최인서, 손현아 | REST API 규격 작성, Mock 서버 세팅, AI 프롬프트·JSON 규격 정의 | `06-api-spec.md`, `07-ai-ready.md`, Postman |
-| **Frontend Developer** | 박상명, 문성도, 박현수 | 레이아웃·라우팅, 핵심 화면 1~2개 (`01`~`03` 확정 후) | `frontend/` |
+| **Frontend Developer** | 박상명, 문성도, 박현수 | 레이아웃·라우팅, 1차 화면 `S-01`~`S-06` (`01`~`03` 확정 후) | `frontend/` |
 | **Backend Developer** | 최인서, 손현아, 문성도 | DB 연동, API 일부 실구현 (`02`·`06` 확정 후) | `backend/` |
-| **DevOps & Integration** | 박상명 | GitHub 저장소 관리, E2E 연동 테스트·오류 검증 | 저장소 세팅, E2E 테스트 결과 |
+| **DevOps & Integration** | 박상명 | GitHub 저장소 관리, E2E 연동 테스트·오류 검증 | `04-architecture.md`, 저장소 세팅, E2E 테스트 결과 |
 
 > **JDK 21 · Node.js 20.19+ 설치는 역할과 무관하게 5명 전원이 한다.**
 > JDK 21은 2026-09-02 전원 완료.
@@ -87,5 +87,5 @@
 
 ## 연락
 
-- 소통 채널: TBD
-- 데일리 체크인: TBD
+- 소통 채널: **슬랙 · 카카오톡 · 대면.** 3일 내내 교육장에서 함께 있으므로 대면이 기본이고, 슬랙·카톡은 링크·파일 공유용
+- 데일리 체크인: 따로 잡지 않는다 — 종일 같은 자리라 수시로 맞춘다. [`checklist.md`](checklist.md)는 PM이 아침·저녁 한 번씩 확인

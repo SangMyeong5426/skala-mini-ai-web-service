@@ -124,7 +124,9 @@ CREATE TABLE checklist_items (
     qty            INTEGER      NOT NULL DEFAULT 1,
     priority       VARCHAR(20)  NOT NULL,
 
-    -- 누가 넣었는지. 규칙 기반 / AI 추천 / 사용자 직접.
+    -- 누가 넣었는지. 규칙 기반 / 사진 인식 승인 / AI 추천 / 사용자 직접.
+    -- PHOTO 와 AI 를 나누는 이유는 S-05 의 출처 배지 때문이다. 사진에서 확인된 것과
+    -- AI 가 덧붙인 부족분은 사용자에게 다르게 보여야 한다. (docs/03-wireframe.md S-05)
     source         VARCHAR(10)  NOT NULL,
 
     -- 명세의 핵심 원칙: 사진에서 못 찾은 것을 "누락"이라 하지 않는다.
@@ -137,7 +139,7 @@ CREATE TABLE checklist_items (
     CONSTRAINT checklist_items_category_check
         CHECK (category IN ('DOCUMENT','CLOTHING','ELECTRONIC','TOILETRY','MEDICINE','ETC')),
     CONSTRAINT checklist_items_priority_check CHECK (priority IN ('REQUIRED','RECOMMENDED')),
-    CONSTRAINT checklist_items_source_check   CHECK (source   IN ('RULE','AI','USER')),
+    CONSTRAINT checklist_items_source_check   CHECK (source   IN ('RULE','PHOTO','AI','USER')),
     CONSTRAINT checklist_items_status_check
         CHECK (check_status IN ('UNCHECKED','PREPARED','NEEDS_CHECK','NOT_IN_PHOTO'))
 );
@@ -175,6 +177,12 @@ CREATE TABLE detected_objects (
     -- 사용자가 그때 보고 승인한 표시는 그대로여야 하기 때문이다.
     -- 근거는 docs/05-erd.md "confidence_level 을 따로 두는 근거".
     confidence_level VARCHAR(10)  NOT NULL,
+
+    -- BAG_CHECK output 의 missingInfo / labelText (docs/07-ai-ready.md).
+    -- 원칙 ②: 보이지 않는 속성은 추정하지 않고 묻는다 — 무엇을 물을지가 행에 남아야
+    -- S-04 를 나갔다 들어와도 "확인 필요" 묶음을 그릴 수 있다.
+    missing_info     VARCHAR(100),
+    label_text       VARCHAR(200),
 
     -- 명세 9.2 수용 기준:
     -- "사진 분석 결과는 사용자가 승인하기 전 최종 준비 상태에 반영되지 않아야 한다"

@@ -8,6 +8,7 @@
 
 | 파일 | 내용 | 담당 | 참조하는 문서 |
 | --- | --- | --- | --- |
+| `02-usecase.png` | Use-Case 다이어그램 | Product/UX Designer | [`02-use-case.md`](../02-use-case.md) |
 | `03-userflow.png` | 사용자 흐름도 | Product/UX Designer | [`03-wireframe.md`](../03-wireframe.md) |
 | `03-wireframe-*.png` | 화면별 와이어프레임 | Product/UX Designer | [`03-wireframe.md`](../03-wireframe.md) |
 | `04-architecture.png` | 시스템 아키텍처 | DevOps & Integration | [`04-architecture.md`](../04-architecture.md) |
