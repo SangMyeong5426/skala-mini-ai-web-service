@@ -64,23 +64,34 @@ public class MockAiClient implements AiClient {
         };
     }
 
-    /** S-09 빈 화면에 노출하는 대표 질문 3개와 그 밖의 안전한 기본 답변. */
+    /** S-09 대표 질문 11개와 그 밖의 안전한 기본 답변. */
     private String ruleCheckFixture(String question, JsonNode input) {
         String normalized = question.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-        if (normalized.contains("100wh")
-                && (normalized.contains("보조배터리") || hasItem(input, "보조배터리"))) {
-            return "RULE_CHECK_BATTERY_100WH";
+        if (normalized.contains("보조배터리") || hasItem(input, "보조배터리")) {
+            if (containsMeasurement(normalized, "200wh")) return "RULE_CHECK_BATTERY_200WH";
+            if (containsMeasurement(normalized, "120wh")) return "RULE_CHECK_BATTERY_120WH";
+            if (containsMeasurement(normalized, "100wh")) return "RULE_CHECK_BATTERY_100WH";
+            if (containsMeasurement(normalized, "20000mah")) return "RULE_CHECK_BATTERY";
         }
-        if (normalized.contains("보조배터리") && normalized.contains("20000mah")) {
-            return "RULE_CHECK_BATTERY";
+        if (normalized.contains("화장품") || hasItem(input, "화장품")) {
+            if (containsMeasurement(normalized, "120ml")) return "RULE_CHECK_LIQUID";
+            if (containsMeasurement(normalized, "50ml")) return "RULE_CHECK_LIQUID_50ML";
+            if (normalized.contains("ml")) return "RULE_CHECK_UNKNOWN";
+            return "RULE_CHECK_LIQUID_UNKNOWN";
         }
-        if (normalized.contains("화장품") && normalized.contains("120ml")) {
-            return "RULE_CHECK_LIQUID";
+        if (normalized.contains("가위") || hasItem(input, "가위")) {
+            if (containsMeasurement(normalized, "7cm")) return "RULE_CHECK_SCISSORS";
+            if (containsMeasurement(normalized, "5cm")) return "RULE_CHECK_SCISSORS_5CM";
+            if (normalized.contains("cm")) return "RULE_CHECK_UNKNOWN";
+            return "RULE_CHECK_SCISSORS_UNKNOWN";
         }
-        if (normalized.contains("가위") && normalized.contains("7cm")) {
-            return "RULE_CHECK_SCISSORS";
-        }
+        if (normalized.contains("노트북")) return "RULE_CHECK_LAPTOP";
         return "RULE_CHECK_UNKNOWN";
+    }
+
+    private boolean containsMeasurement(String text, String measurement) {
+        int index = text.indexOf(measurement);
+        return index >= 0 && (index == 0 || !Character.isDigit(text.charAt(index - 1)));
     }
 
     private boolean hasItem(JsonNode input, String name) {
