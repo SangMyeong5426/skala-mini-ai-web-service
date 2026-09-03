@@ -217,6 +217,22 @@ DATABASE_PASSWORD=devpass
 | 파일 | 무엇을 더하나 |
 | --- | --- |
 | `2026-09-03-add-itineraries-and-placements.sql` | `trip_itineraries` · `item_placements` |
+| `2026-09-03-add-users-login-id.sql` | `users.login_id` |
+| `2026-09-03-add-users-password-hash.sql` | `users.password_hash` |
+
+**순서를 가리지 않는다.** 폴더째 아무 순서로 돌려도 결과가 같다.
+
+```bash
+for f in database/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+```
+
+그렇게 만든 규칙은 하나다. **컬럼 하나의 주인은 파일 하나다.** 두 파일이 같은
+컬럼을 만들면 어느 쪽이 먼저 도느냐에 따라 결과가 달라지고, 그 차이는
+`ddl-auto=validate` 가 잡아 주지도 않는다 — 컬럼 존재와 타입만 보기 때문이다.
+
+여러 번 실행해도 안전하다 (`IF NOT EXISTS` · `WHERE ... IS NULL`).
+`login_id` 는 데모 계정을 `seed.sql` 과 같은 `jiwoo28` 로 맞추고, 예전 판이 남긴
+`user_1` 도 되돌린다.
 
 `ddl-auto=validate` 라 **DB 를 갱신하지 않으면 백엔드가 아예 뜨지 않는다.**
 오류는 `BeanCreationException` 안쪽에 묻혀 있어 원인을 찾는 데 시간이 걸린다.
