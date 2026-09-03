@@ -46,8 +46,8 @@ public final class TripDtos {
      * 날짜 역전처럼 <b>필드 사이의</b> 규칙만 서비스에서 검사한다.
      */
     public record UpdateRequest(
-            @Size(max = 100) @Pattern(regexp = ".*\\S.*", message = "출발지는 공백일 수 없습니다.") String origin,
-            @Size(max = 100) @Pattern(regexp = ".*\\S.*", message = "도착지는 공백일 수 없습니다.") String destination,
+            @Size(max = 100) @Pattern(regexp = "(?s).*\\S.*", message = "출발지는 공백일 수 없습니다.") String origin,
+            @Size(max = 100) @Pattern(regexp = "(?s).*\\S.*", message = "도착지는 공백일 수 없습니다.") String destination,
             @Size(min = 2, max = 2, message = "국가 코드는 2자입니다.") String countryCode,
             LocalDate startDate, LocalDate endDate,
             Codes.Purpose purpose, Codes.Transport transport,

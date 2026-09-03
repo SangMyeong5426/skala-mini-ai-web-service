@@ -23,6 +23,7 @@ public final class AuthDtos {
             @Size(min = 2, max = 50, message = "닉네임은 2~50자입니다.") String nickname,
 
             @NotBlank(message = "아이디는 필수입니다.")
+            @Size(max = 60, message = "아이디는 영문·숫자·밑줄 4~30자입니다.")
             @Pattern(regexp = "\\s*[A-Za-z0-9_]{4,30}\\s*",
                      message = "아이디는 영문·숫자·밑줄 4~30자입니다.") String loginId,
 
@@ -36,7 +37,10 @@ public final class AuthDtos {
 
     /** 06: 로그인은 <b>2개 필드</b>. 닉네임·이메일로 로그인하지 않는다. */
     public record LoginRequest(
-            @NotBlank(message = "아이디는 필수입니다.") String loginId,
+            @NotBlank(message = "아이디는 필수입니다.")
+            @Size(max = 60, message = "아이디는 영문·숫자·밑줄 4~30자입니다.")
+            @Pattern(regexp = "\\s*[A-Za-z0-9_]{4,30}\\s*",
+                     message = "아이디는 영문·숫자·밑줄 4~30자입니다.") String loginId,
             @NotBlank(message = "비밀번호는 필수입니다.") String password) { }
 
     public record Me(Long userId, String loginId, String nickname, String email) { }

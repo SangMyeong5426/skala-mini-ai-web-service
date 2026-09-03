@@ -33,7 +33,7 @@ public final class ItineraryDtos {
     public record UpdateRequest(
             Codes.ItineraryKind kind,
             @Size(max = 100, message = "일정 제목은 100자 이하입니다.")
-            @Pattern(regexp = ".*\\S.*", message = "일정 제목은 공백일 수 없습니다.") String title,
+            @Pattern(regexp = "(?s).*\\S.*", message = "일정 제목은 공백일 수 없습니다.") String title,
             @Size(max = 100, message = "장소는 100자 이하입니다.") String place,
             @Size(max = 50, message = "코드는 50자 이하입니다.") String code,
             OffsetDateTime startAt, OffsetDateTime endAt, String note) { }

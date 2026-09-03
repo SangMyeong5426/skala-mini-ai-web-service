@@ -71,6 +71,9 @@ class AllBackendApiTest {
         read(auth, get("/api/rules").queryParam("transport", "PLANE"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.field").value("transport"));
+        read(auth, get("/api/trips/1/placements"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
 
         MvcResult createdTrip = write(auth, post("/api/trips"), """
                 {"origin":"서울","destination":"도쿄","countryCode":"JP",
@@ -89,6 +92,8 @@ class AllBackendApiTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.destination").value("도쿄"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"   \"}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.field").value("origin"));
+        write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"서울\\n\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.origin").value("서울"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"status\":\"CONFIRMED\"}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONFIRMED"));
 
@@ -204,6 +209,14 @@ class AllBackendApiTest {
 
         mvc.perform(post("/api/auth/signup").cookie(cookies).header("X-CSRF-TOKEN", csrf)
                         .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"nickname":"API검증","loginId":"%s","password":"testpass123",
+                                 "email":"long-%s@test.local"}
+                                """.formatted(" ".repeat(57) + "abcd", RUN_ID)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("loginId"));
+
+        mvc.perform(post("/api/auth/signup").cookie(cookies).header("X-CSRF-TOKEN", csrf)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
                                 {"nickname":" x ","loginId":"bad_%s","password":"testpass123",
                                  "email":"bad-%s@test.local"}
                                 """.formatted(RUN_ID, RUN_ID)))
@@ -217,6 +230,12 @@ class AllBackendApiTest {
                                 """.formatted(loginId.toUpperCase(), RUN_ID)))
                 .andExpect(status().isCreated())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.user.loginId").value(loginId));
+
+        mvc.perform(post("/api/auth/login").cookie(cookies).header("X-CSRF-TOKEN", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginId\":\"invalid-id!\",\"password\":\"testpass123\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("loginId"));
 
         MvcResult login = mvc.perform(post("/api/auth/login").cookie(cookies).header("X-CSRF-TOKEN", csrf)
                         .contentType(MediaType.APPLICATION_JSON)

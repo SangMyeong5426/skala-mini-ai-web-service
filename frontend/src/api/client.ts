@@ -1,4 +1,4 @@
-import type { ApiError } from '../types/api'
+import type { ApiError, SessionResponse } from '../types/api'
 import { MockError, NOT_FOUND, USE_MOCK, mockRequest } from './mock'
 
 /**
@@ -11,6 +11,15 @@ import { MockError, NOT_FOUND, USE_MOCK, mockRequest } from './mock'
  * 8080 으로 넘긴다. `/api` 밑이 아니므로 이 함수에 넣지 않는다.
  */
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
+
+// 익명 세션을 동시에 둘 만들면 쿠키와 CSRF 토큰이 엇갈린다. 모든 호출 경로가 이 요청을 공유한다.
+let sessionRequest: Promise<SessionResponse> | null = null
+export const loadSessionOnce = () => {
+  if (!sessionRequest) {
+    sessionRequest = request<SessionResponse>('/auth/session').finally(() => { sessionRequest = null })
+  }
+  return sessionRequest
+}
 
 /**
  * CSRF 토큰. <b>메모리에만 둔다</b> — 06 이 그렇게 못박았다.
