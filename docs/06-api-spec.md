@@ -120,7 +120,7 @@
 
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
 | --- | --- | --- | --- | --- | --- |
-| 17 | `POST` | `/api/ai-jobs` | **AI 작업 생성** | **`202`** + `Location` | `400` 잘못된 입력, `409` 현재 목록·가방 상태와 입력 불일치 |
+| 17 | `POST` | `/api/ai-jobs` | **AI 작업 생성** | **`202`** + `Location` | `400` 잘못된 입력, `409` 무게 작업의 현재 목록·가방 상태와 입력 불일치 |
 | 18 | `GET` | `/api/ai-jobs/{jobId}` | 작업 상태·결과 조회 | `200` | `404` |
 
 **엔드포인트는 둘뿐이다.** AI 작업이 늘어도 `jobType` 값만 늘고 경로는 그대로다.
@@ -173,21 +173,47 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
     "purpose": "TOUR",
     "note": "친구 2명, 디즈니랜드, 사진 많이 찍을 예정",
     "alreadyPacked": [
-      { "name": "충전기", "category": "ELECTRONIC", "qty": 1 },
-      { "name": "보조배터리", "category": "ELECTRONIC", "qty": 1 },
-      { "name": "상의", "category": "CLOTHING", "qty": 4 }
+      {
+        "name": "충전기",
+        "category": "ELECTRONIC",
+        "qty": 1
+      },
+      {
+        "name": "보조배터리",
+        "category": "ELECTRONIC",
+        "qty": 1
+      },
+      {
+        "name": "상의",
+        "category": "CLOTHING",
+        "qty": 4
+      },
+      {
+        "name": "하의",
+        "category": "CLOTHING",
+        "qty": 2
+      },
+      {
+        "name": "속옷",
+        "category": "CLOTHING",
+        "qty": 4
+      },
+      {
+        "name": "가위",
+        "category": "ETC",
+        "qty": 1
+      }
     ]
   }
 }
 ```
 
-> `alreadyPacked`는 내 목록의 실제 준비 완료(`PREPARED`) 물품이다. 사진 승인과 직접 완료
-> 확인을 모두 포함한다. 서버는 해당 여행의 현재 내 목록을 별도로 읽어 미완료 항목도
-> 중복 추천에서 제외한다. 미완료 물품을 `alreadyPacked`에 섞지 않는다.
->
-> 완료 항목이 없는 경우 빈 배열 `[]` 을 보낸다. 그러면 여행 조건과 현재 내 목록으로
-> 현재 내 목록에 없는 후보를 추천한다. **필드를 생략하지 않는다** — 빈 배열과 미전송을
-> 구분하지 않으면 Mock 과 실제 LLM 의 동작이 갈린다.
+> `alreadyPacked`는 화면이 가진 실제 준비 완료(`PREPARED`) 물품 목록이며 사진 승인과
+> 직접 완료 확인을 포함한다. 기존 입력 스키마를 유지해 필수로 보내되, 화면에 없으면 `[]`도 가능하다.
+> **서버가 최종 입력을 결정한다.** 요청 형식·여행 소유권을 검증한 뒤 현재 내 목록을 읽고,
+> 그중 PREPARED 항목의 이름·분류·수량으로 `alreadyPacked`를 덮어써 작업 입력으로 저장한다.
+> 값이 오래됐거나 `[]`여도 이 차이로 `409`를 반환하지 않는다. 추천·Mock은 보정된 입력을
+> 사용하고, 미완료 항목도 현재 내 목록에 있으면 중복 추천에서 제외한다.
 
 | 필드 | 필수 | 설명 |
 | --- | --- | --- |
@@ -260,6 +286,15 @@ Location: /api/ai-jobs/1041
         "reason": "개인적으로 사용하는 약이 있다면 준비 여부를 확인하세요.",
         "source": "AI",
         "acceptedItemId": null
+      },
+      {
+        "name": "여권",
+        "category": "DOCUMENT",
+        "qty": 1,
+        "priority": "REQUIRED",
+        "reason": "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
+        "source": "RULE",
+        "acceptedItemId": null
       }
     ],
     "tips": [
@@ -314,6 +349,9 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 각 예시는 해당 동작 시점의 응답이다. 추천 작업의 최초 완료 응답은 채택 전이며,
 아래 내 목록 조회·검수 예시는 사용자가 후보를 채택한 후의 상태를 보여준다.
+두 조회는 **같은 tripId 12의 전체 내 목록 7개(완료 6·미완료 1)**를 사용한다.
+변환 플러그는 채택했고 여권 필수 후보는 미채택 상태이며, 추천 재조회 시 플러그의
+`acceptedItemId`는 `7`이다. 최초 완료 응답의 `null`과 시점을 구분한다.
 
 ### `GET /api/trips/{tripId}/inspection` — 검수 결과 (화면 `S-06`)
 
@@ -371,7 +409,8 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
         "photoStatus": "NOT_IN_PHOTO"
       }
     ],
-    "completionRate": 0.8571428571428571
+    "completionRate": 0.857,
+    "unacceptedRequiredCount": 1
   },
   "weight": {
     "minG": 4610,
@@ -541,15 +580,36 @@ Location: /api/trips/12
 ```json
 {
   "trips": [
-    { "tripId": 1, "origin": "서울", "destination": "도쿄",
-      "startDate": "2026-10-01", "endDate": "2026-10-04",
-      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 },
-    { "tripId": 2, "origin": "서울", "destination": "오사카",
-      "startDate": "2026-05-02", "endDate": "2026-05-04",
-      "transport": "FLIGHT", "status": "DONE", "completionRate": 1.0 },
-    { "tripId": 3, "origin": "서울", "destination": "부산",
-      "startDate": "2026-03-14", "endDate": "2026-03-15",
-      "transport": "TRAIN", "status": "DONE", "completionRate": 1.0 }
+    {
+      "tripId": 12,
+      "origin": "서울",
+      "destination": "도쿄",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-04",
+      "transport": "FLIGHT",
+      "status": "CONFIRMED",
+      "completionRate": 0.857
+    },
+    {
+      "tripId": 2,
+      "origin": "서울",
+      "destination": "오사카",
+      "startDate": "2026-05-02",
+      "endDate": "2026-05-04",
+      "transport": "FLIGHT",
+      "status": "DONE",
+      "completionRate": 1.0
+    },
+    {
+      "tripId": 3,
+      "origin": "서울",
+      "destination": "부산",
+      "startDate": "2026-03-14",
+      "endDate": "2026-03-15",
+      "transport": "TRAIN",
+      "status": "DONE",
+      "completionRate": 1.0
+    }
   ]
 }
 ```
@@ -560,9 +620,59 @@ Location: /api/trips/12
 {
   "items": [
     {
+      "itemId": 2,
+      "name": "상의",
+      "category": "CLOTHING",
+      "qty": 4,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
+      "itemId": 3,
+      "name": "하의",
+      "category": "CLOTHING",
+      "qty": 2,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
+      "itemId": 4,
+      "name": "속옷",
+      "category": "CLOTHING",
+      "qty": 4,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
       "itemId": 5,
       "name": "충전기",
       "category": "ELECTRONIC",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
+      "itemId": 6,
+      "name": "보조배터리",
+      "category": "ELECTRONIC",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
+      "itemId": 11,
+      "name": "가위",
+      "category": "ETC",
       "qty": 1,
       "priority": "RECOMMENDED",
       "source": "PHOTO",
@@ -580,8 +690,9 @@ Location: /api/trips/12
       "photoStatus": "NOT_IN_PHOTO"
     }
   ],
-  "completionRate": 0.5,
-  "recommendationJobId": 1041
+  "completionRate": 0.857,
+  "recommendationJobId": 1041,
+  "unacceptedRequiredCount": 1
 }
 ```
 
@@ -659,10 +770,28 @@ Location: /api/trips/12
 
 - `completionRate = PREPARED 항목 수 / 내 목록 전체 항목 수`. 빈 목록은 `0`이다.
   항목의 qty로 가중하지 않는다. 홈·내 목록·검수 결과에 같은 식을 사용한다.
+- 서버는 비율을 **소수 셋째 자리까지 HALF_UP 반올림**한 JSON 숫자로 반환한다(6/7 → `0.857`,
+  후행 0 강제 없음). FE는 이 값에 100을 곱해 소수 첫째 자리에서 HALF_UP 반올림한 정수 %로
+  표시한다(`0.857` → `86%`). 홈·S-05·S-06 모두 같은 표시 함수를 쓰고 비율을 다시 계산하지 않는다.
+- `unacceptedRequiredCount`는 내 목록 조회와 `inspection.readiness`에 함께 반환하는 **조회 시 계산값**이다.
+  가장 최근 완료된 PACKING_LIST 작업에서 `priority=REQUIRED`이고, 유효한 `acceptedItemId`도
+  없고 현재 내 목록에 같은 이름의 항목도 없는 후보를 센다. 이름 비교는 위 채택 규약을 따른다.
+  AI·RULE 출처 모두 포함하며, 미완료로 채택한 필수 물품은 이 경고 대신 내 목록 미완료로 표시한다.
+  후보가 있으면 0 이상의 정수, 완료된 추천 작업 자체가 없으면 `null`(필수 추천 확인 전)이다.
+  빈 후보 배열을 가진 완료 작업은 `0`이다. 컬럼·엔드포인트를 추가하지 않는다.
+- S-05·S-06은 `unacceptedRequiredCount > 0`일 때 **`미채택 필수 후보 n건`**과 S-05 추천 영역으로
+  가는 `확인하기`를 표시한다. 내 목록 완료율이 `1`이어도 경고를 유지한다. `null`은 0건으로
+  표현하지 않고 `필수 추천 확인 전`을 표시한다. 경고는 완료율·무게·최종 저장을 변경하지 않는다.
+  완료율은 선택한 목록의 준비 상태이며 모든 여행 필수품을 갖췄다는 보장이 아니다.
 - `photoStatus`: 승인된 인식 결과와 사용자 확정 연결이 있으면 `CONFIRMED`, 미승인 연결
   후보만 있으면 `NEEDS_CHECK`, 연결이 없으면 `NOT_IN_PHOTO`. 실제 완료 상태와 독립적이다.
 - `readiness.prepared`와 `readiness.unprepared`는 내 목록을 완료 여부로 나눈다. 각 항목에
   `photoStatus`를 표시한다. 미채택 추천·미승인 인식 후보를 내 목록 집계에 넣지 않는다.
+- S-06의 `photoStatus=NEEDS_CHECK`에서 `사진 확인`을 누르면 S-04로 이동한다. FE가 같은 여행의
+  인식 결과와 내 목록을 조회하고, 사용자가 인식 후보와 연결할 내 항목·이름·수량을 선택해
+  `matchedItemIds`·`approved=true`로 PATCH한다. S-06으로 돌아오면 검수·무게를 다시 조회한다.
+  확인 배지만 보고 자동 승인하지 않는다. S-04는 미승인 인식 결과 전체를 보여주므로
+  검수 응답에 예전 `candidates[]`나 별도 후보 점수 API를 추가하지 않는다.
 - `GET items`는 내 목록과 가장 최근 완료된 추천 작업의 `recommendationJobId`(없으면 `null`)를
   반환한다. 재접속 시 이 ID로 후보를 다시 읽는다. 생성 중인 새 추천은 기존 내 목록을 가리지 않는다.
 - `inspection.weight`는 가장 최근 완료된 무게 작업 중 **현재 입력과 같은 결과**만 반환한다.

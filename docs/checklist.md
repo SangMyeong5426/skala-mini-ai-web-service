@@ -7,6 +7,8 @@
 - [x] 개인 Notion 개정안의 사진 승인·추천 채택·실제 완료 구분을 `01`~`07` MD에 반영
 - [x] 내 목록·후보 저장 경계, 기존 API의 추천 참조, 반복 승인 방지 규약 작성
 - [x] 추천 이유·날씨 시점·채택 연결을 AI 스키마와 API 예시에 반영
+- [ ] 팀 개정안·개인 개정안의 관계와 팀 정본 지정, 원본 오타 교정 여부 확인 → 02
+- [ ] PM 확인 — 프롬프트 설계 완료 여부와 Playground 검증 일정 (아래 두 항목)
 - [ ] PNG·PUML·SVG 재생성 — 03 MD Mermaid가 최신 기준
 - [ ] FE 타입·S-04~S-06와 BE 승인·추천 채택·무게 Mock에 개정 계약 반영
 - [ ] 기존 시드를 개정 상태로 갱신 — 승인 가위 등록과 추천 채택 시점 구분
@@ -66,7 +68,8 @@
 - [x] REST API 명세 작성 → [`06-api-spec.md`](06-api-spec.md) — 18엔드포인트 · **Status Code 전부 표기**
 - [x] **Mock API 엔드포인트 포함** → `POST /api/ai-jobs` + `GET /api/ai-jobs/{jobId}` · `jobType` 4종
 - [x] AI 입출력 JSON Schema 확정 → [`07-ai-ready.md`](07-ai-ready.md) — 06 예시·`schema.sql` enum 과 기계 대조
-- [x] 프롬프트 설계 → [`07-ai-ready.md`](07-ai-ready.md) — 실제 모델 검증은 향후 TBD, 이번 데모는 Mock만 사용
+- [ ] 프롬프트 설계 완료 확인 → [`07-ai-ready.md`](07-ai-ready.md) — 작성됨, PM 완료 확인 TBD
+- [ ] Playground 검증 → [`07-ai-ready.md`](07-ai-ready.md) — 미실행 TBD (기존 예상 10분). PM이 실행 시점을 확인한다. 앱의 AI는 Mock만 사용
 - [ ] FE ↔ BE API 연동
 - [ ] BE ↔ DB 연결
 - [x] 시스템 아키텍처 다이어그램 완성 → [`04-architecture.md`](04-architecture.md) — PlantUML 원본 + PNG · SVG
