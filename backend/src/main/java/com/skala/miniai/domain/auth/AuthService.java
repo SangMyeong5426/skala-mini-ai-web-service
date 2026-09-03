@@ -38,8 +38,8 @@ public class AuthService {
         String email = req.email().trim().toLowerCase(Locale.ROOT);
         String nickname = req.nickname().trim();
 
-        if (nickname.isEmpty()) {
-            throw ApiException.badRequest("닉네임은 공백일 수 없습니다.", "nickname");
+        if (nickname.length() < 2) {
+            throw ApiException.badRequest("닉네임은 2~50자입니다.", "nickname");
         }
         if (req.password().getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
             throw ApiException.badRequest("비밀번호가 너무 깁니다. 72바이트 이하로 입력해 주세요.", "password");
