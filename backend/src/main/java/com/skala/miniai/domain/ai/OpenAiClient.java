@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,7 @@ import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
+import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.DetectedObject;
 import com.skala.miniai.domain.photo.TripPhoto;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
@@ -43,10 +45,9 @@ import com.skala.miniai.domain.weather.WeatherSnapshot;
  * ({@code @Primary}). <b>기본값은 그대로 {@code mock} 이다</b> — 발표 데모는 네트워크에 묶이면 안 된다
  * (AGENTS.md). 환경 변수 한 줄로 켜고 끄는 것이 07 이 설계해 둔 모습이다.
  *
- * <p><b>{@code BAG_CHECK} 와 {@code PACKING_LIST} 만 실제로 부른다.</b> 사진에서 물품을 찾아
- * 체크리스트에 올리는 것과, 여행 정보를 보고 빠진 준비물을 추천하는 것 두 가지다.
- * {@code WEIGHT_ESTIMATE} · {@code RULE_CHECK} 는 {@link MockAiClient} 에 넘긴다 —
- * 무게 합산과 반입 판정은 07 이 애초에 AI 를 두지 않기로 한 자리다.
+ * <p>{@code WEIGHT_ESTIMATE} 만 {@link MockAiClient} 에 넘긴다. 나머지 셋은 실제로 부른다.
+ * {@code RULE_CHECK} 는 <b>모델을 두 번</b> 부르고 그 사이에 규칙 엔진이 들어간다 —
+ * <b>반입 판정은 AI 가 하지 않는다</b>(07 「AI-04」).
  *
  * <p>호출하는 쪽은 하나도 바뀌지 않는다. {@link AiJobRunner} 는 {@code AiClient} 만 알고,
  * 인식 결과 저장·내 목록 자동 등록·{@code confidenceLevel} 덮어쓰기는 예전 그대로 돈다.
@@ -76,10 +77,18 @@ public class OpenAiClient implements AiClient {
     private static final int MAX_TIP_LENGTH = 120;
     private static final int MAX_REASON_LENGTH = 200;
 
+    /** 07 RULE_CHECK 출력 스키마의 한도. */
+    private static final int MAX_RULE_RESULTS = 50;
+    private static final int MAX_REASON_TEXT_LENGTH = 300;
+    private static final int MAX_ANSWER_LENGTH = 600;
+    private static final int MAX_FOLLOW_UP_LENGTH = 200;
+
     private final MockAiClient mock;
     private final OpenAiChatApi api;
     private final BagCheckPrompt prompt;
     private final PackingListPrompt packingPrompt;
+    private final RuleCheckPrompt rulePrompt;
+    private final RuleEngine ruleEngine;
     private final VisionImageLoader images;
     private final TripPhotoRepository photos;
     private final TripRepository trips;
@@ -90,7 +99,8 @@ public class OpenAiClient implements AiClient {
     private final int maxPhotos;
 
     public OpenAiClient(MockAiClient mock, OpenAiChatApi api, BagCheckPrompt prompt,
-                        PackingListPrompt packingPrompt, VisionImageLoader images,
+                        PackingListPrompt packingPrompt, RuleCheckPrompt rulePrompt, RuleEngine ruleEngine,
+                        VisionImageLoader images,
                         TripPhotoRepository photos, TripRepository trips, ChecklistItemRepository items,
                         Optional<WeatherClient> weather, Json json,
                         @Value("${app.ai.vision.max-photos:20}") int maxPhotos) {
@@ -98,6 +108,8 @@ public class OpenAiClient implements AiClient {
         this.api = api;
         this.prompt = prompt;
         this.packingPrompt = packingPrompt;
+        this.rulePrompt = rulePrompt;
+        this.ruleEngine = ruleEngine;
         this.images = images;
         this.photos = photos;
         this.trips = trips;
@@ -122,8 +134,9 @@ public class OpenAiClient implements AiClient {
         return switch (jobType) {
             case BAG_CHECK -> bagCheck(input);
             case PACKING_LIST -> packingList(tripId, input);
-            // 07 이 AI 를 두지 않기로 한 자리다. 무게는 산식, 반입은 규칙 엔진이 정본이다.
-            case WEIGHT_ESTIMATE, RULE_CHECK -> mock.run(jobType, input);
+            case RULE_CHECK -> ruleCheck(input);
+            // 합산은 산식이 정본이다. LLM 보정은 07 로드맵 3-4 로 남겨 뒀다.
+            case WEIGHT_ESTIMATE -> mock.run(jobType, input);
         };
     }
 
@@ -174,18 +187,23 @@ public class OpenAiClient implements AiClient {
         Trip trip = trips.findById(targets.get(0).getTripId())
                 .orElseThrow(() -> new OpenAiException("여행 정보를 찾지 못했습니다.", false));
 
-        JsonNode raw = callWithOneRetry(trip, targets, payload);
+        JsonNode raw = callWithOneRetry(() -> call(trip, targets, payload), "BAG_CHECK");
         return toOutput(raw, payload, failed);
     }
 
-    /** 07 로드맵 2단계 — <b>재시도는 한 번뿐이다.</b> 두 번째도 실패하면 작업을 {@code FAILED} 로 둔다. */
-    private JsonNode callWithOneRetry(Trip trip, List<TripPhoto> targets, List<VisionImage> payload) {
+    /**
+     * 07 로드맵 2단계 — <b>재시도는 한 번뿐이다.</b> 두 번째도 실패하면 작업을 {@code FAILED} 로 둔다.
+     *
+     * <p>세 작업이 같은 규칙을 쓴다. 429·5xx·타임아웃·스키마 위반만 다시 걸고,
+     * 401·400 처럼 다시 불러도 같은 실패는 바로 올린다.
+     */
+    private JsonNode callWithOneRetry(Supplier<JsonNode> call, String label) {
         try {
-            return call(trip, targets, payload);
+            return call.get();
         } catch (OpenAiException e) {
             if (!e.isRetryable()) throw e;
-            log.warn("BAG_CHECK 첫 호출 실패, 한 번만 다시 겁니다: {}", e.getMessage());
-            return call(trip, targets, payload);
+            log.warn("{} 첫 호출 실패, 한 번만 다시 겁니다: {}", label, e.getMessage());
+            return call.get();
         }
     }
 
@@ -295,6 +313,149 @@ public class OpenAiClient implements AiClient {
         return kept;
     }
 
+    // ─── AI-04 RULE_CHECK ────────────────────────────────────────────────────
+
+    /**
+     * 자연어 질문·물품 목록 → 반입 판정과 설명. <b>모델을 두 번 부른다.</b>
+     *
+     * <p>가운데에 규칙 엔진이 들어가는 것이 핵심이다. 한 번에 부르면 모델이 규정을 보지 않고
+     * 결론부터 쓰고, 그 결론에 공식 출처 URL 이 함께 붙어 나간다.
+     *
+     * <p>{@code items} 가 있으면 <b>결과 뼈대를 서버가 만든다.</b> 07 이 "results[] 의 개수·순서와
+     * itemId·detectionId·name·qty 가 입력과 같아야 한다" 고 못박았는데, 이걸 모델에게 부탁만 하고
+     * 믿으면 어긋난 순간 작업 전체가 실패한다. 모델에게서는 {@code ruleKeyword} 와
+     * {@code attributes} 만 받아 채운다.
+     */
+    private JsonNode ruleCheck(JsonNode input) {
+        Codes.Transport transport = Codes.Transport.valueOf(input.path("transport").asText());
+        List<String> keywords = ruleEngine.keywordsOf(transport);
+
+        JsonNode structured = callWithOneRetry(
+                () -> api.complete(rulePrompt.system(), rulePrompt.structuring(input, keywords),
+                        List.of(), "rule_check_structured", rulePrompt.structuringSchema()),
+                "RULE_CHECK 1차");
+
+        ObjectNode output = json.newObject();
+        ArrayNode results = output.putArray("results");
+        buildResults(results, input, structured.path("results"));
+        if (results.isEmpty()) {
+            throw new OpenAiException("질문에서 물품을 찾지 못했습니다. 물품 이름을 넣어 다시 물어봐 주세요.", false);
+        }
+
+        // 판정은 여기서 난다. 모델은 이 값을 만들지도, 바꾸지도 못한다.
+        List<String> descriptions = ruleEngine.applyTo(input, output);
+
+        JsonNode explained = callWithOneRetry(
+                () -> api.complete(rulePrompt.system(),
+                        rulePrompt.explaining(input, results, descriptions),
+                        List.of(), "rule_check_explained", rulePrompt.explainingSchema()),
+                "RULE_CHECK 2차");
+
+        applyExplanations(output, results, explained, input);
+        log.info("RULE_CHECK 완료: 물품 {}개, 추가 질문 {}",
+                results.size(), output.path("followUpQuestion").isNull() ? "없음" : "있음");
+        return output;
+    }
+
+    /** 입력 물품이 있으면 그 개수·순서·식별값을 서버가 확정한다. 없으면 모델이 낸 물품을 쓴다. */
+    private void buildResults(ArrayNode results, JsonNode input, JsonNode structured) {
+        JsonNode items = input.path("items");
+        boolean fromItems = items.isArray() && !items.isEmpty();
+        int size = fromItems ? items.size() : Math.min(structured.size(), MAX_RULE_RESULTS);
+
+        for (int i = 0; i < size; i++) {
+            JsonNode model = i < structured.size() ? structured.get(i) : json.newObject();
+            ObjectNode result = results.addObject();
+
+            if (fromItems) {
+                JsonNode item = items.get(i);
+                result.set("itemId", item.get("itemId"));
+                result.set("detectionId", item.get("detectionId"));
+                result.set("name", item.get("name"));
+                result.set("qty", item.get("qty"));
+            } else {
+                result.putNull("itemId");
+                result.putNull("detectionId");
+                String name = text(model.path("name"), MAX_NAME_LENGTH);
+                if (name == null) { results.remove(results.size() - 1); continue; }
+                result.put("name", name);
+                result.put("qty", Math.clamp(model.path("qty").asInt(1), 1, 99));
+            }
+
+            String keyword = text(model.path("ruleKeyword"), MAX_NAME_LENGTH);
+            if (keyword == null) result.putNull("ruleKeyword");
+            else result.put("ruleKeyword", keyword);
+            result.set("attributes", attributesOf(model.path("attributes"),
+                    fromItems ? items.get(i).path("attributes") : null));
+
+            // 규칙 엔진이 곧 덮어쓴다. 계약이 요구하는 칸을 먼저 만들어 둔다.
+            result.putNull("verdict");
+            result.putNull("ruleId");
+            result.putNull("conditionNote");
+            result.putNull("reason");
+            result.putNull("missingInfo");
+            result.putNull("sourceUrl");
+            result.putNull("checkedAt");
+        }
+    }
+
+    /**
+     * 07: 명시된 값만 쓰고 추정·환산하지 않는다.
+     *
+     * <p>입력에 이미 확인된 속성이 있으면 <b>그쪽이 이긴다.</b> 사용자가 라벨을 보고 답한 값이라
+     * 모델이 질문 문장에서 다시 뽑은 값보다 믿을 만하다.
+     */
+    private ObjectNode attributesOf(JsonNode model, JsonNode confirmed) {
+        ObjectNode attributes = json.newObject();
+        for (String field : List.of("capacityMl", "batteryWh", "batteryMah", "bladeCm")) {
+            JsonNode fromInput = confirmed == null ? null : confirmed.path(field);
+            JsonNode value = fromInput != null && fromInput.isNumber() ? fromInput : model.path(field);
+            if (!value.isNumber()) {
+                attributes.putNull(field);
+            } else {
+                // 20000.0 이 아니라 20000 으로 남긴다. 07 예시와 Mock 픽스처가 정수이고,
+                // 후속 턴이 이 값을 그대로 items[] 로 되보내므로 모양이 오가며 달라지지 않게 한다.
+                double number = value.asDouble();
+                if (number == Math.rint(number) && Math.abs(number) < Long.MAX_VALUE) {
+                    attributes.put(field, (long) number);
+                } else {
+                    attributes.put(field, number);
+                }
+            }
+        }
+        return attributes;
+    }
+
+    /** 2차 결과를 붙인다. {@code answer}·{@code followUpQuestion} 규칙은 07 계약 그대로 서버가 건다. */
+    private void applyExplanations(ObjectNode output, ArrayNode results,
+                                   JsonNode explained, JsonNode input) {
+        JsonNode reasons = explained.path("results");
+        boolean needsMoreInfo = false;
+        for (int i = 0; i < results.size(); i++) {
+            ObjectNode result = (ObjectNode) results.get(i);
+            String reason = text(reasons.path(i).path("reason"), MAX_REASON_TEXT_LENGTH);
+            // 07: description 이 없으면 규정을 못 찾은 것이다. 그때 쓸 문장까지 정해 뒀다.
+            result.put("reason", reason != null ? reason : "해당 규정을 찾지 못했습니다. 항공사에 확인하세요.");
+            needsMoreInfo |= Codes.RuleVerdict.NEED_MORE_INFO.name().equals(result.path("verdict").asText());
+        }
+
+        // 물품 목록 호출이면 둘 다 null 이어야 한다 — 계약이 그렇게 검사한다.
+        if (!input.path("question").isTextual()) {
+            output.putNull("answer");
+            output.putNull("followUpQuestion");
+            return;
+        }
+
+        String answer = text(explained.path("answer"), MAX_ANSWER_LENGTH);
+        output.put("answer", answer != null ? answer
+                : "규정을 확인했습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.");
+
+        String followUp = text(explained.path("followUpQuestion"), MAX_FOLLOW_UP_LENGTH);
+        // 되물을 것이 없는데 질문을 남기면 화면이 끝나지 않는다. 그 반대도 계약 위반이다.
+        if (!needsMoreInfo) output.putNull("followUpQuestion");
+        else output.put("followUpQuestion", followUp != null ? followUp : "확인이 필요한 값을 알려 주세요.");
+    }
+
     // ─── AI-02 PACKING_LIST ──────────────────────────────────────────────────
 
     /**
@@ -323,19 +484,9 @@ public class OpenAiClient implements AiClient {
                         LocalDate.parse(input.path("endDate").asText())))
                 .orElse(null);
 
-        JsonNode raw = callPackingWithOneRetry(trip, input, current, snapshot);
+        JsonNode raw = callWithOneRetry(
+                () -> callPacking(trip, input, current, snapshot), "PACKING_LIST");
         return toPackingOutput(raw, input, current, snapshot);
-    }
-
-    private JsonNode callPackingWithOneRetry(Trip trip, JsonNode input,
-                                             List<ChecklistItem> current, WeatherSnapshot snapshot) {
-        try {
-            return callPacking(trip, input, current, snapshot);
-        } catch (OpenAiException e) {
-            if (!e.isRetryable()) throw e;
-            log.warn("PACKING_LIST 첫 호출 실패, 한 번만 다시 겁니다: {}", e.getMessage());
-            return callPacking(trip, input, current, snapshot);
-        }
     }
 
     private JsonNode callPacking(Trip trip, JsonNode input,

@@ -22,6 +22,7 @@ import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.ai.BagCheckPrompt;
 import com.skala.miniai.domain.ai.PackingListPrompt;
+import com.skala.miniai.domain.ai.RuleCheckPrompt;
 import com.skala.miniai.domain.ai.MockAiClient;
 import com.skala.miniai.domain.ai.OpenAiChatApi;
 import com.skala.miniai.domain.ai.OpenAiClient;
@@ -30,6 +31,7 @@ import com.skala.miniai.domain.ai.VisionImage;
 import com.skala.miniai.domain.ai.VisionImageLoader;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
 import com.skala.miniai.domain.photo.TripPhoto;
+import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
 import com.skala.miniai.domain.trip.Trip;
 import com.skala.miniai.domain.trip.TripRepository;
@@ -67,7 +69,8 @@ class OpenAiBagCheckTest {
         given(trips.findById(7L)).willReturn(Optional.of(trip));
 
         client = new OpenAiClient(mock(MockAiClient.class), api, new BagCheckPrompt(json),
-                new PackingListPrompt(json), loader, photos, trips,
+                new PackingListPrompt(json), new RuleCheckPrompt(json), mock(RuleEngine.class),
+                loader, photos, trips,
                 mock(ChecklistItemRepository.class), Optional.empty(), json, 20);
     }
 
