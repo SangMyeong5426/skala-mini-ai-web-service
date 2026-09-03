@@ -9,11 +9,14 @@
 
 hide circle
 skinparam backgroundColor #FFFFFF
+skinparam dpi 160
 skinparam shadowing false
 skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 11
 skinparam linetype ortho
 skinparam ArrowColor #46524E
+title 목표 데이터 모델 — 로그인 사용자 · 내 목록 · 추천 후보
+caption users.login_id 추가 설계 · SQL·시드·DB 적용은 후속 작업
 
 skinparam class {
   BackgroundColor #F5F7F6
@@ -30,11 +33,20 @@ skinparam class {
 entity "users" as users {
   * id : bigint <<PK>>
   --
+  * login_id : varchar(30) <<UQ>>
   * email : varchar(255) <<UQ>>
   * password_hash : varchar(255)
   * nickname : varchar(50)
   * created_at : timestamptz
 }
+
+note left of users
+  가입: 닉네임 · 아이디 · 비밀번호 · 이메일
+  login_id는 로그인용, id는 내부 PK
+  비밀번호는 해시만 저장
+  여행·AI 작업은 인증 사용자에게 귀속
+  세션은 서버 메모리 · 세션 테이블 없음
+end note
 
 entity "trips" as trips {
   * id : bigint <<PK>>
@@ -73,6 +85,8 @@ entity "checklist_items" as items {
   ..
   UNCHECKED / PREPARED /
   NEEDS_CHECK / **NOT_IN_PHOTO**
+  PREPARED만 실제 완료
+  photoStatus는 별도 조회 계산값
 }
 
 entity "trip_itineraries" as itin {
@@ -128,8 +142,8 @@ entity "detected_objects" as detected {
   * approved : boolean
   * created_at : timestamptz
   ..
-  승인 전에는 다음 단계에
-  반영하지 않는다
+  approved: 이전 호환 컬럼 · 등록 조건 아님
+  인식 완료: 내 목록 자동 생성·연결·완료
 }
 
 entity "★ item_detections" as idt <<NM>> {
@@ -218,7 +232,9 @@ end note
 note bottom of idt
   **N:M** 체크리스트 항목 ↔ 인식 물품
   한 항목에 후보 여럿, 한 후보가 여러 항목
-  연결마다 신뢰도·승인 여부가 다르다
+  연결마다 신뢰도·사후 확인 여부가 다르다
+  BAG_CHECK 결과·연결·자동 완료 등록을 한 트랜잭션으로 처리
+  confirmed_by_user=false도 등록·집계에 포함
 end note
 
 note bottom of irc
@@ -228,11 +244,13 @@ note bottom of irc
 end note
 
 note right of jobs
-  jsonb 는 의도적 비정규화다.
-  job_type 4종의 출력 모양이 달라
-  컬럼으로 펴면 대부분 null 이 된다.
-  내부 구조는 07-ai-ready.md 의
-  JSON Schema 로 고정한다.
+  **PACKING_LIST 후보는 output_payload에만 저장**
+  source · acceptedItemId는 JSON 내부 서버 필드
+  선택·승인 시에만 내 목록에 UNCHECKED로 등록
+  acceptedItemId는 내 항목 ID 참조 (DB FK 아님)
+  서버가 소유권·중복·삭제 시 연결 해제를 검증
+  입력·출력 JSON Schema는 07-ai-ready.md
+  완료율·사진 상태·미채택 필수 후보 수는 조회 시 계산
 end note
 
 legend bottom

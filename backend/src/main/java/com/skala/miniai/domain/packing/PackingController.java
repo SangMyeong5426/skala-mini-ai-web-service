@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 
 /**
- * 06 엔드포인트 24~26 — 3D 가방 정리 (S-12).
+ * 06 엔드포인트 28~30 — 3D 가방 정리 (S-12).
  *
  * <p>{@code PUT} 인 이유는 <b>전체 교체</b>이기 때문이다. 부분 갱신이면 {@code PATCH} 였겠지만,
  * 배치는 "지금 화면의 상태 전부" 를 저장하는 동작이다.

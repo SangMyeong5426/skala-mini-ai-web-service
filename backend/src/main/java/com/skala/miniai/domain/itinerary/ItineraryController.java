@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
-/** 06 엔드포인트 19~22 — 여행 일정 (S-11). */
+/** 06 엔드포인트 23~26 — 여행 일정 (S-11). */
 @RestController
 @RequestMapping("/api/trips/{tripId}/itineraries")
 public class ItineraryController {
