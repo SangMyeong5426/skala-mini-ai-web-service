@@ -89,8 +89,10 @@ com.skala.miniai
 ```
 
 **AI 는 전부 Mock 이다.** `MockAiClient` 가 `resources/mock/<jobType>.json` 을 돌려주고,
-그 내용은 `docs/07-ai-ready.md` 「예시」 절 output 을 **스크립트로 추출**한 것이다.
-실제 LLM 을 붙일 때 바꾸는 것은 `AiClient` 구현 하나뿐이다.
+`RULE_CHECK` 챗봇은 S-09의 대표 질문 3개에 맞는 별도 fixture를 고른다. 출력 구조는
+`docs/07-ai-ready.md`의 Schema를 그대로 지키며 `RuleCheckContract`가 RULE_CHECK 입출력을
+실행 시점에 검증한다. 보조배터리는 `100Wh` 후속 답변까지 이어진다. 실제 LLM 을 붙일 때
+바꾸는 것은 `AiClient` 구현 하나뿐이다.
 
 ## 이 스택에서 밟기 쉬운 함정
 

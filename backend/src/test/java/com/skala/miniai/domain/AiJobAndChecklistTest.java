@@ -67,11 +67,13 @@ class AiJobAndChecklistTest {
         jdbc.update("delete from trip_itineraries");
         jdbc.update("delete from trips");
         jdbc.update("delete from users");
-        jdbc.update("insert into users (id, login_id, email, password_hash, nickname, created_at) "
-                + "values (1, 'tester', 'test@skala.dev', 'x', '테스트', current_timestamp)");
+        jdbc.update("insert into users (login_id, email, password_hash, nickname, created_at) "
+                + "values ('tester', 'test@skala.dev', 'x', '테스트', current_timestamp)");
+        Long userId = jdbc.queryForObject(
+                "select id from users where login_id = 'tester'", Long.class);
         // CurrentUser 는 세션에서 읽는다. HTTP 없이 부르는 테스트라 컨텍스트를 직접 채운다.
         SecurityContextHolder.getContext().setAuthentication(
-                UsernamePasswordAuthenticationToken.authenticated(1L, null, java.util.List.of()));
+                UsernamePasswordAuthenticationToken.authenticated(userId, null, java.util.List.of()));
 
         tripId = trips.create(new TripDtos.CreateRequest(
                 "서울", "도쿄", "JP",

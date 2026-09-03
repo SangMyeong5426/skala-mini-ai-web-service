@@ -38,11 +38,13 @@ public class AiJobService {
     private final TripService tripService;
     private final CurrentUser currentUser;
     private final Json json;
+    private final RuleCheckContract ruleCheckContract;
     private final ApplicationEventPublisher events;
     private final long pollAfterMs;
 
     public AiJobService(AiJobRepository jobs, TripPhotoRepository photos, AiInputBuilder inputBuilder,
                         TripService tripService, CurrentUser currentUser, Json json,
+                        RuleCheckContract ruleCheckContract,
                         ApplicationEventPublisher events,
                         @Value("${app.ai.poll-after-ms:500}") long pollAfterMs) {
         this.jobs = jobs;
@@ -51,6 +53,7 @@ public class AiJobService {
         this.tripService = tripService;
         this.currentUser = currentUser;
         this.json = json;
+        this.ruleCheckContract = ruleCheckContract;
         this.events = events;
         this.pollAfterMs = pollAfterMs;
     }
@@ -147,7 +150,7 @@ public class AiJobService {
                 if (clientInput == null || clientInput.isNull()) {
                     throw ApiException.badRequest("input 은 필수입니다.", "input");
                 }
-                yield clientInput;
+                yield ruleCheckContract.validateInput(clientInput);
             }
         };
     }

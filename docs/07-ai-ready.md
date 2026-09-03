@@ -1511,7 +1511,9 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 챗봇 후속 턴은 직전 `results[]`에서 `itemId/detectionId/name/qty/attributes`만 골라
 `items[]`에 보내고 사용자 답을 `question`에 넣는다. `verdict`·`reason` 등 출력 전용 필드는
 입력의 `additionalProperties: false`에 걸리므로 보내지 않는다. 대화 이력을 저장하지 않고
-현재 질의의 구조화 문맥만 이어간다.
+현재 질의의 구조화 문맥만 이어간다. `items[]`가 있으면 출력 `results[]`는 같은 개수·순서이며
+각 위치의 `itemId`·`detectionId`·`name`·`qty`를 그대로 돌려준다. 지원하지 않는 질문이나
+물품은 판정을 지어내지 않고 입력 `attributes`도 그대로 유지해 다음 턴의 문맥 손실을 막는다.
 
 ### 출력 Schema
 
@@ -1770,7 +1772,7 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 
 **서버가 저장 전에 검증한다** — 하나라도 어긋나면 `FAILED` 로 돌리고 기본 문구를 보여준다.
 
-- results[] 의 itemId·detectionId·name·qty 가 input.items 와 순서까지 같아야 한다 (챗봇은 name 만) — 아니면 FAILED
+- input.items 가 있으면 results[] 의 개수·순서와 itemId·detectionId·name·qty 가 같아야 한다 — 아니면 FAILED
 - question 이 있으면 answer 는 string — 아니면 FAILED. question 이 null 이면 answer·followUpQuestion 은 null 로 덮어쓴다
 - sourceUrl ↔ checkedAt 동시, verdict ↔ missingInfo 결합은 스키마(if/then)가 잡는다
 
@@ -1915,7 +1917,9 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 
 `20000mAh`만 있고 Wh가 없다. `batteryMah: 20000`을 보관하되 전압을 가정하지 않는다.
 `batteryWh: null`, `NEED_MORE_INFO`로 두고 라벨의 정격 Wh를 확인하는 후속 질문을 한다.
-사용자가 확인값을 제공한 뒤 같은 규칙 엔진으로 다시 판단한다.
+사용자가 `100Wh예요`라고 답하면 직전 `results[]`의 입력 허용 필드 5개를 `items[]`로
+함께 보내 새 `RULE_CHECK` 작업을 만든다. Mock은 문맥의 보조배터리와 새 답의 `100Wh`를
+조합해 `batteryWh: 100`, `CABIN_OK`, `followUpQuestion: null`을 반환한다.
 
 ### System Prompt
 
@@ -1969,8 +1973,9 @@ B. 설명 (2차 호출)
 `AI_PROVIDER=mock`이면 인식·추천·품목 범위·문장 생성은 고정 예시를 재료로 사용한다.
 실제 AI 호출은 하지 않는다. **사용자의 선택·수량·완료 상태를 처리하는 서버 로직은 실제로 동작해야 한다.**
 
-- Mock과 실제 AI 모두 출력 스키마 검증·입력 대조·서버 필드 채움을 거친다. Mock이라는
-  이유로 중복 검사, 준비 완료 필터, 합산을 생략하지 않는다.
+- `RULE_CHECK` 입출력은 실행 시점에 스키마의 필수 필드·타입·길이·결합 규칙을
+  검증한다. 다른 AI 작업의 공통 출력 검증은 향후 로드맵에 남아 있다. Mock이라는 이유로
+  중복 검사, 준비 완료 필터, 합산을 생략하지 않는다.
 - `BAG_CHECK`는 실제 입력 photoIds에 맞춰 후보를 만든다. 사진 한 장이면 존재하지 않는
   두 번째 photoId를 사용하지 않는다. 성공한 인식 물품은 완료 처리에서 승인 없이 내 목록에 PREPARED로 등록한다. 실패 사진만 재시도한다.
 - `PACKING_LIST`는 현재 내 목록과 중복을 제거하고 reason을 포함한 후보만 반환한다.
@@ -1978,7 +1983,10 @@ B. 설명 (2차 호출)
 - `WEIGHT_ESTIMATE`는 입력의 실제 완료 물품·수량과 품목별 Mock/마스터 범위로 계산한다.
   bagEmptyG·limitG만 바꾼 고정 합계를 반환하지 않는다. 미완료·미채택 추천은 합산하지 않는다.
 - `RULE_CHECK`는 같은 여행의 내 목록 항목·확인된 속성을 사용한다. 사진 자동 등록 항목도 포함한다. 출력 ID는 입력과 일치해야
-  하며 Wh가 없으면 추가정보를 요청한다. 챗봇은 여행 없이 질문한 별도 경로다.
+  하며 Wh가 없으면 추가정보를 요청한다. 챗봇은 여행 없이 질문한 별도 경로다. S-09 Mock은
+  `20000mAh 보조배터리`, `120ml 화장품`, `날 길이 7cm 가위` 질문을 각각 고정 판정으로
+  응답하고 보조배터리의 `100Wh` 후속 답변까지 처리한다. 지원 목록 밖의 질문은 규정을
+  지어내지 않고 `ASK_AIRLINE`을 반환한다.
 - `AI_MOCK_DELAY_MS` 후 완료되며 `202 → 폴링 → COMPLETED/FAILED`를 유지한다.
   사진 등록은 BAG_CHECK 완료 처리, 추천 채택은 별도 item POST가 담당한다.
 - 기존 SQL 시드는 이전 합성 목록이다. 사진 인식 가위 등록·추천 채택 시점이 반영된 시드와
