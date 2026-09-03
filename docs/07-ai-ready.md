@@ -7,13 +7,20 @@
 > Peer Review: **"향후 AI 기능이 들어올 확장 지점이 서비스 흐름상 타당한가?"**,
 > **"AI 프롬프트 설계 및 입출력 JSON 스키마가 기존 웹 구조와 호환되는가?"**
 
-**이 프로젝트에서 AI 코드는 작성하지 않는다.** 3일차 데모까지 AI는 Mock이다.
-대신 **AI가 들어올 자리를 정확히 어디에, 어떤 규격으로 비워 뒀는지**를 설계한다.
+**AI가 들어올 자리를 정확히 어디에, 어떤 규격으로 비워 뒀는지**를 설계한다.
 그것이 이 프로젝트의 주제다.
 
 > **2026-09-03 개정 반영:** [Notion 기능 정의 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)의
 > 사진 우선·별도 추천 원칙에 최신 사용자 결정인 사진 인식 즉시 자동 등록을 적용했다. 아래 스키마는 개정 계약이며
 > 실제 Mock·화면 반영 완료 여부는 [문서 지도](README.md#개정안-반영-상태)에서 별도로 관리한다.
+
+> **2026-09-03 추가:** `BAG_CHECK`(사진 인식) 한 곳에 **실제 OpenAI 호출을 붙였다.**
+> 비워 둔 자리가 정말로 비어 있었는지 확인하는 것이 목적이다 —
+> `AiClient` 인터페이스·06 계약·DB 스키마·화면은 **한 줄도 고치지 않았다.**
+>
+> **기본값은 그대로 `AI_PROVIDER=mock`이다.** 실제 호출은 `.env` 한 줄을 `openai`로
+> 바꿔야만 나간다. 발표 데모는 네트워크·비용·응답 시간에 묶이면 안 되므로 mock으로 돌린다.
+> 나머지 3종(`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK`)은 `openai`에서도 Mock 그대로다.
 
 ## AI 확장 지점
 
@@ -22,7 +29,7 @@
 
 | ID | `jobType` | 하는 일 | Use-Case | 화면 | 지금 | 나중 |
 | --- | --- | --- | --- | --- | --- | --- |
-| AI-01 | `BAG_CHECK` | 사진에서 물품 후보·수량·신뢰도를 뽑는다 | UC-04 | `S-04` | Mock 고정 인식 결과 | 비전 모델 |
+| AI-01 | `BAG_CHECK` | 사진에서 물품 후보·수량·신뢰도를 뽑는다 | UC-04 | `S-04` | Mock 고정 인식 결과 · **`AI_PROVIDER=openai`면 실제 비전 모델** | 비전 모델 |
 | AI-02 | `PACKING_LIST` | 현재 내 목록에 없는 **추가 후보와 이유만** 추천한다 | UC-05 | `S-05` | Mock 고정 목록 | LLM |
 | AI-03 | `WEIGHT_ESTIMATE` | 무게를 **범위**로 추정하고 한도와 비교한다 | UC-10 | `S-06` `S-07` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
 | AI-04 | `RULE_CHECK` | 질문·물품에서 **속성을 구조화**하고 판정을 **설명**한다 | UC-07 · UC-08 | `S-06` `S-08` `S-09` | Mock 고정 판정 | LLM 구조화 + **규칙 엔진** |
@@ -53,11 +60,30 @@
 | Frontend | **변경 없음** — 같은 엔드포인트, 같은 응답 스키마를 그대로 소비 |
 | REST API 규격 | **변경 없음** — [`06-api-spec.md`](06-api-spec.md)의 계약 그대로 |
 | DB 스키마 | **변경 없음** — `ai_jobs.output_payload`(jsonb)에 그대로 저장 |
-| Backend 내부 | **여기만 변경** — `MockAiClient` → `RealAiClient`. 인터페이스 `AiClient` 는 그대로 |
+| Backend 내부 | **여기만 변경** — `MockAiClient` 옆에 `OpenAiClient` 를 두고 `@Primary` 로 밀어낸다. 인터페이스 `AiClient` 는 그대로 |
 | 환경 변수 | `.env`에 API 키·모델명 추가. **코드 변경 없음** |
 
 > 이 표가 발표 2번 섹션의 핵심 슬라이드다.
 > **"백엔드 한 곳만 바뀐다"**를 보여주는 것이 목표다.
+
+`BAG_CHECK` 연동으로 이 표를 실제로 검증했다. 아래가 그때 손댄 파일 전부다 —
+`AiClient`·`AiJobRunner`·`AiJobService`·엔티티·DTO·06 계약·화면은 **건드리지 않았다.**
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `domain/ai/OpenAiClient.java` | `AiClient` 구현. `BAG_CHECK` 만 실제 호출하고 나머지는 `MockAiClient` 에 넘긴다. 응답 검증·보정·재시도 1회 |
+| `domain/ai/OpenAiChatApi.java` | HTTP 한 곳. Structured Outputs(`strict`)로 부른다. **SDK를 넣지 않았다** |
+| `domain/ai/BagCheckPrompt.java` | 아래 System·User Prompt 원문과 **모델용 파생 스키마** |
+| `domain/ai/VisionImageLoader.java` | 저장된 사진을 줄여 `data:` URL 로 바꾼다. 못 읽으면 `failedPhotoIds` |
+| `domain/ai/VisionImage.java` · `OpenAiException.java` | 위 넷이 주고받는 값·예외 |
+
+**모델용 파생 스키마**는 아래 출력 Schema에서 두 가지를 뺀 것이다.
+
+- `confidenceLevel` · `failedPhotoIds` — 이 문서가 **서버가 채운다**고 정했다. 모델에게 물으면
+  경계값이 흔들리고, 실패한 사진은 애초에 모델이 보지 못한다.
+- `minimum` · `maxItems` · `pattern` 같은 값 제약 — Structured Outputs의 `strict` 모드가 받지 않는다.
+  **그래서 서버가 받은 뒤에 다시 검사한다.** `strict`가 지켜 주는 것은 모양뿐이라
+  `qty: 500` · `confidence: 1.9` · 보내지 않은 `photoId` 는 그대로 통과한다.
 
 ---
 
@@ -1981,6 +2007,24 @@ B. 설명 (2차 호출)
 | 화면의 alreadyPacked가 과거 목록이거나 빈 배열 | 유효한 형식이면 서버 PREPARED 목록으로 보정·저장하고 `202`. 같은 값으로 Mock 실행, 차이만으로 `409`를 내지 않음 |
 | S-06 사진 확인 필요 항목을 선택 | S-04에서 이미 자동 등록된 항목을 필요하면 사후 수정하고 S-06 복귀, 상태·무게 다시 조회. 승인 요청 없음 |
 
+### OpenAI 연동 검증 — 2026-09-03
+
+**실제 OpenAI 엔드포인트에는 아직 한 번도 붙여 보지 않았다.** 아래는 네트워크 없이
+확인한 것뿐이다. 키를 넣고 사진 한 장으로 돌려 보는 것은 **남은 일**이다.
+
+| 항목 | 확인 결과 |
+| --- | --- |
+| 제공자 분기 | `AI_PROVIDER` 없이 뜨면 `MockAiClient`, `openai` 면 `OpenAiClient` 가 주입된다 (`AiProviderSwitchTest`) |
+| 값 범위 보정 | `qty: 500` → `99`, `confidence: 1.9` → `1.000`, `missingInfo: "   "` → `null` (`OpenAiBagCheckTest`) |
+| 보내지 않은 사진 | 입력에 없는 `photoId` 의 인식 결과는 버린다. 이름이 공백뿐인 항목도 버린다 |
+| 실패 사진 | 읽지 못한 사진은 `failedPhotoIds` 에 남고, **한 장도 못 읽었을 때만** 작업이 실패한다 |
+| 개수 제한 | 사진 한 장에 10개까지, `confidence` 높은 순으로 남긴다 |
+| 재시도 | 429·5xx 는 한 번만 다시 걸고, 401 은 바로 실패한다 |
+| 기동 | `./gradlew build` 통과. 기존 테스트도 그대로 통과한다 |
+
+아직 확인하지 못한 것 — **실제 모델이 이 프롬프트로 쓸 만한 인식 결과를 내는지**,
+`AI_MODEL` 에 넣을 모델 이름이 지금도 유효한지, 사진 여러 장의 실제 응답 시간과 비용.
+
 ### Playground·실제 모델 검증 — 미실행 TBD
 
 `checklist.md`의 기존 **Playground 검증(예상 10분)**을 별도 미완료 작업으로 유지한다.
@@ -1998,12 +2042,17 @@ B. 설명 (2차 호출)
 
 | 항목 | 환경 변수 | 지금 값 | 비고 |
 | --- | --- | --- | --- |
-| 제공자 | `AI_PROVIDER` | `mock` | 나중에 `openai` / `anthropic` |
-| 모델명 | `AI_MODEL` | `mock` | |
-| API 키 | `AI_API_KEY` | (비움) | **절대 커밋하지 않는다** |
-| 응답 다양성 | `AI_TEMPERATURE` | `0.2` | 구조화된 JSON 출력이므로 낮게 |
-| 최대 토큰 | `AI_MAX_TOKENS` | `4096` | `BAG_CHECK` 100개(≈4.7k 토큰 추정) · `PACKING_LIST` 40개 |
+| 제공자 | `AI_PROVIDER` | `mock` | `openai` 면 `BAG_CHECK` 만 실제 호출. **그 밖의 값은 구현이 없어 mock으로 떨어진다** |
+| 모델명 | `AI_MODEL` | `mock` | `openai` 면 **이미지를 읽는 모델**이어야 한다. `mock` 이면 기동을 막는다 |
+| API 키 | `AI_API_KEY` | (비움) | **절대 커밋하지 않는다.** `openai` 인데 비어 있으면 기동을 막는다 |
+| 응답 다양성 | `AI_TEMPERATURE` | `0.2` | 구조화된 JSON 출력이므로 낮게. 온도를 받지 않는 모델이면 `-1` 로 두어 보내지 않는다 |
+| 최대 토큰 | `AI_MAX_TOKENS` | `4096` | `BAG_CHECK` 100개(≈4.7k 토큰 추정) · `PACKING_LIST` 40개. 여기서 잘리면 JSON이 끊겨 `FAILED` 다 |
 | Mock 응답 지연 | `AI_MOCK_DELAY_MS` | `0` | 발표에서 로딩 화면을 보여주려면 `1000`~`2000` |
+| 호출 제한 시간 | `AI_TIMEOUT_MS` | `60000` | 사진 여러 장을 보는 호출은 느리다. 짧으면 멀쩡한 요청이 `FAILED` 다 |
+| API 주소 | `AI_BASE_URL` | `https://api.openai.com/v1` | Azure·프록시 게이트웨이를 쓸 때만 바꾼다 |
+| 사진 장수 | `AI_VISION_MAX_PHOTOS` | `20` | 입력 Schema의 `maxItems`. 넘는 사진은 `failedPhotoIds` 로 남긴다 |
+| 사진 긴 변 | `AI_VISION_MAX_EDGE_PX` | `1024` | 이 크기로 줄여 JPEG로 다시 굽는다. 요청 크기와 토큰 비용이 여기서 정해진다 |
+| 원본 전송 한도 | `AI_VISION_MAX_RAW_BYTES` | `4194304` | webp는 JDK가 읽지 못해 줄이지 못한다. 그때만 원본을 보내고, 넘으면 그 사진을 포기한다 |
 
 > `AI_PROVIDER=mock`이면 Mock 응답을, 다른 값이면 실제 API를 호출하도록
 > 백엔드를 분기해 두면 **환경 변수 한 줄로 AI를 켜고 끌 수 있다.**
@@ -2015,9 +2064,10 @@ B. 설명 (2차 호출)
 
 | 단계 | 할 일 | 예상 난이도 | 왜 |
 | --- | --- | --- | --- |
-| 1 | `AI_PROVIDER` 분기와 `RealAiClient` — 텍스트 3종 먼저 | 낮음 | 인터페이스와 스키마가 있다. 프롬프트를 붙이고 JSON 모드로 부르면 된다 |
-| 2 | 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | 위 스키마를 그대로 쓴다. Mock 에도 같은 검증을 건다 |
-| 3 | `BAG_CHECK` 비전 입력 — 사진을 모델에 넘기는 파이프라인 | 중간 | 이미지 크기·장수 제한, 실패 사진 처리(`failedPhotoIds`) |
+| 1 | `AI_PROVIDER` 분기와 `OpenAiClient` | 낮음 | **완료.** 다만 붙인 것은 `BAG_CHECK` 뿐이다. 텍스트 3종은 아직 Mock 이다 |
+| 2 | 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | **`BAG_CHECK` 완료.** Structured Outputs 로 모양을 강제하고, 값 범위는 서버가 다시 검사한다. 429·5xx·타임아웃만 재시도하고 401·400 은 바로 실패다 |
+| 3 | `BAG_CHECK` 비전 입력 — 사진을 모델에 넘기는 파이프라인 | 중간 | **완료.** 긴 변 1024px 로 줄여 JPEG 로 보내고, 20장을 넘거나 읽지 못한 사진은 `failedPhotoIds` 로 남긴다 |
+| 3-1 | 텍스트 3종(`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK`) 실제 호출 | 낮음 | 남았다. 자리는 같고 프롬프트만 붙이면 된다 — `OpenAiClient` 가 지금은 Mock 에 넘긴다 |
 | 4 | 서버 작업 실행에 큐(메시지 브로커) 도입 | 중간 | 작업 실행 방식만 변경하고 FE의 상태 조회·폴링 계약은 유지한다 |
 | 5 | `transport_rules` 갱신 잡 — 출처 재확인 날짜 자동 갱신 | 중간 | `checkedAt` 이 오래되면 판정 근거가 약해진다 |
 | 6 | 비용·토큰 사용량 모니터링 | 낮음 | `ai_jobs` 에 토큰 수 컬럼 추가 |
@@ -2040,3 +2090,10 @@ B. 설명 (2차 호출)
 - **챗봇 사진 첨부**의 별도 저장·연결 흐름은 TBD다. 여행 사진의 BAG_CHECK 완료 시 자동 등록 정책과 구분하며, 사진 사전 승인 단계를 다시 추가하지 않는다. 대화 영구 저장은 범위 밖이다.
 - **confidenceLevel 경계값 0.80 / 0.50은 초기값이다.** 실제 모델 인식 정확도·사후 수정률을 보고 조정한다.
 - **실제 모델 검증은 하지 않았다.** 스키마·예시 검증과 모델 정확도를 혼동하지 않는다.
+  `BAG_CHECK` 의 OpenAI 연동도 마찬가지다 — 코드는 돌지만 **실제 응답을 본 적이 없다.**
+- **느린 AI 호출이 DB 커넥션을 쥐고 있다.** `AiJobRunner` 는 `@Transactional` 안에서
+  `AiClient` 를 부르므로, OpenAI 응답을 기다리는 동안 커넥션 하나가 묶인다. 풀 기본값이
+  `DB_POOL_SIZE=5` 라 **동시에 5명이 사진을 분석하면 여섯 번째 요청이 밀린다.** Mock 은
+  즉시 답해서 드러나지 않던 문제다. 로드맵 4단계(큐 도입)가 이것까지 함께 푼다.
+- **`AI_PROVIDER` 에 구현 없는 값을 넣으면 조용히 mock 으로 떨어진다.** `anthropic` 을 넣고
+  실제 호출을 기대하면 Mock 응답을 받는다. 기동 로그에 `OpenAI 연동을 켰습니다` 가 없으면 mock 이다.
