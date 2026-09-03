@@ -174,6 +174,11 @@ const jobs = new Map<number, {
   photoIds?: number[]
   /** RULE_CHECK 이 챗봇 호출인지 가른다. 07 이 출력을 다르게 정했다. */
   question?: string
+  /**
+   * 챗봇이 함께 보낸 물품 이름. 되묻기에 답하는 턴("100Wh예요")은 질문만으로
+   * 무엇을 묻는지 알 수 없어 서버도 `items[]` 를 본다(06:409).
+   */
+  askedItems?: string[]
   /** 06:278 — ai_jobs.user_id == 세션 userId. 없으면 남의 작업을 폴링할 수 있다 */
   ownerId: number
   /**
@@ -474,6 +479,11 @@ export function mockRequest(
       photoIds: Array.isArray(input.photoIds) ? (input.photoIds as number[]) : undefined,
       // 챗봇인지 물품 목록 호출인지 가르는 값. 07 이 출력을 다르게 정했다.
       question: typeof input.question === 'string' && input.question.trim() ? input.question : undefined,
+      askedItems: Array.isArray(input.items)
+        ? (input.items as { name?: unknown }[])
+            .map((i) => i?.name)
+            .filter((n): n is string => typeof n === 'string')
+        : undefined,
       // 접수 시점의 여행 상태를 찍어 둔다. 나중에 현재 상태와 비교한다.
       stamp: target ? stampOf(target) : undefined,
       applied: false,
@@ -504,7 +514,7 @@ export function mockRequest(
     // 07:1733 — question 이 있으면 answer 는 string 이어야 한다. 물품 목록 호출의
     // 출력(answer: null)을 챗봇에 돌려주면 계약 위반이고, 무엇을 물어도 같은 답이 된다.
     if (job.jobType === 'RULE_CHECK' && job.question) {
-      done.output = fx.RULE_CHECK_CHAT as typeof done.output
+      done.output = fx.RULE_CHECK_CHAT(job.question, job.askedItems) as typeof done.output
     }
     // 후보가 이미 채택됐는지는 여행 상태가 안다. 06 의 acceptedItemId 가 그 자리다.
     // 안 실어 주면 화면이 채택한 것을 계속 "담을 수 있는 것" 으로 보여준다.

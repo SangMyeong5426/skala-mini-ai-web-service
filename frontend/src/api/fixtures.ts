@@ -489,16 +489,19 @@ export const AI_OUTPUT: {
 }
 
 /**
- * 챗봇 호출일 때의 <b>RULE_CHECK 출력</b>.
+ * 챗봇 호출일 때의 <b>RULE_CHECK 출력</b> — 질문마다 다르다.
  *
  * `AI_OUTPUT.RULE_CHECK` 은 07 의 <b>예시 1(물품 목록 호출)</b>이라 `answer` 와
  * `followUpQuestion` 이 null 이다. 07:1733 이 <i>"question 이 있으면 answer 는
  * string"</i> 이라고 못박았으므로 챗봇에 그것을 돌려주면 계약 위반이다.
  *
- * 이 값은 07 의 <b>예시 2 — S-09 챗봇 · 여행 없이 질문</b> 출력 그대로다.
+ * 아래 다섯은 백엔드 Mock(`backend/src/main/resources/mock/RULE_CHECK_*.json`)과
+ * <b>같은 값이다.</b> 06:400-411 이 대표 질문 3개와 되묻기 답 하나, 그리고 그 밖의
+ * 질문을 어떻게 처리할지 정해 두었다 — 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ *
  * 질문에서 뽑은 물품이라 `itemId`·`detectionId` 가 null 이다(07:1888).
  */
-export const RULE_CHECK_CHAT: RuleCheckOutput = {
+const CHAT_BATTERY: RuleCheckOutput = {
   results: [
     {
       itemId: null,
@@ -523,6 +526,138 @@ export const RULE_CHECK_CHAT: RuleCheckOutput = {
   ],
   answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
   followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
+}
+
+/** 위 되묻기에 "100Wh예요" 라고 답했을 때. 되묻기가 <b>닫힌다</b>. */
+const CHAT_BATTERY_100WH: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "보조배터리",
+      qty: 1,
+      ruleKeyword: "보조배터리",
+      attributes: {
+        capacityMl: null,
+        batteryWh: 100,
+        batteryMah: 20000,
+        bladeCm: null
+      },
+      verdict: "CABIN_OK",
+      ruleId: 1,
+      conditionNote: "100Wh 이하",
+      reason: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+const CHAT_LIQUID: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "화장품",
+      qty: 1,
+      ruleKeyword: "액체",
+      attributes: {
+        capacityMl: 120,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: null
+      },
+      verdict: "CHECKED_OK",
+      ruleId: 5,
+      conditionNote: "100ml 초과",
+      reason: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+const CHAT_SCISSORS: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "가위",
+      qty: 1,
+      ruleKeyword: "가위",
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: 7
+      },
+      verdict: "CHECKED_OK",
+      ruleId: 6,
+      conditionNote: "날 길이 6cm 초과",
+      reason: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요.",
+      missingInfo: null,
+      sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+/** 모르는 질문. <b>규정을 지어내지 않는다</b> — 항공사에 넘긴다. */
+const CHAT_UNKNOWN: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "문의 물품",
+      qty: 1,
+      ruleKeyword: null,
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: null,
+        bladeCm: null
+      },
+      verdict: "ASK_AIRLINE",
+      ruleId: null,
+      conditionNote: null,
+      reason: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인하세요.",
+      missingInfo: null,
+      sourceUrl: null,
+      checkedAt: null
+    }
+  ],
+  answer: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: null
+}
+
+/**
+ * 질문을 보고 답을 고른다. <b>백엔드 `MockAiClient.ruleCheckFixture` 와 같은 순서·같은 조건이다.</b>
+ *
+ * 공백을 지우고 소문자로 맞춘 뒤 <b>물품 이름과 기준값을 함께</b> 본다(06:398).
+ * "화장품 기내 되나요?" 처럼 수치가 없으면 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ *
+ * 되묻기에 답하는 턴은 질문에 물품 이름이 없다("100Wh예요"). 그래서 화면이 함께
+ * 보낸 `items[]` 의 이름도 본다 — 백엔드의 `hasItem(input, "보조배터리")` 자리다.
+ *
+ * Mock 이 서버보다 후하면 Mock 에서만 되는 화면이 생긴다. 예전에는 무엇을 물어도
+ * 보조배터리 답이 돌아왔고, 되묻기에 답해도 같은 되묻기가 다시 나와 끝나지 않았다.
+ */
+export function RULE_CHECK_CHAT(question: string, itemNames: string[] = []): RuleCheckOutput {
+  const q = question.replace(/\s+/g, '').toLowerCase()
+  const asked = (name: string) => q.includes(name) || itemNames.includes(name)
+  if (q.includes('100wh') && asked('보조배터리')) return CHAT_BATTERY_100WH
+  if (q.includes('보조배터리') && q.includes('20000mah')) return CHAT_BATTERY
+  if (q.includes('화장품') && q.includes('120ml')) return CHAT_LIQUID
+  if (q.includes('가위') && q.includes('7cm')) return CHAT_SCISSORS
+  return CHAT_UNKNOWN
 }
 
 export const AI_JOB_CREATED = (jobType: JobType, jobId: number): AiJobCreated => ({
