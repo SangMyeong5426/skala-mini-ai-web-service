@@ -615,7 +615,14 @@ export function mockRequest(
   // ── 인식 결과 ──────────────────────────────────────────
   if (method === 'GET' && /^\/trips\/\d+\/detections$/.test(p)) {
     const t = tripOf()
-    return t ? delay({ detections: t.detections }) : NOT_FOUND
+    if (!t) return NOT_FOUND
+    // 06 은 목록에도 linkedItems 를 준다. 없으면 S-04 가 이미 연결된 물품까지
+    // "내 목록에 새로 추가됨" 으로 잘못 말한다.
+    return delay({
+      detections: t.detections.map((d) => ({
+        ...d, linkedItems: linkedItems(t, d.detectionId),
+      })),
+    })
   }
   if (method === 'PATCH' && /^\/trips\/\d+\/detections\/\d+$/.test(p)) {
     const t = tripOf()

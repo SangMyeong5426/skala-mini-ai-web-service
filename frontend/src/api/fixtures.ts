@@ -179,16 +179,21 @@ export const INSPECTION: Inspection = {
     unacceptedRequiredCount: 1,
   },
   weight: {
-    minG: 4570, typicalG: 5410, maxG: 6890,
+    // 06:603-610 예시 그대로. 랜딩(4.6—5.5—7.0)과 같은 값이어야 한다.
+    minG: 4610, typicalG: 5480, maxG: 7010,
     limitG: 10000,
     verdict: 'ROOM',
     confidence: 'MEDIUM',
-    confidenceReason: '사진에서 미확인 4개, 승인 전 1개',
-    excludedCount: 5,
+    // 승인 게이트가 폐기됐으므로 "승인 전" 이라는 사유가 남아 있으면 안 된다
+    confidenceReason: '자동 등록 8개 중 6개의 무게를 계산했습니다. 미완료 1개와 무게 정보가 없는 2개는 제외했습니다.',
+    excludedCount: 3,
     contributions: [
       { name: '상의', typicalG: 200, qty: 4, subtotalG: 800 },
       { name: '하의', typicalG: 400, qty: 2, subtotalG: 800 },
       { name: '보조배터리', typicalG: 280, qty: 1, subtotalG: 280 },
+      { name: '속옷', typicalG: 60, qty: 4, subtotalG: 240 },
+      { name: '충전기', typicalG: 90, qty: 1, subtotalG: 90 },
+      { name: '가위', typicalG: 70, qty: 1, subtotalG: 70 },
     ],
   },
   customs: [
