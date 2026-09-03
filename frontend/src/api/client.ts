@@ -38,6 +38,24 @@ let ensureCsrf: (() => Promise<void>) | null = null
 export const setCsrfLoader = (fn: (() => Promise<void>) | null) => { ensureCsrf = fn }
 
 /** 06 의 오류 봉투를 담은 예외. 화면은 `message` 를 그대로 보여주면 된다. */
+/**
+ * 서버에 <b>닿지도 못한 경우</b>를 06 의 오류 봉투로 바꾼다.
+ *
+ * `fetch` 는 네트워크가 끊기면 `TypeError('Failed to fetch')` 를 던진다.
+ * 화면은 `err.message` 를 그대로 보여주므로, 로그인 실패 자리에 영문
+ * 예외 문구가 떴다. 03:210 이 정한 S-00 의 네트워크 오류 상태가 아니다.
+ *
+ * status 0 은 <b>HTTP 응답이 없었다</b>는 뜻이다. 서버가 준 상태 코드와
+ * 섞이지 않는다.
+ */
+async function fetchOrFail(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch {
+    throw new ApiFailure(0, 'NETWORK', '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  }
+}
+
 export class ApiFailure extends Error {
   // tsconfig 의 erasableSyntaxOnly 때문에 생성자 파라미터 프로퍼티를 쓸 수 없다.
   // 필드를 따로 선언하고 대입한다.
@@ -112,7 +130,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!csrf && method !== 'GET' && ensureCsrf) {
     try { await ensureCsrf() } catch { /* 실패해도 아래에서 서버 응답으로 판단한다 */ }
   }
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetchOrFail(`${BASE}${path}`, {
     ...init,
     // 세션 쿠키(JSESSIONID)를 실어 보낸다. 없으면 모든 보호 API 가 401 이다.
     credentials: 'include',

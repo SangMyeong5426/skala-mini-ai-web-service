@@ -44,8 +44,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let alive = true
     api.get<SessionResponse>('/auth/session')
       .then((s) => {
-        if (!alive) return
+        /*
+         * <b>토큰은 alive 가드보다 먼저 받는다.</b>
+         *
+         * StrictMode 는 개발 모드에서 이 effect 를 두 번 돌린다. 두 요청 모두
+         * 아직 XSRF-TOKEN 쿠키가 없어 서버가 <b>서로 다른 토큰 두 개</b>를
+         * 발급하고, 브라우저 쿠키에는 <b>나중에 도착한 응답</b>의 값이 남는다.
+         *
+         * 먼저 도착한 응답이 alive 가드에 걸려 버려지면 메모리 토큰과 쿠키가
+         * 어긋나고, 첫 로그인 클릭이 403 CSRF_INVALID 로 튕긴다.
+         * 마지막에 도착한 응답의 토큰을 그대로 들고 있으면 쿠키와 같아진다.
+         */
         setCsrfToken(s.csrfToken)
+        if (!alive) return
         setUser(s.authenticated ? s.user : null)
       })
       // 세션 조회가 실패하면 미인증으로 둔다. 여기서 막으면 로그인조차 못 한다.
