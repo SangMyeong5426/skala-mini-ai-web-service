@@ -62,6 +62,48 @@ SKALA Full-Stack Engineering의 **3일짜리 Mini-project**다. 운영 서비스
 - 프런트엔드는 Mock이 즉시 응답하더라도 **폴링으로 구현한다.**
 - API 키·모델명·temperature는 코드에 쓰지 않는다. 전부 환경 변수로 읽는다.
 
+## JPA 엔티티를 쓸 때
+
+`application.properties` 가 `spring.jpa.hibernate.ddl-auto=validate` 다.
+**매핑이 하나라도 어긋나면 앱이 아예 뜨지 않는다.** 오류는 `BeanCreationException`
+안쪽에 묻혀 있어 원인을 찾는 데 시간이 오래 걸린다.
+
+아래는 실제 Supabase(PostgreSQL 17.6 · Hibernate 7.4.5)에 붙여 **직접 재현하고
+고쳐 본 것**이다. 추측이 아니다.
+
+| `schema.sql` 의 타입 | 이렇게 쓴다 | 안 그러면 |
+| --- | --- | --- |
+| `GENERATED ALWAYS AS IDENTITY` | `@GeneratedValue(strategy = GenerationType.IDENTITY)` | `Schema validation: missing sequence [trips_seq]` |
+| `JSONB` | `@JdbcTypeCode(SqlTypes.JSON)` + `String` | `found [jsonb (Types#OTHER)], but expecting [varchar(255) (Types#VARCHAR)]` |
+| `NUMERIC(4,3)` | `BigDecimal` + `@Column(precision=4, scale=3)` | `found [numeric (Types#NUMERIC)], but expecting [float(53) (Types#FLOAT)]` |
+| `CHAR(2)` · `CHAR(3)` | `@JdbcTypeCode(SqlTypes.CHAR)` | `found [bpchar (Types#CHAR)], but expecting [varchar(255) (Types#VARCHAR)]` |
+| `TIMESTAMPTZ` | `OffsetDateTime` | `LocalDateTime` 도 검증은 통과하지만 `06-api-spec.md` 가 ISO 8601 UTC(`...Z`)를 계약으로 못박았다 |
+
+**`@GeneratedValue` 를 전략 없이 쓰지 않는다.** Hibernate 6/7 의 기본값(`AUTO`)은
+시퀀스를 찾는데 `schema.sql` 에는 시퀀스가 없다.
+
+**`hypersistence-utils` 같은 라이브러리를 넣지 않는다.** `@JdbcTypeCode` 만으로 된다.
+
+### 복합 기본키 두 개
+
+`item_detections` 와 `item_rule_checks` 는 복합 PK 다. `@IdClass` 를 쓰고
+**ID 클래스에 `equals` · `hashCode` 를 반드시 넣는다.** 없으면 기동할 때마다
+`HHH000038: Composite id class does not override equals()` 경고가 뜬다.
+
+### 지연 로딩
+
+`spring.jpa.open-in-view=false` 다. 컨트롤러까지 엔티티를 들고 가지 않는다.
+서비스 계층(`@Transactional`) 안에서 DTO 로 바꿔서 내보낸다.
+
+### 엔티티를 만든 직후
+
+```bash
+cd backend && ./gradlew bootRun
+```
+
+`Initialized JPA EntityManagerFactory` 와 `Started MiniAiWebServiceApplication`
+두 줄이 뜨는 것을 확인하고 커밋한다. **`validate` 는 읽기 전용이라 DB 를 건드리지 않는다.**
+
 ## Git
 
 - `main`에 직접 커밋·push하지 않는다. 작업 브랜치를 만든다.
