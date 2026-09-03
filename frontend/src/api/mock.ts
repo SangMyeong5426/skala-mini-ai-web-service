@@ -259,6 +259,28 @@ function syncStatus(t: TripState, itemIds: number[]) {
      * 물품이 <b>재분석 한 번에 완료로 되돌아갔다.</b> 사진을 다시 분석했다는
      * 이유로 "이거 챙겼다" 를 사용자 대신 결정한 셈이다.
      */
+    /*
+     * <b>사진 상태는 언제나 다시 계산한다.</b> 준비 여부와 독립된 축이다
+     * (Codes.java — "사진에서 못 찾았다고 완료를 취소하지 않는다").
+     *
+     * 06:1033 — 유효한 연결 중 HIGH/MEDIUM 이거나 사후 확인된 것이 있으면
+     * CONFIRMED, LOW 만 있고 사후 확인이 없으면 NEEDS_CHECK, 연결이 없으면
+     * NOT_IN_PHOTO.
+     *
+     * 예전에는 이 값을 아예 건드리지 않아서, 사진을 지워도 그 사진을 근거로 한
+     * "사진에서 확인" 배지가 그대로 남았다.
+     */
+    if (linked.length === 0) {
+      item.photoStatus = 'NOT_IN_PHOTO'
+    } else {
+      const strong = linked.some((detectionId) => {
+        if (t.confirmed.has(detectionId)) return true
+        const d = t.detections.find((x) => x.detectionId === detectionId)
+        return d !== undefined && d.confidenceLevel !== 'LOW'
+      })
+      item.photoStatus = strong ? 'CONFIRMED' : 'NEEDS_CHECK'
+    }
+
     const touchedByUser = linked.some((detectionId) => t.confirmed.has(detectionId))
     if (touchedByUser) continue
 
@@ -346,12 +368,27 @@ function weightFor(input: Record<string, unknown>) {
   if (noWeight.length) why.push(`무게 정보 없음 ${noWeight.length}개`)
 
   return {
-    minG, typicalG, maxG, limitG, verdict, confidence,
+    minG, typicalG, maxG, limitG, bagEmptyG, verdict, confidence,
     confidenceReason: why.join(' · ') + (why.length > 1 ? '는 제외했습니다.' : '.'),
     excludedCount: excluded.length,
-    // 06 투영 — S-06 은 위 3개만. S-07 이 전부를 본다(07:1081)
-    contributions: contributions.slice(0, 3),
+    excluded,
+    contributions,
   }
+}
+
+/**
+ * 07 출력 → 06 `inspection.weight` 투영.
+ *
+ * <b>같은 작업 출력에서 만든다.</b> 07 이 inspection.weight 를 그 작업 출력의
+ * 투영으로 정했다. 따로 만들면 같은 작업인데 `GET /ai-jobs` 와 검수 화면의
+ * 숫자가 달라진다.
+ *
+ * 서버가 하는 일과 같다 — `excluded` 는 빼고(S-07 이 본다),
+ * `contributions` 는 위 3개만(InspectionService:142 의 `break`), 07:1081.
+ */
+function weightForInspection(input: Record<string, unknown>) {
+  const { excluded: _excluded, bagEmptyG: _bagEmptyG, ...rest } = weightFor(input)
+  return { ...rest, contributions: rest.contributions.slice(0, 3) }
 }
 
 function itemsOf(t: TripState): ChecklistItem[] {
@@ -631,6 +668,16 @@ export function mockRequest(
     if (job.jobType === 'RULE_CHECK' && job.question) {
       done.output = fx.RULE_CHECK_CHAT(job.question, job.askedItems) as typeof done.output
     }
+    /*
+     * 무게도 <b>접수한 입력으로</b> 만든다. 검수 화면만 그렇게 하고 여기는
+     * 고정 fixture 를 두면, <b>같은 작업인데 두 곳의 숫자가 다르다.</b>
+     * 빈 가방 5.2kg·한도 23kg 여행에서 작업 출력은 5.48kg·한도 10kg 에
+     * 다른 여행의 기여 물품을 내놓았다. 07 은 inspection.weight 를 이 출력의
+     * 투영으로 정했으므로 만드는 곳이 하나여야 한다.
+     */
+    if (job.jobType === 'WEIGHT_ESTIMATE' && job.input) {
+      done.output = weightFor(job.input) as typeof done.output
+    }
     // 후보가 이미 채택됐는지는 여행 상태가 안다. 06 의 acceptedItemId 가 그 자리다.
     // 안 실어 주면 화면이 채택한 것을 계속 "담을 수 있는 것" 으로 보여준다.
     const t2 = job.tripId ? trips.get(job.tripId) : undefined
@@ -747,6 +794,22 @@ export function mockRequest(
     if (!item) return NOT_FOUND
     // 06: 보낸 체크 상태를 그대로 바꾼다. 조회할 때 다시 덮어쓰지 않는다.
     Object.assign(item, b)
+
+    /*
+     * 06:720 — <b>"사용자 item PATCH 도 해당 사진 연결의 사후 확인을 기록해
+     * 이후 분석에서 보존한다."</b>
+     *
+     * 여기서 기록하지 않으면, 사진에서 등록된 물품의 체크만 해제하고 재분석했을
+     * 때 다시 PREPARED 로 되돌아간다. 인식 PATCH 를 거친 항목만 보호받고 있었다.
+     *
+     * 값은 그 인식의 <b>현재 이름</b>이다. 이름을 고친 적이 없으므로 재분석 때
+     * 모델이 내놓는 이름과 그대로 대조된다.
+     */
+    for (const [detectionId, ids] of t.links) {
+      if (!ids.includes(itemId) || t.confirmed.has(detectionId)) continue
+      const d = t.detections.find((x) => x.detectionId === detectionId)
+      if (d) t.confirmed.set(detectionId, d.name)
+    }
     return delay({ ...item })
   }
 
@@ -772,14 +835,35 @@ export function mockRequest(
     return t ? delay({ photos: t.photos }) : NOT_FOUND
   }
 
-  // 06:106 #12 — 사진 삭제 → 204. 03:245 의 "미리보기 썸네일·삭제" 가 부른다.
+  /*
+   * 06:106 #12 — 사진 삭제 → 204. 03:245 의 "미리보기 썸네일·삭제" 가 부른다.
+   *
+   * <b>사진만 지우면 안 된다.</b> schema.sql 이 사진 → 인식 → 연결을
+   * `ON DELETE CASCADE` 로 걸어 뒀고 `PhotoService.delete` 도 그렇게 지운다.
+   * 사진만 목록에서 빼면 <b>지운 사진을 근거로 한 인식과 "사진에서 확인" 이
+   * 그대로 남는다.</b> 사진 2장을 분석하고 첫 장을 지워도 그 사진의 인식 5건과
+   * 연결이 계속 조회됐다.
+   *
+   * <b>체크리스트 항목과 사용자가 정한 준비 상태는 남긴다.</b> 사진을 지웠다고
+   * 챙기기로 한 물건까지 없어지지는 않는다. 연결이 사라지면 사진 확인 상태만
+   * 다시 계산한다.
+   */
   if (method === 'DELETE' && /^\/trips\/\d+\/photos\/\d+$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND
     const photoId = idsIn(p)[1]
-    const before = t.photos.length
+    if (!t.photos.some((x) => x.photoId === photoId)) return NOT_FOUND
     t.photos = t.photos.filter((x) => x.photoId !== photoId)
-    if (t.photos.length === before) return NOT_FOUND
+
+    const gone = t.detections.filter((d) => d.photoId === photoId)
+    const touched = new Set<number>()
+    for (const d of gone) {
+      for (const itemId of t.links.get(d.detectionId) ?? []) touched.add(itemId)
+      t.links.delete(d.detectionId)
+      t.confirmed.delete(d.detectionId)
+    }
+    t.detections = t.detections.filter((d) => d.photoId !== photoId)
+    syncStatus(t, [...touched])
     return delay(undefined)
   }
 
@@ -917,7 +1001,7 @@ export function mockRequest(
        */
       weight: (() => {
         const j = freshJob('WEIGHT_ESTIMATE')
-        return j?.input ? weightFor(j.input) : null
+        return j?.input ? weightForInspection(j.input) : null
       })(),
       customs: fresh('RULE_CHECK') ? fx.INSPECTION.customs : null,
       notice: fx.INSPECTION.notice,

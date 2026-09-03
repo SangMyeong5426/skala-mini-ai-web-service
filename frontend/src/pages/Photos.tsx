@@ -147,7 +147,13 @@ export default function Photos() {
               type="button"
               className="btn"
               disabled={empty}
-              onClick={() => nav(`/trips/${tripId}/detections`)}
+              /*
+               * <b>분석해 달라는 뜻</b>을 함께 넘긴다. S-04 는 인식 결과가 이미
+               * 있으면 분석을 건너뛰는데(사후 수정하러 다시 들어온 경우다),
+               * 그러면 사진을 새로 올리고 이 버튼을 눌러도 아무 일이 없었다.
+               * 이전 결과만 보이고 `다시 분석` 을 또 눌러야 했다.
+               */
+              onClick={() => nav(`/trips/${tripId}/detections?analyze=1`)}
             >
               분석 시작
             </button>

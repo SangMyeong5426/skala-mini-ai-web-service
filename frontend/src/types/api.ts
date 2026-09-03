@@ -263,8 +263,12 @@ export interface WeightEstimateOutput {
   minG: number
   typicalG: number
   maxG: number
-  limitG: number
-  bagEmptyG: number
+  /**
+   * 07 은 둘 다 <b>nullable</b> 이다 — 서버가 input 값을 그대로 옮기는데
+   * 가방 정보를 모르는 여행이 있다. `limitG` 가 null 이면 verdict 는 UNKNOWN 이다.
+   */
+  limitG: number | null
+  bagEmptyG: number | null
   verdict: WeightVerdict
   confidence: ConfidenceLevel
   confidenceReason: string

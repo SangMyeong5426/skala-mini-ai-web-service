@@ -117,7 +117,17 @@ export default function Detections() {
   useEffect(() => {
     kicked.current = false
     void load().then((r) => {
-      if (kicked.current || r.dets.length > 0 || r.photoIds.length === 0) return
+      if (kicked.current || r.photoIds.length === 0) return
+      /*
+       * 인식 결과가 이미 있으면 <b>그냥 들른 것</b>이다 — 사후 수정하러 온
+       * 방문까지 매번 다시 분석하면 사용자가 고친 것을 계속 흔든다.
+       *
+       * 다만 S-03 의 `분석 시작` 은 <b>분석해 달라는 명시적 요청</b>이라
+       * 결과가 있어도 돌린다. 사진을 새로 올리고 눌렀는데 이전 결과만 보이면
+       * 그 버튼은 이름값을 못 한다.
+       */
+      const asked = new URLSearchParams(window.location.search).get('analyze') === '1'
+      if (!asked && r.dets.length > 0) return
       kicked.current = true
       void analyzeWith(r.photoIds)
     })
