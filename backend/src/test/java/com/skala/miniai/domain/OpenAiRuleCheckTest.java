@@ -223,4 +223,87 @@ class OpenAiRuleCheckTest {
         assertThat(battery.path("attributes").path("batteryWh").asInt()).isEqualTo(200);
         assertThat(battery.path("verdict").asText()).isEqualTo("CHECKED_FORBIDDEN");
     }
+
+    /**
+     * {@code "170Wh"} 안에는 {@code "70wh"} 가 들어 있다. 부분 문자열로 찾으면 모델이 낸
+     * {@code 70} 이 사용자 확인값으로 통과하고, 전면 금지가 반입 가능으로 뒤집힌다.
+     */
+    @Test
+    void 질문_숫자의_일부와_겹치는_값은_받지_않는다() {
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":70,"batteryMah":null,"bladeCm":null}}]}
+                """, """
+                {"results":[{"reason":"확인이 필요합니다."}],
+                 "answer":"확인이 필요합니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+                 "followUpQuestion":"배터리 라벨에 표시된 정격 Wh는 얼마인가요?"}
+                """);
+
+        JsonNode battery = client.run(Codes.JobType.RULE_CHECK, 7L, json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"170Wh 보조배터리 기내 되나요?","items":[]}
+                """)).path("results").path(0);
+
+        assertThat(battery.path("attributes").path("batteryWh").isNull())
+                .as("질문은 170Wh 인데 모델이 70 을 냈다. 받아들이면 전면 금지가 반입 가능이 된다")
+                .isTrue();
+        assertThat(battery.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
+    }
+
+    /** 질문에 실제로 적힌 값은 그대로 살아야 한다. 위 검사가 과하게 막지 않는지 함께 본다. */
+    @Test
+    void 질문에_적힌_170Wh_는_그대로_쓴다() {
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":170,"batteryMah":null,"bladeCm":null}}]}
+                """, """
+                {"results":[{"reason":"160Wh 를 넘습니다."}],
+                 "answer":"반입할 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+                 "followUpQuestion":null}
+                """);
+
+        JsonNode battery = client.run(Codes.JobType.RULE_CHECK, 7L, json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"170Wh 보조배터리 기내 되나요?","items":[]}
+                """)).path("results").path(0);
+
+        assertThat(battery.path("attributes").path("batteryWh").asInt()).isEqualTo(170);
+        assertThat(battery.path("verdict").asText()).isEqualTo("CHECKED_FORBIDDEN");
+    }
+
+    /**
+     * 이름이 같은 물품이 둘이면 어느 응답이 어느 물품인지 서버가 알 수 없다.
+     *
+     * <p>예전에는 첫 결과를 두 번 써서 둘 다 100Wh 로 만들었다. <b>모델이 제대로 답해도</b>
+     * 서버가 두 번째 값을 잃었다.
+     */
+    @Test
+    void 이름이_같은_물품이_둘이면_판정을_보류한다() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,
+                 "question":"첫 번째 보조배터리는 100Wh, 두 번째는 200Wh예요","items":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]}
+                """);
+
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":100,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":200,"batteryMah":null,"bladeCm":null}}]}
+                """, TWO_REASONS);
+
+        JsonNode results = client.run(Codes.JobType.RULE_CHECK, 7L, input).path("results");
+
+        assertThat(results).hasSize(2);
+        for (JsonNode r : results) {
+            assertThat(r.path("attributes").path("batteryWh").isNull())
+                    .as("어느 응답이 어느 물품인지 모른다. 100Wh 를 둘 다에 붙이면 200Wh 가 사라진다")
+                    .isTrue();
+            assertThat(r.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        }
+    }
 }

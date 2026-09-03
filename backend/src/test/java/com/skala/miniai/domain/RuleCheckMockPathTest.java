@@ -101,4 +101,37 @@ class RuleCheckMockPathTest {
         assertThat(output.path("results").path(0).path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
         assertThat(output.path("followUpQuestion").asText()).isNotBlank();
     }
+
+    /**
+     * 규정을 못 찾았는데 {@code answer} 가 구체적인 허용·금지를 말하면, 같은 응답 안에서
+     * 결과와 안내가 충돌한다. <b>시드를 고치지 않아도</b> 재현되는 문제라 07 「알려진 한계」의
+     * 규정표 드리프트와는 별개다.
+     */
+    @Test
+    void 규정을_못_찾으면_답변도_미확인_안내로_바꾼다() {
+        AiJob job = ask("TRAIN", "100Wh 보조배터리 가져가도 되나요?");
+
+        assertThat(job.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+        JsonNode output = json.read(job.getOutputPayload());
+        assertThat(output.path("results").path(0).path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        assertThat(output.path("results").path(0).path("ruleId").isNull()).isTrue();
+
+        String answer = output.path("answer").asText();
+        assertThat(answer)
+                .as("규정을 못 찾았는데 '위탁수하물로 부칠 수 없습니다' 같은 확정 안내가 남으면 안 된다")
+                .contains("찾지 못했습니다")
+                .doesNotContain("위탁수하물로 부칠 수 없습니다");
+        // 07: answer 는 이 문장으로 맺는다.
+        assertThat(answer).endsWith("최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.");
+    }
+
+    /** 규정을 찾은 질문의 답변은 건드리지 않는다 — 위 정리가 과하게 덮지 않는지 함께 본다. */
+    @Test
+    void 규정을_찾으면_답변을_그대로_둔다() {
+        AiJob job = ask("FLIGHT", "120ml 화장품 기내 반입되나요?");
+
+        JsonNode output = json.read(job.getOutputPayload());
+        assertThat(output.path("results").path(0).path("ruleId").isNull()).isFalse();
+        assertThat(output.path("answer").asText()).doesNotContain("찾지 못했습니다");
+    }
 }

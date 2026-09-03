@@ -187,15 +187,24 @@ public class AiJobRunner {
      * 서버 필드 채움을 생략하지 않는다" 고 한 것과 같은 취지다.
      *
      * <p>{@code reason} 은 규정을 못 찾았을 때만 손댄다. 07 이 그 자리에 쓸 문장까지 정해 뒀다.
-     * 규정을 찾은 결과의 문장은 건드리지 않는다 — Mock 픽스처 문장이 규정표와 어긋날 수 있는
-     * 것은 07 「알려진 한계」에 남겨 둔 별개 문제다.
+     *
+     * <p><b>{@code answer} 도 규정을 하나도 못 찾았으면 바꾼다.</b> 그러지 않으면 같은 응답 안에서
+     * "규정을 찾지 못했다" 는 결과와 <i>"기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다"</i>
+     * 같은 구체적 안내가 충돌한다 — {@code transport=TRAIN} 질문에서 <b>시드를 고치지 않아도</b>
+     * 재현되던 것이라, 07 「알려진 한계」의 규정표 드리프트와는 별개다.
+     *
+     * <p>규정을 <b>찾은</b> 결과의 문장은 건드리지 않는다. Mock 픽스처 문장이 규정표와 어긋날 수
+     * 있는 것은 07 「알려진 한계」에 남겨 둔 문제다.
      */
     private void alignToEngine(JsonNode input, JsonNode output) {
         boolean needsMoreInfo = false;
+        boolean anyRuleFound = false;
         for (JsonNode result : output.path("results")) {
             if (!(result instanceof ObjectNode node)) continue;
             if (node.path("ruleId").isNull()) {
                 node.put("reason", "해당 규정을 찾지 못했습니다. 항공사에 확인하세요.");
+            } else {
+                anyRuleFound = true;
             }
             needsMoreInfo |= Codes.RuleVerdict.NEED_MORE_INFO.name().equals(node.path("verdict").asText());
         }
@@ -205,6 +214,10 @@ public class AiJobRunner {
             root.putNull("answer");
             root.putNull("followUpQuestion");
             return;
+        }
+        if (!anyRuleFound && !output.path("results").isEmpty()) {
+            root.put("answer", "해당 이동수단의 반입 규정을 찾지 못했습니다. 항공사에 확인해 주세요. "
+                    + "최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.");
         }
         if (!needsMoreInfo) {
             root.putNull("followUpQuestion");
