@@ -189,4 +189,129 @@ class ChatbotPhotoAttachmentTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("찾을 수 없습니다");
     }
+
+    /** 직전 결과에서 07 이 허용한 다섯 칸만 골라 다음 턴의 {@code items} 로 만든다. */
+    private String asFollowUpItems(JsonNode results) {
+        StringBuilder sb = new StringBuilder("[");
+        for (JsonNode r : results) {
+            if (sb.length() > 1) sb.append(',');
+            sb.append("{\"itemId\":").append(r.path("itemId").isNull() ? "null" : r.path("itemId").asLong())
+                    .append(",\"detectionId\":")
+                    .append(r.path("detectionId").isNull() ? "null" : r.path("detectionId").asLong())
+                    .append(",\"name\":\"").append(r.path("name").asText()).append('"')
+                    .append(",\"qty\":").append(r.path("qty").asInt(1))
+                    .append(",\"attributes\":").append(json.write(r.path("attributes"))).append('}');
+        }
+        return sb.append(']').toString();
+    }
+
+    private AiJob runJson(String inputJson) {
+        return run(tripId, json.read(inputJson));
+    }
+
+    /**
+     * 되묻기 → 사용자 답변 → 판정 완료가 <b>끝나야</b> 한다. 이 PR 의 핵심 흐름이다.
+     *
+     * <p>같은 물품·같은 규정을 다시 판정하면 {@code item_rule_checks} 가 INSERT 가 아니라
+     * MERGE 로 가는데, {@code decided_at} 을 {@code @PrePersist} 에서만 채우던 탓에
+     * {@code null} 로 UPDATE 되어 NOT NULL 제약에 걸렸다 — 두 번째 작업이 {@code FAILED} 였다.
+     */
+    @Test
+    void 되묻기에_답하면_판정이_끝난다() {
+        AiJob first = run(tripId, ask("20000mAh 보조배터리 기내 되나요?", photoId));
+        assertThat(first.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+
+        JsonNode results = json.read(first.getOutputPayload()).path("results");
+        AiJob second = runJson("""
+                {"transport":"FLIGHT","airline":null,"question":"100Wh예요","items":%s}
+                """.formatted(asFollowUpItems(results)));
+
+        assertThat(second.getStatus())
+                .as("같은 물품을 다시 판정하면 decided_at 제약에 걸려 FAILED 가 되던 경로다")
+                .isEqualTo(Codes.JobStatus.COMPLETED);
+        assertThat(second.getErrorMessage()).isNull();
+    }
+
+    /**
+     * 같은 사진을 다시 붙이면 이전 인식 행이 지워지고 새 id 로 다시 생긴다.
+     * 그 사이 <b>서버가 돌려준 {@code detectionId}</b> 가 사라지면 다음 턴에 서버가 스스로
+     * 거절한다 — 소유권 검사가 없는 id 를 {@code 404} 로 막기 때문이다.
+     */
+    @Test
+    void 사진을_다시_붙여도_돌려준_인식_id_가_유효하다() {
+        AiJob first = run(tripId, ask("이거 기내 되나요?", photoId));
+        JsonNode firstResults = json.read(first.getOutputPayload()).path("results");
+
+        AiJob second = runJson("""
+                {"transport":"FLIGHT","airline":null,"question":"다시 봐주세요","items":%s,"photoIds":[%d]}
+                """.formatted(asFollowUpItems(firstResults), photoId));
+        assertThat(second.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+
+        for (JsonNode r : json.read(second.getOutputPayload()).path("results")) {
+            if (r.path("detectionId").isNull()) continue;
+            Integer alive = jdbc.queryForObject(
+                    "select count(*) from detected_objects where id = ?", Integer.class,
+                    r.path("detectionId").asLong());
+            assertThat(alive).as("서버가 돌려준 detectionId 가 살아 있어야 다음 턴이 이어진다").isEqualTo(1);
+        }
+    }
+
+    /**
+     * 07 이 <b>"사진에서 나온 물품도 함께 판정한다"</b> 고 적었다. 한도를 넘는다고 조용히
+     * 버리면 목록에는 있는데 판정에서만 빠진 물품이 생기고, 응답에는 아무 안내도 없다.
+     */
+    @Test
+    void 물품이_한도를_넘으면_조용히_버리지_않고_실패한다() {
+        StringBuilder items = new StringBuilder("[");
+        for (int i = 0; i < 50; i++) {
+            if (i > 0) items.append(',');
+            items.append("{\"itemId\":null,\"detectionId\":null,\"name\":\"물건").append(i)
+                    .append("\",\"qty\":1,\"attributes\":")
+                    .append("{\"capacityMl\":null,\"batteryWh\":null,\"batteryMah\":null,\"bladeCm\":null}}");
+        }
+        AiJob job = runJson("""
+                {"transport":"FLIGHT","airline":null,"question":"이거 다 되나요?","items":%s,"photoIds":[%d]}
+                """.formatted(items.append(']'), photoId));
+
+        assertThat(job.getStatus()).isEqualTo(Codes.JobStatus.FAILED);
+    }
+
+    /**
+     * 사진을 보고 <i>"이거 기내 되나요?"</i> 라고 물으면 질문이 물품을 말하지 않는다.
+     * 그때도 <b>인식된 물품에는 규정 키워드가 붙어야</b> 07 에 적은 "사진 → 속성 확인" 흐름이 산다.
+     */
+    @Test
+    void 질문이_물품을_말하지_않아도_사진_물품에_규정이_붙는다() {
+        AiJob job = run(tripId, ask("이거 기내 되나요?", photoId));
+        assertThat(job.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+
+        JsonNode output = json.read(job.getOutputPayload());
+        JsonNode battery = null;
+        for (JsonNode r : output.path("results")) {
+            if ("보조배터리".equals(r.path("name").asText(""))) battery = r;
+        }
+        assertThat(battery).as("사진에서 인식된 보조배터리").isNotNull();
+        assertThat(battery.path("ruleKeyword").asText())
+                .as("질문이 물품을 말하지 않아도 규정 키워드가 붙어야 한다")
+                .isEqualTo("보조배터리");
+        assertThat(battery.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
+        assertThat(battery.path("missingInfo").asText()).isEqualTo("배터리 정격(Wh)");
+        assertThat(output.path("followUpQuestion").asText()).isNotBlank();
+    }
+
+    /**
+     * {@code input_payload} 는 <b>실제로 판정한 입력</b>이어야 한다. 사진 물품이 빠져 있으면
+     * 답이 이상할 때 무엇을 보고 판정했는지 재구성할 수 없다.
+     */
+    @Test
+    void 기록에_사진_물품이_함께_남는다() {
+        AiJob job = run(tripId, ask("이거 기내 되나요?", photoId));
+
+        JsonNode input = json.read(job.getInputPayload());
+        JsonNode output = json.read(job.getOutputPayload());
+        assertThat(input.path("items")).isNotEmpty();
+        assertThat(input.path("items").size())
+                .as("계약이 요구하는 items↔results 개수 일치가 기록에서도 성립해야 한다")
+                .isEqualTo(output.path("results").size());
+    }
 }
