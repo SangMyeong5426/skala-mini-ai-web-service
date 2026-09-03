@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "itemId": null,
+      "detectionId": null,
+      "name": "보조배터리",
+      "qty": 1,
+      "ruleKeyword": "보조배터리",
+      "attributes": {
+        "capacityMl": null,
+        "batteryWh": 100,
+        "batteryMah": 20000,
+        "bladeCm": null
+      },
+      "verdict": "CABIN_OK",
+      "ruleId": 1,
+      "conditionNote": "100Wh 이하",
+      "reason": "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다.",
+      "missingInfo": null,
+      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+      "checkedAt": "2026-09-02"
+    }
+  ],
+  "answer": "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}

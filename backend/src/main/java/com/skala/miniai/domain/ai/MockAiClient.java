@@ -3,6 +3,7 @@ package com.skala.miniai.domain.ai;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,11 +21,11 @@ import com.skala.miniai.common.Json;
 /**
  * Mock AI. <b>실제 LLM 을 호출하지 않는다</b> (AGENTS.md: 3일차 데모까지 AI 는 전부 Mock).
  *
- * <p>돌려주는 것은 {@code src/main/resources/mock/&lt;jobType&gt;.json} 이고, 그 내용은
- * {@code docs/07-ai-ready.md} 「예시」 절의 output 을 <b>스크립트로 추출</b>한 것이다.
- * 손으로 옮기면 {@code additionalProperties: false} 스키마를 어기기 쉽다.
+ * <p>기본 fixture는 {@code src/main/resources/mock/&lt;jobType&gt;.json}, 대표 챗봇 질문은
+ * {@code RULE_CHECK_*.json} 이다. 모두 {@code docs/07-ai-ready.md}의 output 스키마를 지킨다.
  *
- * <p>07 "Mock이 돌려주는 것" 규약대로 <b>id 만 입력에 맞춘다</b> —
+ * <p>07 "Mock이 돌려주는 것" 규약대로 대표 챗봇 질문은 질문별 고정 응답을 고르고,
+ * 나머지는 <b>id 만 입력에 맞춘다</b> —
  * {@code BAG_CHECK} 의 {@code photoId}, {@code WEIGHT_ESTIMATE} 의 {@code limitG}·{@code bagEmptyG},
  * {@code RULE_CHECK} 의 {@code itemId}. 새 여행에서도 Mock 이 깨지지 않는다.
  */
@@ -34,7 +35,7 @@ public class MockAiClient implements AiClient {
     private final Json json;
     private final String modelName;
     /** 가상 스레드에서 동시에 들어온다. HashMap 의 computeIfAbsent 는 스레드 안전하지 않다. */
-    private final Map<Codes.JobType, JsonNode> fixtures = new ConcurrentHashMap<>();
+    private final Map<String, JsonNode> fixtures = new ConcurrentHashMap<>();
 
     public MockAiClient(Json json, @Value("${app.ai.model:mock}") String modelName) {
         this.json = json;
@@ -48,13 +49,42 @@ public class MockAiClient implements AiClient {
 
     @Override
     public JsonNode run(Codes.JobType jobType, JsonNode input) {
-        JsonNode output = load(jobType).deepCopy();
+        if (jobType == Codes.JobType.RULE_CHECK && input.path("question").isTextual()) {
+            return load(ruleCheckFixture(input.path("question").asText(), input)).deepCopy();
+        }
+
+        JsonNode output = load(jobType.name()).deepCopy();
         return switch (jobType) {
             case BAG_CHECK -> alignPhotoIds(output, input);
             case WEIGHT_ESTIMATE -> alignBag(output, input);
             case RULE_CHECK -> alignItemIds(output, input);
             case PACKING_LIST -> output;
         };
+    }
+
+    /** S-09 빈 화면에 노출하는 대표 질문 3개와 그 밖의 안전한 기본 답변. */
+    private String ruleCheckFixture(String question, JsonNode input) {
+        String normalized = question.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        if (normalized.contains("100wh") && hasItem(input, "보조배터리")) {
+            return "RULE_CHECK_BATTERY_100WH";
+        }
+        if (normalized.contains("보조배터리") && normalized.contains("20000mah")) {
+            return "RULE_CHECK_BATTERY";
+        }
+        if (normalized.contains("화장품") && normalized.contains("120ml")) {
+            return "RULE_CHECK_LIQUID";
+        }
+        if (normalized.contains("가위") && normalized.contains("7cm")) {
+            return "RULE_CHECK_SCISSORS";
+        }
+        return "RULE_CHECK_UNKNOWN";
+    }
+
+    private boolean hasItem(JsonNode input, String name) {
+        for (JsonNode item : input.path("items")) {
+            if (name.equals(RecommendationStore.normalize(item.path("name").asText("")))) return true;
+        }
+        return false;
     }
 
     /** 07: 고정 출력의 {@code photoId} 1·2 를 {@code input.photoIds[0]}·{@code [1]} 로 바꾼다. */
@@ -101,13 +131,13 @@ public class MockAiClient implements AiClient {
         return output;
     }
 
-    private JsonNode load(Codes.JobType jobType) {
-        return fixtures.computeIfAbsent(jobType, type -> {
-            try (InputStream in = new ClassPathResource("mock/" + type.name() + ".json").getInputStream()) {
+    private JsonNode load(String fixtureName) {
+        return fixtures.computeIfAbsent(fixtureName, name -> {
+            try (InputStream in = new ClassPathResource("mock/" + name + ".json").getInputStream()) {
                 return json.mapper().readTree(in);
             } catch (IOException e) {
                 throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "MOCK_MISSING",
-                        "Mock 응답 파일이 없습니다: mock/" + type.name() + ".json", null);
+                        "Mock 응답 파일이 없습니다: mock/" + name + ".json", null);
             }
         });
     }
