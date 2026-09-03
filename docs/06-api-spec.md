@@ -9,6 +9,10 @@
 **이 문서가 FE와 BE 사이의 계약이다.** 여기가 먼저 고정되면 두 사람이 서로를
 기다리지 않고 동시에 작업할 수 있다. 바꿀 때는 반드시 양쪽에 알린다.
 
+> **2026-09-03 개정 계약:** [Notion 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)에
+> 따라 사진 승인은 완료 등록, 추천 채택은 미완료 등록으로 분리했다. 엔드포인트 18개는
+> 유지하고 기존 요청·응답을 확장한다. 현재 코드·시드의 후속 반영 상태는 [문서 지도](README.md#개정안-반영-상태)에 적는다.
+
 ## 공통 규칙
 
 | 항목 | 규칙 |
@@ -16,7 +20,7 @@
 | Base URL (로컬) | `http://localhost:8080/api` — Spring Boot 기본 포트. [ADR 0001](adr/0001-backend-stack.md)에서 확정 |
 | 요청·응답 형식 | `application/json; charset=utf-8` |
 | 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X). 예외: `/inspection` 은 자원 목록이 아니라 여행 하나의 **집계 결과**라 단수다 |
-| 시각 형식 | ISO 8601 UTC (`2026-09-02T05:30:00Z`) |
+| 시각 형식 | ISO 8601 UTC (`2026-09-03T05:30:00Z`) |
 | 인증 | **이번 데모에서 구현하지 않는다.** 스키마에는 `users.password_hash` 자리를 두었지만 토큰·세션을 발급하지 않고, 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
 
 브라우저 연동 시 `CORS_ALLOWED_ORIGINS`에 지정한 origin만 허용한다.
@@ -72,7 +76,7 @@
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
 | --- | --- | --- | --- | --- | --- |
 | 6 | `GET` | `/api/trips/{tripId}/items` | 체크리스트 조회 | `200` | `404` |
-| 7 | `POST` | `/api/trips/{tripId}/items` | 항목 추가 | **`201`** + `Location` | `400` `404` |
+| 7 | `POST` | `/api/trips/{tripId}/items` | 직접 추가·추천 채택 | **`201`** + `Location`, 재승인·기존 항목 연결은 `200` | `400` `404` `409` |
 | 8 | `PATCH` | `/api/trips/{tripId}/items/{itemId}` | 항목 수정·완료 처리 | `200` | `400` `404` |
 | 9 | `DELETE` | `/api/trips/{tripId}/items/{itemId}` | 항목 삭제 | **`204`** | `404` |
 
@@ -89,7 +93,7 @@
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
 | --- | --- | --- | --- | --- | --- |
 | 13 | `GET` | `/api/trips/{tripId}/detections` | 인식 결과 목록 | `200` | `404` |
-| 14 | `PATCH` | `/api/trips/{tripId}/detections/{detectionId}` | **승인 · 이름·수량 수정** | `200` | `400` `404` |
+| 14 | `PATCH` | `/api/trips/{tripId}/detections/{detectionId}` | **승인·이름·수량 수정·내 목록 완료 등록** | `200` | `400` `404` `409` |
 
 > **14번이 이 서비스의 핵심 게이트다.** 명세 9.2 수용 기준 —
 > *"사진 분석 결과는 사용자가 승인하기 전 최종 준비 상태에 반영되지 않아야 한다."*
@@ -116,7 +120,7 @@
 
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
 | --- | --- | --- | --- | --- | --- |
-| 17 | `POST` | `/api/ai-jobs` | **AI 작업 생성** | **`202`** + `Location` | `400` 잘못된 `jobType` |
+| 17 | `POST` | `/api/ai-jobs` | **AI 작업 생성** | **`202`** + `Location` | `400` 잘못된 입력, `409` 현재 목록·가방 상태와 입력 불일치 |
 | 18 | `GET` | `/api/ai-jobs/{jobId}` | 작업 상태·결과 조회 | `200` | `404` |
 
 **엔드포인트는 둘뿐이다.** AI 작업이 늘어도 `jobType` 값만 늘고 경로는 그대로다.
@@ -139,7 +143,7 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 
 | `jobType` | Use-Case | 화면 | 지금 | 나중 |
 | --- | --- | --- | --- | --- |
-| `PACKING_LIST` | UC-05 체크리스트 생성 | `S-05` | Mock 고정 JSON | LLM |
+| `PACKING_LIST` | UC-05 추가 준비물 추천 | `S-05` | Mock 고정 JSON | LLM |
 | `BAG_CHECK` | UC-04 사진 물품 인식 | `S-04` | Mock 고정 인식 결과 | 비전 모델 |
 | `WEIGHT_ESTIMATE` | UC-10 예상 무게 산정 | `S-06` `S-07` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
 | `RULE_CHECK` | UC-07 · UC-08 반입 규정 | `S-06` `S-08` `S-09` | Mock 고정 판정 | LLM 구조화 + 규칙 엔진 |
@@ -177,12 +181,12 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 }
 ```
 
-> **`alreadyPacked` 가 이 서비스의 핵심이다.** 사진에서 인식돼 사용자가 승인한
-> 물품(`detected_objects.approved = true`)을 그대로 넣는다. AI 는 이 목록을 빼고
-> **부족한 것만** 돌려준다. 이미 가방에 있는 것을 다시 추천하지 않기 위해서다.
+> `alreadyPacked`는 내 목록의 실제 준비 완료(`PREPARED`) 물품이다. 사진 승인과 직접 완료
+> 확인을 모두 포함한다. 서버는 해당 여행의 현재 내 목록을 별도로 읽어 미완료 항목도
+> 중복 추천에서 제외한다. 미완료 물품을 `alreadyPacked`에 섞지 않는다.
 >
-> 사진 없이 시작한 경우 빈 배열 `[]` 을 보낸다. 그러면 여행 조건만으로
-> 전체 목록을 추천한다. **필드를 생략하지 않는다** — 빈 배열과 미전송을
+> 완료 항목이 없는 경우 빈 배열 `[]` 을 보낸다. 그러면 여행 조건과 현재 내 목록으로
+> 현재 내 목록에 없는 후보를 추천한다. **필드를 생략하지 않는다** — 빈 배열과 미전송을
 > 구분하지 않으면 Mock 과 실제 LLM 의 동작이 갈린다.
 
 | 필드 | 필수 | 설명 |
@@ -203,7 +207,7 @@ Location: /api/ai-jobs/1041
   "jobId": 1041,
   "jobType": "PACKING_LIST",
   "status": "PENDING",
-  "createdAt": "2026-09-02T05:30:00Z",
+  "createdAt": "2026-09-03T05:30:00Z",
   "pollAfterMs": 500
 }
 ```
@@ -224,7 +228,7 @@ Location: /api/ai-jobs/1041
   "jobType": "PACKING_LIST",
   "status": "PENDING",
   "output": null,
-  "createdAt": "2026-09-02T05:30:00Z",
+  "createdAt": "2026-09-03T05:30:00Z",
   "completedAt": null,
   "pollAfterMs": 500
 }
@@ -239,15 +243,35 @@ Location: /api/ai-jobs/1041
   "status": "COMPLETED",
   "output": {
     "items": [
-      { "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1, "priority": "REQUIRED" },
-      { "name": "상비약", "category": "MEDICINE", "qty": 1, "priority": "RECOMMENDED" }
+      {
+        "name": "변환 플러그",
+        "category": "ELECTRONIC",
+        "qty": 1,
+        "priority": "REQUIRED",
+        "reason": "여행지에서 충전기를 연결할 때 필요한 어댑터입니다.",
+        "source": "AI",
+        "acceptedItemId": null
+      },
+      {
+        "name": "상비약",
+        "category": "MEDICINE",
+        "qty": 1,
+        "priority": "RECOMMENDED",
+        "reason": "개인적으로 사용하는 약이 있다면 준비 여부를 확인하세요.",
+        "source": "AI",
+        "acceptedItemId": null
+      }
     ],
-    "tips": ["일본 콘센트는 A타입, 100V입니다.", "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다."],
-    "weatherSource": "SEASONAL"
+    "tips": [
+      "일본 콘센트는 A타입, 100V입니다.",
+      "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다."
+    ],
+    "weatherSource": "SEASONAL",
+    "weatherAsOf": "2026-09-03"
   },
   "modelName": "mock",
-  "createdAt": "2026-09-02T05:30:00Z",
-  "completedAt": "2026-09-02T05:30:01Z"
+  "createdAt": "2026-09-03T05:30:00Z",
+  "completedAt": "2026-09-03T05:30:01Z"
 }
 ```
 
@@ -259,16 +283,16 @@ Location: /api/ai-jobs/1041
   "jobType": "PACKING_LIST",
   "status": "FAILED",
   "output": null,
-  "errorMessage": "추천을 만들지 못했습니다. 기본 체크리스트를 사용하세요.",
-  "createdAt": "2026-09-02T05:30:00Z",
-  "completedAt": "2026-09-02T05:30:01Z"
+  "errorMessage": "추천을 만들지 못했습니다. 내 체크리스트는 유지됩니다. 다시 시도하거나 직접 추가해 주세요.",
+  "createdAt": "2026-09-03T05:30:00Z",
+  "completedAt": "2026-09-03T05:30:01Z"
 }
 ```
 
 > **`FAILED` 도 `200` 이다.** 조회 자체는 성공했기 때문이다. `500` 을 쓰면
 > 프런트엔드가 네트워크 오류와 AI 실패를 구분하지 못한다.
-> 명세의 예외 처리 *"AI 생성 실패 시 기본 체크리스트를 제공한다"* 를 하려면
-> 이 구분이 필요하다.
+> 추천 실패를 알려도 이미 승인·등록한 내 목록은 유지한다. 실패를 이유로 기본 목록을
+> 자동으로 채택하거나 기존 항목을 삭제하지 않는다.
 
 ### 폴링 규약
 
@@ -288,49 +312,107 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 ## 주요 응답 예시
 
+각 예시는 해당 동작 시점의 응답이다. 추천 작업의 최초 완료 응답은 채택 전이며,
+아래 내 목록 조회·검수 예시는 사용자가 후보를 채택한 후의 상태를 보여준다.
+
 ### `GET /api/trips/{tripId}/inspection` — 검수 결과 (화면 `S-06`)
 
-**이 서비스의 차별점 셋이 한 응답에 있다.**
+**이 서비스의 차별점 셋이 한 응답에 있다.** 아래는 완료 항목 6개·채택 후 미완료 1개인
+상태다. 부분 집계 예시의 `customs`는 보조배터리 한 건만 보여준다. 기존 SQL 시드의
+승인 가위 미등록 상태를 그대로 재현하는 예시는 아니다.
 
 ```json
 {
   "tripId": 12,
   "readiness": {
-    "prepared":   [{ "itemId": 5, "name": "충전기", "qty": 1 }],
-    "needsCheck": [{ "itemId": 8, "name": "화장품", "qty": 1,
-                     "candidates": [
-                       { "detectionId": 6, "name": "화장품 용기", "matchConfidence": 0.71 },
-                       { "detectionId": 8, "name": "검정 파우치", "matchConfidence": 0.31 }
-                     ] }],
-    "notInPhoto": [{ "itemId": 1, "name": "여권", "priority": "REQUIRED" }],
-    "extra":      [{ "detectionId": 7, "name": "가위", "confidence": 0.91,
-                     "verdict": "NEED_MORE_INFO", "missingInfo": "날 길이(cm)" }],
-    "completionRate": 0.5
+    "prepared": [
+      {
+        "itemId": 2,
+        "name": "상의",
+        "qty": 4,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 3,
+        "name": "하의",
+        "qty": 2,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 4,
+        "name": "속옷",
+        "qty": 4,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 5,
+        "name": "충전기",
+        "qty": 1,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 6,
+        "name": "보조배터리",
+        "qty": 1,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 11,
+        "name": "가위",
+        "qty": 1,
+        "photoStatus": "CONFIRMED"
+      }
+    ],
+    "unprepared": [
+      {
+        "itemId": 7,
+        "name": "변환 플러그",
+        "qty": 1,
+        "photoStatus": "NOT_IN_PHOTO"
+      }
+    ],
+    "completionRate": 0.8571428571428571
   },
   "weight": {
-    "minG": 4570, "typicalG": 5410, "maxG": 6890,
+    "minG": 4610,
+    "typicalG": 5480,
+    "maxG": 7010,
     "limitG": 10000,
     "verdict": "ROOM",
     "confidence": "MEDIUM",
-    "confidenceReason": "사진에서 미확인 4개, 승인 전 1개",
-    "excludedCount": 5,
+    "confidenceReason": "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+    "excludedCount": 3,
     "contributions": [
-      { "name": "상의", "typicalG": 200, "qty": 4, "subtotalG": 800 },
-      { "name": "하의", "typicalG": 400, "qty": 2, "subtotalG": 800 },
-      { "name": "보조배터리", "typicalG": 280, "qty": 1, "subtotalG": 280 }
+      {
+        "name": "상의",
+        "typicalG": 200,
+        "qty": 4,
+        "subtotalG": 800
+      },
+      {
+        "name": "하의",
+        "typicalG": 400,
+        "qty": 2,
+        "subtotalG": 800
+      },
+      {
+        "name": "보조배터리",
+        "typicalG": 280,
+        "qty": 1,
+        "subtotalG": 280
+      }
     ]
   },
   "customs": [
-    { "itemId": 6, "name": "보조배터리", "verdict": "NEED_MORE_INFO",
+    {
+      "itemId": 6,
+      "name": "보조배터리",
+      "verdict": "NEED_MORE_INFO",
       "missingInfo": "배터리 정격(Wh)",
       "reason": "보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.",
       "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
-      "checkedAt": "2026-09-02" },
-    { "itemId": 8, "name": "화장품", "verdict": "NEED_MORE_INFO",
-      "missingInfo": "용량(ml)",
-      "reason": "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
-      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
-      "checkedAt": "2026-09-02" }
+      "checkedAt": "2026-09-02"
+    }
   ],
   "notice": "사진 분석 결과는 가방 전체를 확인한 것이 아닙니다. 사진에서 확인되지 않은 물건은 직접 확인해 주세요."
 }
@@ -340,7 +422,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 | 필드 | 왜 이 이름인가 |
 | --- | --- |
-| `notInPhoto` | **`missing` 이 아니다.** 사진에서 못 찾았을 뿐 없다는 뜻이 아니다 |
+| `photoStatus=NOT_IN_PHOTO` | 사진에서 못 찾았을 뿐 없다는 뜻이 아니다. 실제 완료와 별도다 |
 | `weight.minG` `typicalG` `maxG` | **단일 값이 아니라 범위다.** 명세 F-10: *"결과를 실측값처럼 표현하지 않는다"* |
 | `weight.excludedCount` | 계산에서 뺀 항목 수를 **숨기지 않는다** |
 | `customs[].missingInfo` | 판정을 단정하지 않고 **무엇이 부족한지** 알려준다 |
@@ -369,40 +451,43 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 > `missingInfo` · `labelText` 는 `BAG_CHECK` 출력([`07-ai-ready.md`](07-ai-ready.md))에서 그대로 온다.
 > `S-04` 「확인 필요」 묶음 = `missingInfo ≠ null` 또는 `confidenceLevel = LOW`.
 
-### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 승인
+### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 승인·완료 등록
+
+승인과 내 목록 반영은 **같은 트랜잭션**이다. 추천 작업을 기다리지 않는다.
 
 ```json
-// Request
-{ "approved": true, "name": "선크림", "qty": 1, "matchedItemIds": [8] }
+// Request — 체크리스트가 비어 있는 여행에서 승인
+{ "approved": true, "name": "선크림", "qty": 1, "category": "TOILETRY" }
 ```
 
 ```json
-// Response 200
+// Response 200 — 새 항목을 만들었더라도 수정한 주 자원은 인식 결과다
 { "detectionId": 6, "approved": true, "name": "선크림", "qty": 1,
-  "linkedItems": [{ "itemId": 8, "name": "화장품", "confirmedByUser": true }] }
+  "linkedItems": [{ "itemId": 8, "name": "선크림", "confirmedByUser": true,
+                    "source": "PHOTO", "checkStatus": "PREPARED" }] }
 ```
 
-> `linkedItems` 가 배열인 이유는 **N:M** 이기 때문이다. 인식 결과 하나가 여러
-> 체크리스트 항목에 연결될 수 있다. ([`05-erd.md`](05-erd.md))
-
-**연결 수정 규약 — 전체 교체다.**
-
-| 요청 | 결과 |
+| 요청 | 처리 |
 | --- | --- |
-| `matchedItemIds: [8]` | 이 인식 결과의 연결을 **`[8]` 하나로 교체**한다. 기존 연결은 지운다 |
-| `matchedItemIds: [8, 9]` | 두 항목에 연결한다 |
-| `matchedItemIds: []` | **연결을 모두 해제**한다 |
-| 필드 자체를 안 보냄 | 연결을 건드리지 않는다. `approved`·`name`·`qty` 만 바꾼다 |
+| `approved=true`, 기존 승인 연결 있음 | 같은 항목을 갱신하고 완료 처리. 최초 등록 출처는 유지한다 |
+| `approved=true`, 연결 없음 | 이름이 일치하는 내 항목이 있으면 연결하고, 없으면 생성한다. 신규 기본값은 `source=PHOTO`, `checkStatus=PREPARED`, `priority=RECOMMENDED`, `category=ETC`이며 category는 승인 요청으로 보완 가능 |
+| `matchedItemIds: [8]` 또는 `[8, 9]` | 같은 여행의 항목인지 검증한 뒤 이 인식 결과의 연결을 배열 전체로 교체한다. 실제 동일 물품이 중복 항목으로 남으면 먼저 병합·수량 확인을 요청한다 |
+| `matchedItemIds: []` | 미승인 결과의 후보 연결 해제에 사용한다. 최종 `approved=true`와 함께 연결이 비도록 요청하면 `400` |
+| `matchedItemIds` 생략 | 기존 연결 유지. 단, 승인 시 연결이 전혀 없으면 위 생성·연결 규칙을 적용한다 |
 
-**추가·삭제가 아니라 배열 전체 교체**로 정한 이유는 화면 때문이다. `S-04`에서
-사용자가 후보 목록의 체크박스를 조작하면 **그 시점의 전체 선택 상태**가 넘어온다.
-증분으로 보내려면 프런트엔드가 이전 상태를 기억해야 하는데, 폴링으로 갱신되는
-화면에서는 그 가정이 깨진다.
+이름·수량을 수정한 승인 결과는 연결 항목에도 반영한다. 연결 항목이 여러 개이거나 다른
+사진과 수량이 충돌하면 임의로 합산하지 않고 `409`와 재확인 안내를 반환한다.
+사진 여러 장에 같은 물품이 보이면 하나의 항목으로 연결하고 사용자가 **최종 수량**을
+정한다. 반복 승인은 기존 연결을 사용하므로 항목을 더 만들지 않는다.
 
-```json
-// Request — 필드명이 matchedItemId 가 아니라 matchedItemIds 다
-{ "approved": true, "name": "선크림", "qty": 1, "matchedItemIds": [8] }
-```
+사용자가 명시적으로 `approved=false`로 취소하면 해당 연결의 `confirmed_by_user`도
+해제한다. 영향을 받는 항목에 다른 승인·확정 연결이 없으면 `UNCHECKED`로 돌려 실제 챙김을
+다시 확인하도록 한다. 항목은 삭제하지 않는다. 이 명시적 승인 취소는 사진 재분석에서
+물품을 못 찾는 경우와 다르다. 단순 미인식은 기존 완료 상태를 바꾸지 않는다.
+
+`linkedItems`가 배열인 이유는 기존 N:M 모델 때문이다(05). 승인된 물품이 내 목록에 없이
+`extra`로만 남는 성공 응답은 허용하지 않는다. 미승인 후보는 확정 준비 상태·무게·규정에
+넣지 않으며 S-04에서 계속 확인한다.
 
 ## 도메인 API 요청·응답
 
@@ -448,7 +533,7 @@ Location: /api/trips/12
 ```json
 { "tripId": 12, "origin": "서울", "destination": "도쿄",
   "startDate": "2026-10-01", "endDate": "2026-10-04",
-  "transport": "FLIGHT", "status": "DRAFT", "createdAt": "2026-09-02T05:30:00Z" }
+  "transport": "FLIGHT", "status": "DRAFT", "createdAt": "2026-09-03T05:30:00Z" }
 ```
 
 ### `GET /api/trips` — 목록 (화면 `S-01`)
@@ -474,12 +559,29 @@ Location: /api/trips/12
 ```json
 {
   "items": [
-    { "itemId": 1, "name": "여권", "category": "DOCUMENT", "qty": 1,
-      "priority": "REQUIRED", "source": "RULE", "checkStatus": "NOT_IN_PHOTO" },
-    { "itemId": 5, "name": "충전기", "category": "ELECTRONIC", "qty": 1,
-      "priority": "REQUIRED", "source": "PHOTO", "checkStatus": "PREPARED" }
+    {
+      "itemId": 5,
+      "name": "충전기",
+      "category": "ELECTRONIC",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED",
+      "photoStatus": "CONFIRMED"
+    },
+    {
+      "itemId": 7,
+      "name": "변환 플러그",
+      "category": "ELECTRONIC",
+      "qty": 1,
+      "priority": "REQUIRED",
+      "source": "AI",
+      "checkStatus": "UNCHECKED",
+      "photoStatus": "NOT_IN_PHOTO"
+    }
   ],
-  "completionRate": 0.5
+  "completionRate": 0.5,
+  "recommendationJobId": 1041
 }
 ```
 
@@ -487,24 +589,87 @@ Location: /api/trips/12
 | --- | --- |
 | `category` | `DOCUMENT` `CLOTHING` `ELECTRONIC` `TOILETRY` `MEDICINE` `ETC` |
 | `priority` | `REQUIRED` `RECOMMENDED` |
-| `source` | `RULE` `PHOTO` `AI` `USER` — 누가 넣었는지. `PHOTO` 는 사진에서 승인된 것, `AI` 는 AI 가 덧붙인 부족분이다 |
-| `checkStatus` | `UNCHECKED` `PREPARED` `NEEDS_CHECK` **`NOT_IN_PHOTO`** |
+| `source` | `RULE` `PHOTO` `AI` `USER` — 최초 등록 경로. `PHOTO`는 사진 승인으로 신규 생성, `AI`·`RULE`은 해당 출처의 후보를 사용자가 채택, `USER`는 직접 추가 |
+| `checkStatus` | `PREPARED`가 실제 완료, 나머지 `UNCHECKED` `NEEDS_CHECK` `NOT_IN_PHOTO`는 미완료. 신규 채택·직접 추가는 `UNCHECKED` |
+| `photoStatus` | `CONFIRMED` `NEEDS_CHECK` `NOT_IN_PHOTO` — 인식 연결에서 계산하는 별도 사진 상태 |
 
-### `POST /api/trips/{tripId}/items` — 항목 추가
+### `POST /api/trips/{tripId}/items` — 직접 추가·추천 채택
 
 ```json
-// Request
+// Request — 직접 추가
 { "name": "우산", "category": "ETC", "qty": 1, "priority": "RECOMMENDED" }
 ```
 
-`201 Created` + `Location: /api/trips/12/items/11`. `source` 는 서버가 `USER` 로 채운다.
-
-### `PATCH /api/trips/{tripId}/items/{itemId}` — 수정·완료 처리
+`201 Created` + `Location: /api/trips/12/items/12`. 추천 참조가 없으면 서버가
+`source=USER`, `checkStatus=UNCHECKED`로 채운다. 이미 챙겼다면 이후 PATCH로 완료 처리한다.
 
 ```json
-// Request — 보낸 필드만 바꾼다
+// Request — 추천 후보 선택·승인, 내용과 수량은 사용자가 수정 가능
+{ "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1,
+  "priority": "REQUIRED", "recommendation": { "jobId": 1041, "candidateIndex": 0 } }
+```
+
+```json
+// Response 201 — 선택하지 않은 다른 추천은 내 목록에 넣지 않는다
+{ "itemId": 7, "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1,
+  "priority": "REQUIRED", "source": "AI", "checkStatus": "UNCHECKED",
+  "photoStatus": "NOT_IN_PHOTO" }
+```
+
+- `candidateIndex`는 완료된 추천의 `output.items`에서 **0부터 시작하는 위치**다. 작업 완료 후
+  후보 배열 순서·원래 내용은 바꾸지 않는다. 서버는 후보의 `acceptedItemId`만 갱신한다.
+- 서버가 같은 여행·사용자의 `COMPLETED / PACKING_LIST` 작업인지, 위치가 유효한지 확인한다.
+  다른 여행의 작업은 `404`, 미완료 작업은 `409`, 잘못된 위치·값은 `400`이다.
+- 신규 항목은 후보의 `source`(`AI` 또는 `RULE`)를 서버가 복사하고 `UNCHECKED`로 만든다.
+  클라이언트가 임의로 `source`·완료 상태를 지정하지 않는다.
+- 후보의 `acceptedItemId`가 이미 있으면 같은 항목을 `200`으로 반환한다. 재시도 본문의
+  이름·수량으로 기존 항목을 다시 덮어쓰거나 완료 상태를 되돌리지 않는다.
+- 최초 채택이라도 원래 후보명 또는 수정된 이름과 같은 내 항목이 있으면 그 항목에 연결해
+  `200`으로 반환한다. 상태·수량·출처를 유지하며 차이는 항목 PATCH로 사용자가 정정한다.
+- 이름 비교는 앞뒤 공백 제거·연속 공백 정리 후 일치를 기준으로 한다. 명백한 동의어는
+  후보 생성 단계에서 제외하고, 자동으로 동일시하기 어려운 물품은 사용자 연결로 확인한다.
+- 같은 여행의 항목 추가·수정·삭제·사진 승인·추천 채택은 여행 단위 트랜잭션으로 직렬화한다.
+  항목과 `acceptedItemId`를 함께 저장해 동시 클릭에도 중복 생성을 막는다(05).
+- 이름 1~100자(공백만 금지), qty 1~99 정수, category·priority는 위 enum을 검증한다.
+- 여러 후보를 선택하면 기존 단건 POST를 후보별로 호출한다. 일부 실패 시 성공한 항목은
+  유지하고 실패 후보만 재시도한다. 전체를 다시 보내도 이미 채택된 후보는 `200`이다.
+- 화면에서 후보를 정렬·숨겨도 `candidateIndex`는 원래 응답 배열의 위치를 사용한다.
+  이후 사진 승인 등으로 같은 물품이 내 목록에 생겼다면 표시 시 현재 내 목록과 대조해
+  `추가됨`으로 처리한다. 저장된 후보 배열을 재정렬하거나 삭제하지 않는다.
+
+### `PATCH /api/trips/{tripId}/items/{itemId}` — 수정·실제 완료 처리
+
+```json
+// Request — 보낸 필드만 바꾼다. 추천 채택과 별도 동작이다
 { "checkStatus": "PREPARED", "qty": 2 }
 ```
+
+사진 없이 직접 챙김 완료를 확인한 항목도 완료율·무게에 포함한다. 수량·완료 여부 변경 후
+준비율을 다시 계산하고 현재 입력으로 무게 작업을 다시 요청한다. 사진 재분석만으로
+`PREPARED`를 취소하지 않는다. `photoStatus`는 조회 전용이며 PATCH로 받지 않는다.
+
+### `DELETE /api/trips/{tripId}/items/{itemId}` — 삭제
+
+`204 No Content`. 같은 트랜잭션에서 그 항목을 참조하는 해당 여행의 추천
+`acceptedItemId`도 `null`로 해제한다. 화면은 내 목록·추천을 다시 읽는다.
+사진에서 승인한 항목을 삭제하면 연결 인식 결과의 `approved`도 해제해 S-04에서 다시
+확인하도록 한다. 하나의 인식 결과가 다른 내 항목에도 확정 연결돼 있다면 그 승인은 유지한다.
+
+### 완료율·사진 상태·현재 무게의 공통 규약
+
+- `completionRate = PREPARED 항목 수 / 내 목록 전체 항목 수`. 빈 목록은 `0`이다.
+  항목의 qty로 가중하지 않는다. 홈·내 목록·검수 결과에 같은 식을 사용한다.
+- `photoStatus`: 승인된 인식 결과와 사용자 확정 연결이 있으면 `CONFIRMED`, 미승인 연결
+  후보만 있으면 `NEEDS_CHECK`, 연결이 없으면 `NOT_IN_PHOTO`. 실제 완료 상태와 독립적이다.
+- `readiness.prepared`와 `readiness.unprepared`는 내 목록을 완료 여부로 나눈다. 각 항목에
+  `photoStatus`를 표시한다. 미채택 추천·미승인 인식 후보를 내 목록 집계에 넣지 않는다.
+- `GET items`는 내 목록과 가장 최근 완료된 추천 작업의 `recommendationJobId`(없으면 `null`)를
+  반환한다. 재접속 시 이 ID로 후보를 다시 읽는다. 생성 중인 새 추천은 기존 내 목록을 가리지 않는다.
+- `inspection.weight`는 가장 최근 완료된 무게 작업 중 **현재 입력과 같은 결과**만 반환한다.
+  현재 입력과 다르거나 결과가 없으면 `null`이다. 완료 여부·이름·수량·가방 정보 및 계산 제외
+  목록을 작업 입력과 대조한다. 오래된 작업이 뒤늦게 끝나도 현재 결과로 사용하지 않는다.
+- S-06·S-07에서 무게가 `null`이면 현재 입력으로 `WEIGHT_ESTIMATE`를 요청·폴링한다.
+  추천 채택만으로는 합계가 늘지 않으며, 실제 완료 확인 후에만 계산 대상에 포함된다.
 
 ### `POST /api/trips/{tripId}/photos` — 사진 업로드
 
@@ -513,7 +678,7 @@ Location: /api/trips/12
 ```json
 // 201 Created
 { "photos": [{ "photoId": 1, "fileUrl": "/uploads/demo/bag-01.jpg",
-               "bagKind": "CABIN", "uploadedAt": "2026-09-02T05:31:00Z" }] }
+               "bagKind": "CABIN", "uploadedAt": "2026-09-03T05:31:00Z" }] }
 ```
 
 ### `GET /api/rules?transport=FLIGHT&keyword=보조배터리`

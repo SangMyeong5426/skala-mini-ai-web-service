@@ -33,6 +33,10 @@
 
 ![시스템 아키텍처](images/04-architecture.png)
 
+> PNG·PUML·SVG의 시스템 구성은 유지한다. 이번 개정의 승인·저장 책임은 아래 표로 보완하며,
+> 그림 주석 갱신은 TBD다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
+> 교체할 때**의 의미다. 기능 정의 자체가 달라질 때 API·화면까지 불변이라는 뜻은 아니다.
+
 - 원본: [`images/04-architecture.puml`](images/04-architecture.puml) (PlantUML)
 - 벡터: [`images/04-architecture.svg`](images/04-architecture.svg) — 발표 슬라이드용
 - **고치는 법**: `.puml`을 수정하고 <https://www.plantuml.com/plantuml/uml/> 에 붙여넣거나
@@ -58,6 +62,19 @@
 > 발표에서 설명하기 좋다.
 
 ## AI-Ready 설계 적용 지점
+
+### 사진 승인과 추천 채택의 책임
+
+| 주체 | 처리 | 저장 위치 |
+| --- | --- | --- |
+| 이미지 AI (현재 Mock) | 사진에서 후보·수량·신뢰도를 반환 | `detected_objects`, 최초 `approved=false` |
+| 서버 Service | 사진 승인 시 내 목록 생성·연결·완료 처리 | `checklist_items` + `item_detections` |
+| 추천 AI (현재 Mock) | 여행 조건과 현재 내 목록을 고려해 후보·이유 제시 | `ai_jobs.output_payload` |
+| 서버 Service | 선택·승인한 후보만 미완료로 등록, 반복 승인 방지 | `checklist_items`, 후보의 서버 필드 `acceptedItemId` |
+| 서버 Service | 내 목록 기준 완료율, 실제 완료 항목 기준 무게 합산 | 내 목록에서 집계, 무게 결과는 `ai_jobs.output_payload` |
+
+추천 생성 완료는 내 목록을 변경하지 않는다. 후보 저장과 사용자 채택 처리는 기존
+`ai_jobs`·항목 추가 API를 사용한다(05·06·07). 화면·엔드포인트·테이블 수는 늘리지 않는다.
 
 PDF가 제시한 4대 원칙을 이 구조가 각각 어디서 만족하는지 적는다.
 **발표에서 가장 많이 질문받는 부분이다.**
