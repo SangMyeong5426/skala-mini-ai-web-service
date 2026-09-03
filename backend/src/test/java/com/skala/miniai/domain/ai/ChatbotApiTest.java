@@ -40,8 +40,18 @@ class ChatbotApiTest {
 
         assertAnswer(auth, question("20000mAh 보조배터리 기내 되나요?", "[]"),
                 "NEED_MORE_INFO", "배터리 라벨에 표시된 정격 Wh는 얼마인가요?");
+        assertAnswer(auth, question("100Wh 보조배터리 기내 반입되나요?", "[]"), "CABIN_OK", null);
+        assertAnswer(auth, question("120Wh 보조배터리 기내 반입되나요?", "[]"), "ASK_AIRLINE", null);
+        assertAnswer(auth, question("200Wh 보조배터리 기내 반입되나요?", "[]"), "CHECKED_FORBIDDEN", null);
+        assertAnswer(auth, question("50ml 화장품 기내 반입되나요?", "[]"), "CABIN_OK", null);
         assertAnswer(auth, question("120ml 화장품 기내 반입되나요?", "[]"), "CHECKED_OK", null);
+        assertAnswer(auth, question("화장품 용량을 모르겠어요", "[]"),
+                "NEED_MORE_INFO", "용기 용량은 몇 ml인가요?");
+        assertAnswer(auth, question("날 길이 5cm 가위 기내 반입되나요?", "[]"), "CABIN_OK", null);
         assertAnswer(auth, question("날 길이 7cm 가위 기내 반입되나요?", "[]"), "CHECKED_OK", null);
+        assertAnswer(auth, question("가위 길이를 모르겠어요", "[]"),
+                "NEED_MORE_INFO", "가위 날 길이는 몇 cm인가요?");
+        assertAnswer(auth, question("노트북 기내 반입되나요?", "[]"), "CABIN_OK", null);
         assertAnswer(auth, question("삼각대 가져가도 되나요?", "[]"), "ASK_AIRLINE", null);
 
         String previousBattery = """
@@ -55,6 +65,29 @@ class ChatbotApiTest {
                 auth, question("45Wh예요", previousBattery), "ASK_AIRLINE", null);
         assertThat(unsupportedFollowUp.path("output").path("results").get(0).path("name").asText())
                 .isEqualTo("보조배터리");
+        assertAnswer(auth, question("화장품 용량을 모르겠어요", previousBattery), "ASK_AIRLINE", null);
+
+        String previousCosmetic = """
+                [{"itemId":null,"detectionId":null,"name":"화장품","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]
+                """;
+        assertAnswer(auth, question("50ml예요", previousCosmetic), "CABIN_OK", null);
+
+        String previousScissors = """
+                [{"itemId":null,"detectionId":null,"name":"가위","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]
+                """;
+        assertAnswer(auth, question("5cm예요", previousScissors), "CABIN_OK", null);
+        assertAnswer(auth, question("20000mAh 보조배터리는요?", previousScissors), "ASK_AIRLINE", null);
+        JsonNode topicChange = assertAnswer(
+                auth, question("화장품 용량을 모르겠어요", previousScissors), "ASK_AIRLINE", null);
+        assertThat(topicChange.path("output").path("answer").asText()).contains("규정을 찾지 못했습니다");
+
+        String previousLaptop = """
+                [{"itemId":null,"detectionId":null,"name":"노트북","qty":1,
+                  "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]
+                """;
+        assertAnswer(auth, question("가위 길이를 모르겠어요", previousLaptop), "ASK_AIRLINE", null);
 
         mvc.perform(post("/api/ai-jobs")
                         .session(auth.session()).cookie(auth.cookies())
