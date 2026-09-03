@@ -47,7 +47,14 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
     setTurns((t) => [...t, { role: 'user', text: q }])
     setText('')
     // 챗봇은 여행이 없어도 쓸 수 있다. tripId 를 보내지 않는다.
-    await job.start('RULE_CHECK', { question: q, items: [] })
+    // 07:1436-1441 required 4개. 여행 없는 챗봇은 transport=FLIGHT, airline=null 이다
+    // (07:1467). 빠뜨리면 명세대로 검증하는 서버가 접수 전에 거절한다.
+    await job.start('RULE_CHECK', {
+      transport: 'FLIGHT',
+      airline: null,
+      question: q,
+      items: [],
+    })
   }
 
   // 작업이 끝나면 답을 대화에 넣는다.

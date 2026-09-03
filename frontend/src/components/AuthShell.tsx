@@ -40,18 +40,32 @@ export function AuthShell({
  * 알 수 없게 된다.
  */
 export function Field({
-  label, htmlFor, hint, children,
+  label, htmlFor, hint, error, children,
 }: {
   label: string
   htmlFor: string
   hint?: string
+  /** 서버가 알려준 이 칸의 오류. 있으면 안내문 대신 <b>오류 모양</b>으로 보인다 */
+  error?: string | null
   children: React.ReactNode
 }) {
+  const msgId = `${htmlFor}-msg`
   return (
     <div className="field">
       <label htmlFor={htmlFor}>{label}</label>
-      {children}
-      {hint && <p className="field-hint">{hint}</p>}
+      {/*
+        * 오류를 회색 안내문으로 바꿔치기하지 않는다. 그러면 평소 문구와 똑같이
+        * 생겨서 무엇이 잘못됐는지 눈에도 스크린리더에도 남지 않는다.
+        */}
+      <div
+        className={error ? 'field-in is-bad' : 'field-in'}
+        aria-invalid={error ? true : undefined}
+      >
+        {children}
+      </div>
+      {error
+        ? <p id={msgId} className="field-error" role="alert">{error}</p>
+        : hint && <p id={msgId} className="field-hint">{hint}</p>}
     </div>
   )
 }

@@ -22,6 +22,21 @@ const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 let csrf: string | null = null
 export const setCsrfToken = (token: string | null) => { csrf = token }
 
+/**
+ * 세션이 끊겼을 때 부를 것. <b>AuthProvider 가 걸어 둔다.</b>
+ *
+ * 이게 없으면 30분 세션 만료 후에도 user 가 남아 보호 화면을 계속 통과하고,
+ * 폴링이 받은 401 은 "AI 작업 실패" 로 뭉개진다. 06:284 는 401 을 로그인 화면
+ * 전환 신호로, 수용 기준은 "세션 만료를 AI 작업의 FAILED 로 바꾸지 않는다" 로
+ * 못박았다.
+ */
+let onUnauthorized: (() => void) | null = null
+export const setUnauthorizedHandler = (fn: (() => void) | null) => { onUnauthorized = fn }
+
+/** CSRF 토큰을 아직 못 받았을 때 세션을 먼저 받아 오는 함수. AuthProvider 가 건다. */
+let ensureCsrf: (() => Promise<void>) | null = null
+export const setCsrfLoader = (fn: (() => Promise<void>) | null) => { ensureCsrf = fn }
+
 /** 06 의 오류 봉투를 담은 예외. 화면은 `message` 를 그대로 보여주면 된다. */
 export class ApiFailure extends Error {
   // tsconfig 의 erasableSyntaxOnly 때문에 생성자 파라미터 프로퍼티를 쓸 수 없다.
@@ -89,6 +104,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const method = init?.method ?? 'GET'
+  // 토큰 없이 바꾸는 요청을 보내면 서버가 403 CSRF_INVALID 로 거절한다.
+  // 새로고침 직후 곧바로 제출하는 경우가 그렇다 — 먼저 세션을 받아 온다.
+  if (!csrf && method !== 'GET' && ensureCsrf) {
+    try { await ensureCsrf() } catch { /* 실패해도 아래에서 서버 응답으로 판단한다 */ }
+  }
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     // 세션 쿠키(JSESSIONID)를 실어 보낸다. 없으면 모든 보호 API 가 401 이다.
@@ -102,6 +122,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
 
+  if (res.status === 401) {
+    // 06:284 — 401 은 로그인 화면으로 전환하라는 신호다. AI 작업 실패가 아니다.
+    csrf = null
+    onUnauthorized?.()
+  }
+  if (res.status === 403) {
+    // 06:260 — CSRF 오류면 세션·토큰을 다시 확인한다. 요청을 자동 재전송하지는
+    // 않는다. 사용자가 입력을 유지한 채 다시 누르면 새 토큰으로 나간다.
+    csrf = null
+    if (ensureCsrf) { try { await ensureCsrf() } catch { /* 무시 */ } }
+  }
   if (!res.ok) throw await toFailure(res)
   // 204 No Content — 삭제 성공. 본문이 없다.
   if (res.status === 204) return undefined as T
@@ -117,5 +148,8 @@ export const api = {
     }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  // #42 의 PUT /trips/{tripId}/packing-layout (06 29번). S-12 를 붙일 때 쓴다.
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   del: (path: string) => request<void>(path, { method: 'DELETE' }),
 }

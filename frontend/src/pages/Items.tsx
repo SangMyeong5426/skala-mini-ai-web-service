@@ -5,7 +5,7 @@ import { Shell, Steps, TopBar } from '../components/Shell'
 import { AiPending, Empty, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { CATEGORY_LABEL, pct, PHOTO_STATUS_LABEL, SOURCE_LABEL } from '../lib/format'
-import type { ItemsResponse, PackingListOutput } from '../types/api'
+import type { ItemsResponse, PackingListOutput, TripDetail } from '../types/api'
 
 /**
  * S-05 내 체크리스트 · AI 추천.
@@ -21,6 +21,7 @@ export default function Items() {
   const { tripId = '1' } = useParams()
   const nav = useNavigate()
   const [data, setData] = useState<ItemsResponse | null>(null)
+  const [trip, setTrip] = useState<TripDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cands, setCands] = useState<PackingListOutput | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
@@ -28,6 +29,8 @@ export default function Items() {
 
   const load = () => {
     setError(null)
+    // 07:513-521 의 PACKING_LIST required 를 채우려면 여행 정보가 필요하다.
+    api.get<TripDetail>(`/trips/${tripId}`).then(setTrip).catch(() => setTrip(null))
     api
       .get<ItemsResponse>(`/trips/${tripId}/items`)
       .then(async (r) => {
@@ -48,11 +51,23 @@ export default function Items() {
   useEffect(load, [tripId])
 
   const recommend = async () => {
-    // 이미 챙긴 물품을 넘겨 중복 추천을 막는다 — "부족한 것만" 추천의 구현.
-    const alreadyPacked = (data?.items ?? []).map((i) => ({
-      name: i.name, category: i.category, qty: i.qty,
-    }))
-    await job.start('PACKING_LIST', { alreadyPacked }, Number(tripId))
+    // 07:470 — alreadyPacked 는 <b>PREPARED 만</b>이다. 전체를 보내면 아직 안 챙긴
+    // 것까지 "이미 챙겼다" 로 넘어가 추천이 줄어든다.
+    const alreadyPacked = (data?.items ?? [])
+      .filter((i) => i.checkStatus === 'PREPARED')
+      .map((i) => ({ name: i.name, category: i.category, qty: i.qty }))
+
+    // 07:513-521 required 7개를 전부 채운다. 07:121 "없을 수 있는 값은 null 을
+    // 허용하되 필드 자체는 반드시 낸다".
+    await job.start('PACKING_LIST', {
+      destination: trip?.destination ?? '',
+      startDate: trip?.startDate ?? '',
+      endDate: trip?.endDate ?? '',
+      transport: trip?.transport ?? 'FLIGHT',
+      purpose: trip?.purpose ?? null,
+      note: trip?.note ?? null,
+      alreadyPacked,
+    }, Number(tripId))
     load()
   }
 

@@ -35,9 +35,22 @@ export function SiteHeader() {
   const { user, loading, logout } = useAuth()
   const nav = useNavigate()
 
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState(false)
+
+  // 06:263 — "서버 실패 시 로그아웃 완료로 표시하지 않고 재시도한다".
+  // 예외를 삼키면 아무 일도 안 일어난 것처럼 보인다.
   const signOut = async () => {
-    await logout()
-    nav('/', { replace: true })
+    setSigningOut(true)
+    setSignOutError(false)
+    try {
+      await logout()
+      nav('/', { replace: true })
+    } catch {
+      setSignOutError(true)
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   return (
@@ -54,6 +67,7 @@ export function SiteHeader() {
         ) : user ? (
           <>
             <nav className="site-nav" aria-label="주요 메뉴">
+              <span className="site-who">{user.nickname}</span>
               {NAV.map((n) => (
                 <NavLink
                   key={n.path}
@@ -64,7 +78,11 @@ export function SiteHeader() {
                   {n.name}
                 </NavLink>
               ))}
-              <button type="button" className="site-nav-btn" onClick={signOut}>로그아웃</button>
+              <button
+                type="button" className="site-nav-btn" onClick={signOut} disabled={signingOut}
+              >
+                {signingOut ? '로그아웃 중…' : signOutError ? '다시 시도' : '로그아웃'}
+              </button>
             </nav>
             <Link to={NAV_CTA.path} className="btn-head">＋ {NAV_CTA.name}</Link>
           </>
@@ -73,7 +91,7 @@ export function SiteHeader() {
             <nav className="site-nav" aria-label="주요 메뉴">
               <NavLink to="/login">로그인</NavLink>
             </nav>
-            <Link to="/signup" className="btn-head">시작하기</Link>
+            <Link to="/login" className="btn-head">시작하기</Link>
           </>
         )}
       </div>
@@ -144,7 +162,10 @@ export function Steps({ current, tripId }: { current: 1 | 2 | 3; tripId?: number
  * 흐름" 으로 못박았기 때문이다. 화면을 옮기면 하던 일이 끊긴다.
  */
 export function Chat() {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
+  // 06:278 — 챗봇도 userId 가 필수다. 로그인 전에는 버튼 자체를 두지 않는다.
+  if (!user) return null
   return (
     <>
       <button

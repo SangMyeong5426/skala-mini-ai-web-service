@@ -1002,3 +1002,47 @@ select:focus-visible, textarea:focus-visible {
 .chat-foot {
   padding: 0 16px 14px; font-size: 11px; color: var(--text-3);
 }
+
+/* 인식 결과 사후 수정 — 이름·수량을 그 자리에서 고친다 */
+.edit-row { display: flex; gap: 8px; align-items: center; }
+.edit-row input {
+  padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
+}
+.edit-row input[type='number'] { width: 76px; }
+
+/* 인식 결과 사후 수정 — 이름·수량을 그 자리에서 고친다 */
+.edit-row { display: flex; gap: 8px; align-items: center; }
+.edit-row input {
+  padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
+}
+.edit-row input[type='number'] { width: 76px; }
+
+/* 헤더의 로그인 사용자 — 03-wireframe "공통 헤더는 닉네임과 로그아웃을 표시한다" */
+.site-who {
+  padding: 8px 4px; font-size: 14.5px; font-weight: 600; color: var(--ink-3);
+}
+
+/* 입력 칸 — 오류일 때 테두리와 메시지를 함께 바꾼다 */
+.field-in { display: contents; }
+.field-in.is-bad input { border-color: var(--danger); }
+.field-error { font-size: 12.5px; font-weight: 600; color: var(--danger); }
+
+/* 비밀번호 표시/숨기기 — 03-wireframe S-00 요구 */
+.pw { position: relative; display: flex; }
+.pw input { flex: 1; padding-right: 62px; }
+.pw-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  padding: 6px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-3);
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.pw-toggle:hover { background: var(--fill); color: var(--ink); }
+
+/* 글 안에서 모드를 바꾸는 버튼 — 링크처럼 보인다 */
+.link-btn {
+  border: 0; background: none; padding: 0;
+  color: var(--accent); font: inherit; font-weight: 700; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}

@@ -17,6 +17,7 @@ export default function Photos() {
   const [photos, setPhotos] = useState<TripPhoto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drag, setDrag] = useState(false)
+  const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
@@ -27,6 +28,29 @@ export default function Photos() {
       .catch((e) => setError(e instanceof Error ? e.message : '알 수 없는 오류'))
   }
   useEffect(load, [tripId])
+
+  /**
+   * 사진 등록 — 06:104 `POST /trips/{tripId}/photos` → `201`.
+   *
+   * Mock 은 파일 본문을 받지 못하므로 <b>브라우저가 만든 미리보기 URL</b>을 보낸다.
+   * 실제 서버로 바꿀 때 이 함수의 body 만 FormData 로 바꾸면 된다.
+   */
+  const upload = async (files: FileList | null) => {
+    const picked = Array.from(files ?? []).filter((f) => f.type.startsWith('image/'))
+    if (!picked.length) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.post(`/trips/${tripId}/photos`, {
+        files: picked.map((f) => ({ fileUrl: URL.createObjectURL(f), bagKind: 'CABIN' })),
+      })
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '사진을 올리지 못했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const empty = photos !== null && photos.length === 0
 
@@ -72,8 +96,9 @@ export default function Photos() {
                     type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={() => fileRef.current?.click()}
+                    disabled={busy}
                   >
-                    사진 추가
+                    {busy ? '올리는 중…' : '사진 추가'}
                   </button>
                 </div>
 
@@ -81,14 +106,17 @@ export default function Photos() {
                   className={`dropzone${drag ? ' is-over' : ''}`}
                   onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
                   onDragLeave={() => setDrag(false)}
-                  onDrop={(e) => { e.preventDefault(); setDrag(false) }}
+                  onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files) }}
                 >
                   {empty ? (
                     <div className="state">
                       <p className="state-title">싸 놓은 짐을 찍어 올려 주세요</p>
                       <p className="state-sub">여기로 끌어다 놓거나 아래 버튼을 누르세요</p>
-                      <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
-                        사진 선택
+                      <button
+                        type="button" className="btn" disabled={busy}
+                        onClick={() => fileRef.current?.click()}
+                      >
+                        {busy ? '올리는 중…' : '사진 선택'}
                       </button>
                     </div>
                   ) : (
@@ -111,10 +139,10 @@ export default function Photos() {
                   accept="image/*"
                   multiple
                   hidden
-                  onChange={() => {
-                    // 업로드는 백엔드가 붙으면 POST /trips/{id}/photos 로 보낸다.
-                    // Mock 은 파일을 받지 않으므로 지금은 목록만 다시 읽는다.
-                    load()
+                  onChange={(e) => {
+                    upload(e.target.files)
+                    // 같은 파일을 다시 골라도 onChange 가 뜨도록 비운다
+                    e.target.value = ''
                   }}
                 />
               </div>

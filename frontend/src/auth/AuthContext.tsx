@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, setCsrfToken } from '../api/client'
+import { api, setCsrfLoader, setCsrfToken, setUnauthorizedHandler } from '../api/client'
 import type { AuthUserResponse, SessionResponse, SignupRequest, User } from '../types/api'
 import { AuthCtx } from './context'
 
@@ -31,6 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(next)
     return next
   }, [])
+
+  // 세션이 끊기면 사용자 상태를 비운다 → RequireAuth 가 로그인 화면으로 보낸다.
+  // 토큰이 없는 채로 나가는 변경 요청은 세션을 먼저 받아 오게 한다.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null))
+    setCsrfLoader(async () => { await sync() })
+    return () => { setUnauthorizedHandler(null); setCsrfLoader(null) }
+  }, [sync])
 
   useEffect(() => {
     let alive = true

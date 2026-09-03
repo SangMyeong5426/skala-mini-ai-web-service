@@ -102,6 +102,26 @@ export const ITEMS: ChecklistItem[] = [
       photoStatus: "CONFIRMED"
     },
     {
+      itemId: 8,
+      name: "화장품 용기",
+      category: "TOILETRY",
+      qty: 1,
+      photoStatus: "CONFIRMED",
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED"
+    },
+    {
+      itemId: 9,
+      name: "검정 파우치",
+      category: "ETC",
+      qty: 1,
+      photoStatus: "NEEDS_CHECK",
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED"
+    },
+    {
       itemId: 7,
       name: "변환 플러그",
       category: "ELECTRONIC",
@@ -115,7 +135,7 @@ export const ITEMS: ChecklistItem[] = [
 
 /** 06 이 items 응답에 함께 주는 값들. */
 export const ITEMS_META = {
-  completionRate: 0.857,
+  completionRate: 0.889,
   recommendationJobId: 1041,
   unacceptedRequiredCount: 1,
 }
@@ -461,6 +481,43 @@ export const AI_OUTPUT: {
     answer: null,
     followUpQuestion: null
   },
+}
+
+/**
+ * 챗봇 호출일 때의 <b>RULE_CHECK 출력</b>.
+ *
+ * `AI_OUTPUT.RULE_CHECK` 은 07 의 <b>예시 1(물품 목록 호출)</b>이라 `answer` 와
+ * `followUpQuestion` 이 null 이다. 07:1733 이 <i>"question 이 있으면 answer 는
+ * string"</i> 이라고 못박았으므로 챗봇에 그것을 돌려주면 계약 위반이다.
+ *
+ * 이 값은 07 의 <b>예시 2 — S-09 챗봇 · 여행 없이 질문</b> 출력 그대로다.
+ * 질문에서 뽑은 물품이라 `itemId`·`detectionId` 가 null 이다(07:1888).
+ */
+export const RULE_CHECK_CHAT: RuleCheckOutput = {
+  results: [
+    {
+      itemId: null,
+      detectionId: null,
+      name: "보조배터리",
+      qty: 1,
+      ruleKeyword: "보조배터리",
+      attributes: {
+        capacityMl: null,
+        batteryWh: null,
+        batteryMah: 20000,
+        bladeCm: null
+      },
+      verdict: "NEED_MORE_INFO",
+      ruleId: 1,
+      conditionNote: "100Wh 이하",
+      reason: "mAh만으로 정격 Wh를 확정하지 않습니다. 라벨의 Wh를 확인해 주세요.",
+      missingInfo: "배터리 정격(Wh)",
+      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+      checkedAt: "2026-09-02"
+    }
+  ],
+  answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
 }
 
 export const AI_JOB_CREATED = (jobType: JobType, jobId: number): AiJobCreated => ({

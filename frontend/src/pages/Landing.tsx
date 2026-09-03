@@ -386,7 +386,7 @@ function HeroArt() {
         <circle cx={SEOUL_PT.x} cy={SEOUL_PT.y} r="19" className="art-halo" />
         <circle cx={SEOUL_PT.x} cy={SEOUL_PT.y} r="7" />
         <text x={SEOUL_PT.x} y={SEOUL_PT.y + 48}>서울</text>
-        <text x={SEOUL_PT.x} y={SEOUL_PT.y + 70} className="art-code">SEL</text>
+        <text x={SEOUL_PT.x} y={SEOUL_PT.y + 70} className="art-code">ICN</text>
       </g>
 
       {/* 도착 */}
@@ -394,7 +394,7 @@ function HeroArt() {
         <circle cx={TOKYO_PT.x} cy={TOKYO_PT.y} r="19" className="art-halo" />
         <circle cx={TOKYO_PT.x} cy={TOKYO_PT.y} r="7" />
         <text x={TOKYO_PT.x} y={TOKYO_PT.y + 48}>도쿄</text>
-        <text x={TOKYO_PT.x} y={TOKYO_PT.y + 70} className="art-code">HND</text>
+        <text x={TOKYO_PT.x} y={TOKYO_PT.y + 70} className="art-code">NRT</text>
       </g>
 
       {/*

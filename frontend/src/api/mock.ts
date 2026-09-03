@@ -24,6 +24,7 @@
  * 끄는 법: frontend/.env 의 VITE_USE_MOCK 를 false 로.
  */
 import * as fx from './fixtures'
+import { LOGIN_ID_RE } from '../types/api'
 import type {
   BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto, User,
 } from '../types/api'
@@ -79,7 +80,7 @@ interface MockUser {
 }
 
 const users: MockUser[] = [
-  { userId: 1, loginId: 'jiwoo', nickname: '김지우', email: 'kim@skala.dev', password: 'skala1234' },
+  { userId: 1, loginId: 'jiwoo28', nickname: '김지우', email: 'kim@skala.dev', password: 'skala1234' },
 ]
 let nextUserId = 2
 
@@ -96,11 +97,12 @@ const publicUser = (u: MockUser): User => ({
 })
 
 /** 06 의 입력 규칙. 서버가 최종 판정하는 자리라 Mock 도 같이 지킨다. */
-const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ── 여행별 상태 ───────────────────────────────────────────
 interface TripState {
+  /** 06:275 — trips.user_id == 세션 userId. 없으면 남의 여행이 그대로 보인다 */
+  ownerId: number
   detail: TripDetail
   items: ChecklistItem[]
   detections: Detection[]
@@ -113,9 +115,9 @@ interface TripState {
   accepted: Map<number, number>
 }
 
-function emptyTrip(detail: TripDetail): TripState {
+function emptyTrip(detail: TripDetail, ownerId = 1): TripState {
   return {
-    detail, items: [], detections: [], photos: [],
+    ownerId, detail, items: [], detections: [], photos: [],
     links: new Map(), recommendationJobId: null, accepted: new Map(),
   }
 }
@@ -136,6 +138,7 @@ const trips = new Map<number, TripState>()
 // 1번은 시드(도쿄). 2·3번은 지난 여행이라 하위 자원을 두지 않는다 —
 // S-10 여행 기록 상세는 3차라 데모에서 열지 않는다.
 trips.set(1, {
+  ownerId: 1,           // 시드 사용자(jiwoo28)의 여행이다
   detail: { ...fx.TRIP_DETAIL },
   items: fx.ITEMS.map((i) => ({ ...i })),
   detections: fx.DETECTIONS.map((d) => ({ ...d })),
@@ -152,6 +155,7 @@ for (const t of fx.TRIPS.slice(1)) trips.set(t.tripId, emptyTrip({ ...t }))
 let nextTripId = 100
 let nextDetectionId = 100
 let nextItemId = 100
+let nextPhotoId = 100
 let nextJobId = 1042
 
 // 시드 여행에는 이미 완료된 추천이 하나 있다 (fx.ITEMS_META.recommendationJobId).
@@ -165,6 +169,8 @@ const jobs = new Map<number, {
   tripId?: number
   /** BAG_CHECK 이 어느 사진을 분석했는지. 저장 범위를 여기에 맞춘다. */
   photoIds?: number[]
+  /** RULE_CHECK 이 챗봇 호출인지 가른다. 07 이 출력을 다르게 정했다. */
+  question?: string
   /** 완료 결과를 도메인에 한 번만 반영한다. 반복 GET 으로 중복 삽입하지 않는다. */
   applied: boolean
 }>()
@@ -266,10 +272,10 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds?: number[]) {
   t.detections = t.detections.filter((d) => !(scope.has(d.photoId) && !d.approved))
 
   for (const d of target) {
-    // 같은 사진에 이미 승인된 같은 이름이 있으면 건드리지 않는다.
     if (t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)) continue
+    const detectionId = nextDetectionId++
     t.detections.push({
-      detectionId: nextDetectionId++,
+      detectionId,
       photoId: d.photoId,
       name: d.name,
       qty: d.qty,
@@ -277,8 +283,30 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds?: number[]) {
       confidenceLevel: d.confidenceLevel,
       missingInfo: d.missingInfo,
       labelText: d.labelText,
-      approved: false,      // 승인 전이다. 명세 9.2.
+      // 승인 게이트는 폐기됐다. 인식 즉시 등록된 것으로 본다(06:686-737).
+      approved: true,
     })
+
+    // 06: "이름 있는 인식 물품을 즉시 PHOTO/PREPARED 로 등록한다".
+    // 같은 이름이 이미 내 목록에 있으면 새로 만들지 않고 연결만 한다.
+    const exist = t.items.find((i) => i.name.trim() === d.name.trim())
+    if (exist) {
+      t.links.set(detectionId, [exist.itemId])
+      touched.add(exist.itemId)
+      continue
+    }
+    const created: ChecklistItem = {
+      itemId: nextItemId++,
+      name: d.name,
+      category: 'ETC',
+      qty: d.qty,
+      priority: 'RECOMMENDED',
+      source: 'PHOTO',
+      checkStatus: 'PREPARED',
+      photoStatus: d.missingInfo ? 'NEEDS_CHECK' : 'CONFIRMED',
+    }
+    t.items.push(created)
+    t.links.set(detectionId, [created.itemId])
   }
   syncStatus(t, [...touched])
 }
@@ -317,6 +345,10 @@ export function mockRequest(
       nickname.length < 2 || nickname.length > 50 ? ['nickname', '닉네임은 2~50자로 입력해 주세요.'] :
       !LOGIN_ID_RE.test(loginId) ? ['loginId', '아이디는 영문 소문자·숫자·밑줄 4~30자입니다.'] :
       password.length < 8 ? ['password', '비밀번호는 8자 이상이어야 합니다.'] :
+      // 06:190 — UTF-8 72바이트 이하. BCrypt 가 잘리는 지점이라 서버가 실제로 막는다.
+      // .length 는 UTF-16 코드유닛 수라 한글에서 어긋난다. 바이트로 센다.
+      new TextEncoder().encode(password).length > 72
+        ? ['password', '비밀번호는 72바이트 이하여야 합니다.'] :
       !EMAIL_RE.test(email) || email.length > 255 ? ['email', '이메일 형식을 확인해 주세요.'] :
       null
     if (bad) return delay(new MockError(400, 'VALIDATION_FAILED', bad[1], bad[0]))
@@ -354,6 +386,18 @@ export function mockRequest(
     return delay({})   // 실제 서버는 204
   }
 
+  /*
+   * 여기부터는 <b>전부 보호 자원</b>이다. 06:25 "서비스 전체 로그인 필수",
+   * 275~278 "trips.user_id == 세션 userId".
+   *
+   * 인증 라우트(위)를 지난 뒤 한 번만 막는다. 라우트마다 검사하면 새 라우트를
+   * 추가할 때 빠뜨린다 — 실제로 이 PR 에서 그렇게 빠져 있었다.
+   */
+  if (!session) {
+    return delay(new MockError(401, 'AUTH_REQUIRED', '로그인이 필요합니다.'))
+  }
+  const me = session.userId
+
   // ── AI 작업 ────────────────────────────────────────────
   if (method === 'POST' && p === '/ai-jobs') {
     const jobType = b.jobType as JobType
@@ -364,6 +408,8 @@ export function mockRequest(
       jobType,
       tripId: b.tripId as number | undefined,
       photoIds: Array.isArray(input.photoIds) ? (input.photoIds as number[]) : undefined,
+      // 챗봇인지 물품 목록 호출인지 가르는 값. 07 이 출력을 다르게 정했다.
+      question: typeof input.question === 'string' && input.question.trim() ? input.question : undefined,
       applied: false,
     })
     return delay(fx.AI_JOB_CREATED(jobType, jobId))
@@ -388,6 +434,11 @@ export function mockRequest(
       if (t && job.jobType === 'PACKING_LIST') t.recommendationJobId = jobId
     }
     const done = fx.AI_JOB(jobId, job.jobType, true)
+    // 07:1733 — question 이 있으면 answer 는 string 이어야 한다. 물품 목록 호출의
+    // 출력(answer: null)을 챗봇에 돌려주면 계약 위반이고, 무엇을 물어도 같은 답이 된다.
+    if (job.jobType === 'RULE_CHECK' && job.question) {
+      done.output = fx.RULE_CHECK_CHAT as typeof done.output
+    }
     // 후보가 이미 채택됐는지는 여행 상태가 안다. 06 의 acceptedItemId 가 그 자리다.
     // 안 실어 주면 화면이 채택한 것을 계속 "담을 수 있는 것" 으로 보여준다.
     const t2 = job.tripId ? trips.get(job.tripId) : undefined
@@ -404,7 +455,7 @@ export function mockRequest(
   // ── 여행 ───────────────────────────────────────────────
   if (method === 'GET' && p === '/trips') {
     return delay({
-      trips: [...trips.values()].map((t) => ({
+      trips: [...trips.values()].filter((t) => t.ownerId === me).map((t) => ({
         ...t.detail, completionRate: completionRate(t),
       })),
     })
@@ -432,11 +483,15 @@ export function mockRequest(
       note: b.note as string | undefined,
     }
     // 새 여행은 자원이 비어 있다. 시드 여행 것을 물려주면 안 된다.
-    trips.set(tripId, emptyTrip(created))
+    trips.set(tripId, emptyTrip(created, me))
     return delay({ ...created, createdAt: new Date().toISOString() })
   }
 
-  const tripOf = (): TripState | undefined => trips.get(idsIn(p)[0])
+  // 06:282 — 소유권 불일치는 404 다. 존재 여부를 알려 주지 않는다.
+  const tripOf = (): TripState | undefined => {
+    const t = trips.get(idsIn(p)[0])
+    return t && t.ownerId === me ? t : undefined
+  }
 
   if (method === 'GET' && /^\/trips\/\d+$/.test(p)) {
     const t = tripOf()
@@ -504,6 +559,22 @@ export function mockRequest(
   }
 
   // ── 사진 ───────────────────────────────────────────────
+  // 06:104 — POST /trips/{tripId}/photos → 201. 없으면 새 여행은 영원히 0장이라
+  // "분석 시작" 이 비활성으로 굳고 S-04 에 도달할 길이 사라진다.
+  if (method === 'POST' && /^\/trips\/\d+\/photos$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    // 실제 서버는 파일을 받는다. Mock 은 화면이 만든 미리보기 URL 을 그대로 쓴다.
+    const added = (Array.isArray(b.files) ? b.files : []) as { fileUrl: string; bagKind?: string }[]
+    const photos: TripPhoto[] = added.map((f) => ({
+      photoId: nextPhotoId++,
+      fileUrl: String(f.fileUrl ?? ''),
+      bagKind: (f.bagKind ?? 'CABIN') as TripPhoto['bagKind'],
+    }))
+    t.photos.push(...photos)
+    return delay({ photos })
+  }
+
   if (method === 'GET' && /^\/trips\/\d+\/photos$/.test(p)) {
     const t = tripOf()
     return t ? delay({ photos: t.photos }) : NOT_FOUND
@@ -521,7 +592,14 @@ export function mockRequest(
     const d = t.detections.find((x) => x.detectionId === detectionId)
     if (!d) return NOT_FOUND
 
-    if (b.approved !== undefined) d.approved = Boolean(b.approved)
+    // 06:732 — "approved 전송 → 400. FE 에 승인 버튼·요청을 두지 않는다".
+    // 승인 게이트는 폐기됐다. 인식 즉시 등록이 계약이다.
+    if (b.approved !== undefined) {
+      return delay(new MockError(
+        400, 'VALIDATION_FAILED',
+        '승인 흐름은 폐기됐습니다. 인식 물품은 자동 등록됩니다.', 'approved',
+      ))
+    }
     if (b.name !== undefined) d.name = String(b.name)
     if (b.qty !== undefined) d.qty = Number(b.qty)
 
