@@ -36,6 +36,38 @@ const SAMPLES = [
   '날 길이 7cm 가위 기내 반입되나요?',
 ]
 
+/**
+ * 되묻는 질문에 답할 때 <b>직전 판정 결과를 함께 들고 간다.</b>
+ *
+ * 06:409 — "직전 `results[]`의 입력 허용 필드 5개를 `items[]`로 함께 보내고 새
+ * 작업을 만든다." 서버는 대화를 기억하지 않는다. 대화 전용 ID도, 대화를 저장하는
+ * API도 만들지 않기로 했다(06:411). 문맥을 잇는 것은 <b>화면의 몫이다.</b>
+ *
+ * 빈 배열로 보내면 서버에는 "100Wh예요" 한 마디만 남는다. 무엇의 100Wh인지 알 수
+ * 없으니 `ASK_AIRLINE` — "해당 물품의 규정을 찾지 못했습니다" 가 돌아온다.
+ * 실서버에 직접 물어 확인했다. 들고 가면 `CABIN_OK` 다.
+ *
+ * `attributes` 는 통째로 넘기지 않고 <b>네 개만 골라 담는다.</b> 07:1455-1462 이
+ * 그 4개를 required + 추가 필드 금지로 못박았고, 서버는 입력을 접수 <b>전에</b>
+ * 검증해 어긋나면 400 VALIDATION_FAILED 를 낸다(06:415). 나중에 실제 모델이
+ * 출력에 필드를 하나 더 얹어도 이쪽은 깨지지 않는다.
+ */
+function carryOver(prev: Turn | undefined) {
+  if (!prev || prev.role !== 'bot' || !prev.followUp || !prev.results) return []
+  return prev.results.map((r) => ({
+    itemId: r.itemId,
+    detectionId: r.detectionId,
+    name: r.name,
+    qty: r.qty,
+    attributes: {
+      capacityMl: r.attributes.capacityMl ?? null,
+      batteryWh: r.attributes.batteryWh ?? null,
+      batteryMah: r.attributes.batteryMah ?? null,
+      bladeCm: r.attributes.bladeCm ?? null,
+    },
+  }))
+}
+
 export function ChatModal({ onClose }: { onClose: () => void }) {
   const [turns, setTurns] = useState<Turn[]>([])
   const [text, setText] = useState('')
@@ -55,6 +87,9 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
 
   const ask = async (q: string) => {
     if (!q.trim() || job.phase === 'running') return
+    // <b>보내기 전에</b> 직전 턴을 읽는다. 아래 setTurns 로 사용자 말풍선을
+    // 붙이고 나면 마지막 턴이 방금 쓴 질문으로 바뀐다.
+    const items = carryOver(turns.at(-1))
     setTurns((t) => [...t, { role: 'user', text: q }])
     setText('')
     // 챗봇은 여행이 없어도 쓸 수 있다. tripId 를 보내지 않는다.
@@ -64,7 +99,7 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
       transport: 'FLIGHT',
       airline: null,
       question: q,
-      items: [],
+      items,
     })
   }
 
