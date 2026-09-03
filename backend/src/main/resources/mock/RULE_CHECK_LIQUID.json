@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "itemId": null,
+      "detectionId": null,
+      "name": "화장품",
+      "qty": 1,
+      "ruleKeyword": "액체",
+      "attributes": {
+        "capacityMl": 120,
+        "batteryWh": null,
+        "batteryMah": null,
+        "bladeCm": null
+      },
+      "verdict": "CHECKED_OK",
+      "ruleId": 5,
+      "conditionNote": "100ml 초과",
+      "reason": "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요.",
+      "missingInfo": null,
+      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+      "checkedAt": "2026-09-02"
+    }
+  ],
+  "answer": "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}

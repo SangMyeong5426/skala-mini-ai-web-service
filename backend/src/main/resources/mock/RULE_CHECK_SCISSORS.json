@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "itemId": null,
+      "detectionId": null,
+      "name": "가위",
+      "qty": 1,
+      "ruleKeyword": "가위",
+      "attributes": {
+        "capacityMl": null,
+        "batteryWh": null,
+        "batteryMah": null,
+        "bladeCm": 7
+      },
+      "verdict": "CHECKED_OK",
+      "ruleId": 6,
+      "conditionNote": "날 길이 6cm 초과",
+      "reason": "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요.",
+      "missingInfo": null,
+      "sourceUrl": "https://www.airport.kr/ap_ko/907/subview.do",
+      "checkedAt": "2026-09-02"
+    }
+  ],
+  "answer": "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}

@@ -54,12 +54,14 @@ public class AiJobRunner {
     private final ChecklistItemRepository items;
     private final ItemRuleCheckRepository ruleChecks;
     private final PhotoAutoRegistrar autoRegistrar;
+    private final RuleCheckContract ruleCheckContract;
     private final Json json;
     private final long mockDelayMs;
 
     public AiJobRunner(AiJobRepository jobs, AiJobService jobService, AiClient aiClient,
                        DetectedObjectRepository detections, ChecklistItemRepository items,
                        ItemRuleCheckRepository ruleChecks, PhotoAutoRegistrar autoRegistrar, Json json,
+                       RuleCheckContract ruleCheckContract,
                        @Value("${app.ai.mock-delay-ms:0}") long mockDelayMs) {
         this.jobs = jobs;
         this.jobService = jobService;
@@ -68,6 +70,7 @@ public class AiJobRunner {
         this.items = items;
         this.ruleChecks = ruleChecks;
         this.autoRegistrar = autoRegistrar;
+        this.ruleCheckContract = ruleCheckContract;
         this.json = json;
         this.mockDelayMs = mockDelayMs;
     }
@@ -83,7 +86,11 @@ public class AiJobRunner {
             // 발표에서 로딩 화면을 보여주려면 AI_MOCK_DELAY_MS 를 1000~2000 으로 둔다.
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
-            JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), json.read(job.getInputPayload()));
+            JsonNode input = json.read(job.getInputPayload());
+            JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
+            if (job.getJobType() == Codes.JobType.RULE_CHECK) {
+                ruleCheckContract.validateOutput(input, output);
+            }
 
             // 순서가 중요하다. **부수 효과를 먼저 쓰고, 성공했을 때만 작업을 완료로 바꾼다.**
             //
