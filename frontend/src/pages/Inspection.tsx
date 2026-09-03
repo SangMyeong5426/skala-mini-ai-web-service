@@ -4,8 +4,8 @@ import { api } from '../api/client'
 import { AiPending, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { Shell, Steps, TopBar } from '../components/Shell'
-import { pct } from '../lib/format'
-import type { Inspection, PhotoStatus, RuleVerdict, TripDetail, WeightVerdict } from '../types/api'
+import { pct, VERDICT_CLASS, VERDICT_LABEL } from '../lib/format'
+import type { Inspection, PhotoStatus, TripDetail, WeightVerdict } from '../types/api'
 
 /**
  * S-06 검수 결과 ★AI — 준비 상태 · 예상 무게 · 반입 판정을 한 화면에서 본다.
@@ -26,14 +26,8 @@ const WEIGHT: Record<WeightVerdict, { label: string; cls: string }> = {
   UNKNOWN: { label: '판단 보류', cls: '' },
 }
 
-const RULE: Record<RuleVerdict, { label: string; cls: string }> = {
-  CABIN_OK: { label: '기내 가능', cls: 'badge-ok' },
-  CHECKED_OK: { label: '위탁 가능', cls: 'badge-ok' },
-  CHECKED_FORBIDDEN: { label: '반입 불가', cls: 'badge-danger' },
-  RESTRICTED: { label: '조건부', cls: 'badge-warn' },
-  NEED_MORE_INFO: { label: '정보 부족', cls: 'badge-warn' },
-  ASK_AIRLINE: { label: '항공사 확인', cls: 'badge-warn' },
-}
+/** 07:1390 — RULE_CHECK `items` 의 maxItems. 서버는 51개부터 400 이다 */
+const RULE_CHECK_MAX_ITEMS = 50
 
 const kg = (g: number) => (g / 1000).toFixed(1)
 
@@ -42,9 +36,14 @@ export default function InspectionPage() {
   const nav = useNavigate()
   const [data, setData] = useState<Inspection | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [trip, setTrip] = useState<TripDetail | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const weightJob = useAiJob()
   const ruleJob = useAiJob()
   const kicked = useRef(false)
+  /** 화면을 떠났나. effect cleanup 과 비동기 함수가 같은 값을 본다 */
+  const cancelled = useRef(false)
 
   const load = () =>
     api.get<Inspection>(`/trips/${tripId}/inspection`)
@@ -61,17 +60,25 @@ export default function InspectionPage() {
    * 둘을 따로 돌린다. 03 이 "세 영역이 각각 따로 로딩된다" 로 정했고,
    * 무게가 실패해도 반입 판정은 보여야 한다.
    */
-  useEffect(() => {
-    let alive = true
-    void (async () => {
+  /**
+   * 없는 결과를 <b>여기서 만들어 온다.</b> 조회만 하고 "아직 계산하지
+   * 않았습니다" 로 두면 사용자가 할 수 있는 일이 없다.
+   *
+   * 이름을 붙여 둔 것은 <b>재시도가 이 함수를 다시 부르기 위해서다.</b>
+   * effect 안에 묻어 두면 409 STALE_WEIGHT_INPUT 을 받았을 때 다시 걸 방법이
+   * 없어, "다시 시도" 가 조회만 하고 아무 일도 안 하는 버튼이 된다.
+   */
+  const startJobs = async () => {
+    {
       const r = await load()
-      if (!alive || !r || kicked.current) return
+      if (cancelled.current || !r) return
       kicked.current = true
 
       // 07 의 두 입력 스키마는 서로 다르다. 여행 정보가 있어야 채울 수 있고,
       // 없으면 요청을 걸지 않는다 — 07 이 minLength·enum 을 요구한다.
       const trip = await api.get<TripDetail>(`/trips/${tripId}`).catch(() => null)
-      if (!alive || !trip) return
+      if (cancelled.current || !trip) return
+      setTrip(trip)
 
       const prepared = r.readiness?.prepared ?? []
       const unprepared = r.readiness?.unprepared ?? []
@@ -98,7 +105,7 @@ export default function InspectionPage() {
           weightLimitG: trip.weightLimitG ?? null,
           items: prepared.map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty })),
           excluded: unprepared.map((i) => ({ name: i.name, reason: 'UNCHECKED' })),
-        }, Number(tripId)).then((done) => { if (done && alive) void load() })
+        }, Number(tripId)).then((r) => { if (r.done && !cancelled.current) void load() })
       }
 
       /*
@@ -114,7 +121,12 @@ export default function InspectionPage() {
        * JS 에서 `![]` 는 false 라, 새로 만든 여행은 판정을 영영 걸지 않았다.
        * 데모에서 여행을 새로 만들어 여기까지 오면 반입 판정 칸이 계속 비어 있었다.
        */
-      const all = [...prepared, ...unprepared]
+      /*
+       * 07:1390 `items` 는 <b>maxItems 50</b> 이고, 서버는 51개부터 접수 전에
+       * 400 VALIDATION_FAILED 를 낸다(RuleCheckContract:36). 물품이 많은
+       * 여행에서 판정이 통째로 안 나오는 것보다 앞 50개라도 나오는 편이 낫다.
+       */
+      const all = [...prepared, ...unprepared].slice(0, RULE_CHECK_MAX_ITEMS)
       if (!r.customs?.length && all.length > 0) {
         void ruleJob.start('RULE_CHECK', {
           transport: trip.transport,
@@ -128,11 +140,82 @@ export default function InspectionPage() {
             // 속성은 서버가 채운다. FE 는 모르는 값을 지어내지 않는다.
             attributes: { capacityMl: null, batteryWh: null, batteryMah: null, bladeCm: null },
           })),
-        }, Number(tripId)).then((done) => { if (done && alive) void load() })
+        }, Number(tripId)).then((r) => { if (r.done && !cancelled.current) void load() })
       }
-    })()
-    return () => { alive = false }
+    }
+  }
+
+  useEffect(() => {
+    /*
+     * <b>취소 상태는 ref 로 공유한다.</b>
+     *
+     * 예전에는 effect 의 지역 `let alive` 를 `startJobs(alive)` 로 <b>값으로</b>
+     * 넘겼다. 함수 안에는 `true` 사본이 남으므로 cleanup 이 바깥 변수를 false 로
+     * 바꿔도 안쪽 검사는 계속 통과했다. 그래서 조회 응답이 늦게 오면 <b>이미
+     * 떠난 화면에서 WEIGHT_ESTIMATE·RULE_CHECK 를 새로 접수했다.</b>
+     *
+     * useAiJob 의 이탈 검사는 첫 폴링 대기 <b>뒤에</b> 있어서 접수 자체를 막지
+     * 못한다. 실제 모델을 부르는 설정에서는 모델 호출로도 이어진다.
+     *
+     * 재시도 경로도 같은 ref 를 본다 — 이탈 처리가 두 갈래가 되면 한쪽이 또
+     * 빠진다.
+     */
+    cancelled.current = false
+    if (!kicked.current) void startJobs()
+    return () => { cancelled.current = true }
   }, [tripId])
+
+  /**
+   * 03:284 주요 요소의 <b>`최종 저장`</b>. 03:184 이 정한 흐름의 마지막 단계다 —
+   * <i>"검수 결과 확인·수정 → 최종 저장"</i>.
+   *
+   * 새 여행은 `DRAFT`(작성 중)로 만들어진다(TripService:95 — "생성 직후는
+   * DRAFT 다. 클라이언트가 status 를 정하지 않는다"). 준비가 끝났다는 뜻을
+   * 남기는 것이 이 버튼이고, 그러면 내 여행 목록에서 <b>진행 중</b>으로 선다.
+   *
+   * 06 은 `PATCH /trips/{tripId}` 가 `status` 를 받는다고 적어 두었지만 S-06 의
+   * 호출 API 목록에서 이 단계를 빠뜨렸다. 작성자 확인을 거쳐 06 에 함께 적었다.
+   *
+   * 06:289 — "경고는 완료율 계산·최종 저장을 막지 않는다". 미채택 필수 후보가
+   * 있어도 저장을 막지 않는다.
+   */
+  const confirm = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api.patch(`/trips/${tripId}`, { status: 'CONFIRMED' })
+      setSaveError(null)
+      nav('/trips')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * <b>50개 상한에 걸려 판정에 못 보낸 물품.</b>
+   *
+   * 07:1390 이 `items` 를 maxItems 50 으로 정해서 51번째부터는 요청에 담지
+   * 못한다. 조용히 자르면 물품 60개인 여행은 50개만 보이고 사용자는 60개 다
+   * 봤다고 생각한다. 서버도 판정 기록이 없는 물품을 `customs` 에서 빼므로
+   * 다음 방문에 저절로 채워지지 않는다.
+   *
+   * 이 저장소에는 같은 상황의 전례가 있다 — #46 의 `AI_VISION_MAX_PHOTOS` 는
+   * 넘는 사진을 `failedPhotoIds` 로 남기며 <i>"조용히 버리면 사용자는 그 사진이
+   * 분석된 줄 안다"</i> 고 적었다.
+   *
+   * <b>`customs` 에 없는 물품으로 세면 안 된다.</b> 규칙이 없어 판정이 나오지
+   * 않은 물품도 서버가 `customs` 에서 빼기 때문에, 두 가지가 섞여 "판정 못 했다"
+   * 고 잘못 말한다. 상한을 넘긴 것만 정확히 센다 — 목록 길이만 보면 되고
+   * 재진입해도 같은 값이 나온다.
+   */
+  const unjudged = (() => {
+    const r0 = data?.readiness
+    if (!r0) return []
+    // 요청에 담는 순서 그대로 세야 실제로 빠진 것이 나온다
+    return [...r0.prepared, ...r0.unprepared].slice(RULE_CHECK_MAX_ITEMS).map((i) => i.name)
+  })()
 
   const r = data?.readiness
   const w = data?.weight
@@ -174,11 +257,13 @@ export default function InspectionPage() {
                   <span>
                     {r.unacceptedRequiredCount === null
                       ? '필수 추천 확인 전입니다'
-                      : <>아직 채택하지 않은 <b>필수 후보 {r.unacceptedRequiredCount}건</b>이 있습니다</>}
+                      : <>미채택 <b>필수 후보 {r.unacceptedRequiredCount}건</b></>}
                   </span>
                   <button
                     type="button" className="btn btn-sm"
-                    onClick={() => nav(`/trips/${tripId}/items`)}
+                    /* 03:289 · 06:1029 — "확인하기는 S-05 의 필수 추천 영역으로
+                       이동한다". 목록 맨 위로 보내면 무엇을 확인하라는지 모른다 */
+                    onClick={() => nav(`/trips/${tripId}/items#recommend`)}
                   >확인하기</button>
                 </div>
               )}
@@ -195,7 +280,7 @@ export default function InspectionPage() {
                       {i.photoStatus === 'NEEDS_CHECK' && (
                         <button
                           type="button" className="btn btn-ghost btn-sm"
-                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                          onClick={() => nav(`/trips/${tripId}/detections?from=inspection`)}
                         >사진 확인</button>
                       )}
                     </div>
@@ -203,8 +288,15 @@ export default function InspectionPage() {
                 ))}
               </Group>
 
+              {/*
+                * 03:288 빈 상태 — "내 목록이 비면 사진 등록·직접 추가 안내".
+                * 목록이 통째로 비었는데 "모두 챙기셨습니다" 라고 하면 거짓말이다.
+                * 챙긴 것도 챙길 것도 없는 상태다.
+                */}
               <Group title="아직 안 챙김" count={r.unprepared.length} tone="warn"
-                empty="모두 챙기셨습니다">
+                empty={r.prepared.length === 0
+                  ? '내 목록이 비어 있습니다. 사진을 올리거나 체크리스트에서 직접 추가하세요'
+                  : '모두 챙기셨습니다'}>
                 {r.unprepared.map((i) => (
                   <li key={i.itemId} className="row">
                     <div className="row-main">
@@ -215,7 +307,7 @@ export default function InspectionPage() {
                       {i.photoStatus === 'NEEDS_CHECK' && (
                         <button
                           type="button" className="btn btn-ghost btn-sm"
-                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                          onClick={() => nav(`/trips/${tripId}/detections?from=inspection`)}
                         >사진 확인</button>
                       )}
                     </div>
@@ -238,7 +330,16 @@ export default function InspectionPage() {
             {!data && !error && <Skeleton rows={3} />}
             {weightJob.phase === 'running' && <AiPending label="예상 무게를 계산하는 중" polls={weightJob.polls} />}
             {weightJob.phase === 'failed' && (
-              <Failed title="무게를 계산하지 못했습니다" detail={weightJob.error ?? ''} />
+              /*
+               * 07:1151 — 입력이 어긋나면 서버가 409 STALE_WEIGHT_INPUT 으로
+               * <b>재조회를 요청</b>한다. 그 뜻대로 다시 조회하고 다시 건다.
+               * 예전에는 실패 문구만 남아서 브라우저 새로고침 말고 길이 없었다.
+               */
+              <Failed
+                title="무게를 계산하지 못했습니다"
+                detail={weightJob.error ?? ''}
+                onRetry={() => { kicked.current = false; void startJobs() }}
+              />
             )}
             {/*
               * 06:537-538 — 60회를 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼.
@@ -249,7 +350,7 @@ export default function InspectionPage() {
               <Failed
                 title="시간이 오래 걸립니다"
                 detail="작업은 서버에 남아 있습니다"
-                onRetry={() => { void load() }}
+                onRetry={() => { kicked.current = false; void startJobs() }}
               />
             )}
             {data && !w && weightJob.phase === 'idle' && (
@@ -263,11 +364,22 @@ export default function InspectionPage() {
                   <span>{kg(w.maxG)}</span>
                   <small>kg</small>
                 </p>
-                <div className="bar bar-lg" style={{ margin: '12px 0 10px' }}>
-                  <span style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }} />
-                </div>
+                {/*
+                  * <b>한도가 없으면 막대를 그리지 않는다.</b> `limitG` 는 nullable 이다
+                  * — 가방 정보를 안 넣은 여행이 있다(시드의 지난 여행이 그렇다).
+                  *
+                  * null 로 나누면 JS 에서 `Infinity` 가 되고 `Math.min(100, …)` 이
+                  * 100 을 골라, 한도를 모르는데 <b>가득 찬 막대</b>가 그려졌다.
+                  * 아래 문구도 "한도 0.0kg" 이 됐다. 둘 다 거짓말이다.
+                  */}
+                {w.limitG !== null && (
+                  <div className="bar bar-lg" style={{ margin: '12px 0 10px' }}>
+                    <span style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }} />
+                  </div>
+                )}
                 <p className="card-sub">
-                  한도 {kg(w.limitG)}kg · 신뢰도 {w.confidence === 'HIGH' ? '높음' : w.confidence === 'MEDIUM' ? '보통' : '낮음'}
+                  {w.limitG === null ? '한도 정보 없음' : `한도 ${kg(w.limitG)}kg`}
+                  {' · '}신뢰도 {w.confidence === 'HIGH' ? '높음' : w.confidence === 'MEDIUM' ? '보통' : '낮음'}
                   {w.excludedCount > 0 && ` · 계산 제외 ${w.excludedCount}개`}
                 </p>
                 <p className="row-sub" style={{ marginTop: 6 }}>{w.confidenceReason}</p>
@@ -301,6 +413,16 @@ export default function InspectionPage() {
             {ruleJob.phase === 'failed' && (
               <Failed title="판정하지 못했습니다" detail={ruleJob.error ?? ''} />
             )}
+            {/* 조용히 빠뜨리지 않는다. 무엇이 안 봤는지 이름으로 말한다 */}
+            {unjudged.length > 0 && ruleJob.phase !== 'running' && (
+              <p className="notice-warn" style={{ display: 'block' }}>
+                <b>{unjudged.length}개는 판정하지 못했습니다</b> — 한 번에{' '}
+                {RULE_CHECK_MAX_ITEMS}개까지 확인합니다.{' '}
+                항공사 규정을 직접 확인해 주세요 —{' '}
+                {unjudged.slice(0, 5).join(' · ')}
+                {unjudged.length > 5 && ` 외 ${unjudged.length - 5}개`}
+              </p>
+            )}
             {ruleJob.phase === 'timeout' && (
               <Failed
                 title="시간이 오래 걸립니다"
@@ -316,7 +438,7 @@ export default function InspectionPage() {
               <div key={x.itemId} className="verdict">
                 <div className="verdict-head">
                   <b>{x.name}</b>
-                  <span className={`badge ${RULE[x.verdict].cls}`}>{RULE[x.verdict].label}</span>
+                  <span className={`badge ${VERDICT_CLASS[x.verdict]}`}>{VERDICT_LABEL[x.verdict]}</span>
                 </div>
                 <p className="verdict-why">{x.reason}</p>
                 {x.missingInfo && (
@@ -334,6 +456,17 @@ export default function InspectionPage() {
         </div>
 
         {data?.notice && <p className="disclaimer">{data.notice}</p>}
+
+        {saveError && <Failed title="저장하지 못했습니다" detail={saveError} />}
+
+        {/* 03:284 — 검수 결과 아래 `최종 저장`. 흐름의 마지막 단추다 */}
+        {data && (
+          <div className="form-foot">
+            <button type="button" className="btn" onClick={confirm} disabled={saving}>
+              {saving ? '저장하는 중…' : trip?.status === 'DRAFT' ? '최종 저장' : '저장하고 목록으로'}
+            </button>
+          </div>
+        )}
       </div>
     </Shell>
   )

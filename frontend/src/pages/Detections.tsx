@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { AiPending, Empty, Failed, Skeleton } from '../components/States'
@@ -23,6 +23,8 @@ const LEVEL: Record<string, { label: string; cls: string }> = {
  */
 export default function Detections() {
   const { tripId = '1' } = useParams()
+  /** S-06 의 `사진 확인` 으로 들어왔나. 그러면 돌아갈 곳이 검수다(03:290) */
+  const fromInspection = new URLSearchParams(useLocation().search).get('from') === 'inspection'
   const nav = useNavigate()
   const [dets, setDets] = useState<Detection[] | null>(null)
   const [items, setItems] = useState<ChecklistItem[]>([])
@@ -30,6 +32,8 @@ export default function Detections() {
   const [error, setError] = useState<string | null>(null)
   /** 조회 실패(error)와 구분한다. 수정·삭제가 거절당한 것은 다른 사건이다 */
   const [actionError, setActionError] = useState<string | null>(null)
+  /** 07:293 — 분석에 실패한 사진. 성공분은 이미 등록됐다 */
+  const [failedPhotos, setFailedPhotos] = useState<number[]>([])
   const job = useAiJob<BagCheckOutput>()
   /** 자동 추천. 폴링해야 recommendationJobId 가 생긴다 */
   const rec = useAiJob()
@@ -64,9 +68,23 @@ export default function Detections() {
     // 사진 ID 를 박아 두면 다른 여행에서 남의 사진을 분석하려 든다.
     // 06 의 소유권 검증에서 거절되는 요청이다.
     // 완료를 확인하고 넘어간다. FAILED·timeout 이면 후속 추천을 걸지 않는다.
-    const ok = await job.start('BAG_CHECK', { photoIds: ids }, Number(tripId))
+    const { done: ok, output } = await job.start('BAG_CHECK', { photoIds: ids }, Number(tripId))
     const fresh = (await load()).items
     if (!ok) return
+
+    /*
+     * 07:293 — `failedPhotoIds` 는 <b>required</b> 다. "S-04 는 성공한 것만
+     * 보여주고 실패 사진에 재시도 버튼을 단다". 03:261 도 "일부 사진 실패 시
+     * 성공한 사진 물품은 자동 등록하고 실패 사진만 재시도" 다.
+     *
+     * 이 값을 아무도 읽지 않아서, 사진 하나가 실패해도 <b>완료 화면만</b>
+     * 보였다. 사용자는 무엇이 빠졌는지 몰랐다.
+     *
+     * 다만 "실패 사진만" 재분석은 못 한다 — 서버가 클라이언트의 photoIds 를
+     * 무시하고 여행의 사진을 전부 분석한다(AiJobService:141). 그래서 사실만
+     * 알리고 재시도는 `다시 분석` 하나로 둔다.
+     */
+    setFailedPhotos(output?.failedPhotoIds ?? [])
 
     /*
      * 06:705 · 03:262 — 자동 등록 뒤 <b>곧바로 추가 추천을 요청</b>한다.
@@ -187,9 +205,23 @@ export default function Detections() {
             <button type="button" className="btn btn-ghost" onClick={analyze} disabled={job.phase === 'running'}>
               다시 분석
             </button>
-            <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/items`)}>
-              체크리스트로
-            </button>
+            {/*
+              * 03:290 — S-06 의 `사진 확인` 으로 들어왔으면 <b>`검수로 돌아가기`</b>
+              * 로 돌아간다. 03:264 도 같다. "복귀 시 준비 상태·무게를 다시
+              * 조회한다" 는 검수 화면이 열릴 때 이미 하는 일이다.
+              *
+              * 이게 없어서 사용자에게 남은 길이 브라우저 뒤로가기뿐이었다 —
+              * 단계 표시줄은 <b>지나온</b> 단계만 링크한다.
+              */}
+            {fromInspection ? (
+              <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/inspection`)}>
+                검수로 돌아가기
+              </button>
+            ) : (
+              <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/items`)}>
+                체크리스트로
+              </button>
+            )}
           </>
         }
       />
@@ -217,6 +249,13 @@ export default function Detections() {
         {job.phase === 'timeout' && (
           <Failed title="시간이 오래 걸립니다" detail="작업은 서버에 남아 있습니다" onRetry={analyze} />
         )}
+        {failedPhotos.length > 0 && (
+          <Failed
+            title={`사진 ${failedPhotos.length}장을 분석하지 못했습니다`}
+            detail="나머지 사진에서 찾은 물품은 이미 목록에 등록했습니다"
+            onRetry={analyze}
+          />
+        )}
 
         {!error && dets === null && <div className="card"><Skeleton rows={3} /></div>}
 
@@ -225,8 +264,13 @@ export default function Detections() {
             <Empty
               title="인식된 물품이 없습니다"
               action={
+                /* 03:261 빈 상태 — `직접 입력 / 재촬영`. 인식이 하나도 없으면
+                   사진을 다시 찍는 것 말고 직접 적는 길도 있어야 한다 */
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="button" className="btn" onClick={analyze}>사진 분석하기</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => nav(`/trips/${tripId}/items`)}>
+                    직접 입력
+                  </button>
                   <button type="button" className="btn btn-ghost" onClick={() => nav(`/trips/${tripId}/photos`)}>
                     다시 촬영
                   </button>
@@ -323,6 +367,12 @@ function DetectionRow({
         {d.missingInfo && (
           <p className="row-sub">확인 필요 — <b>{d.missingInfo}</b></p>
         )}
+        {/*
+          * 07 — labelText 는 "라벨·포장에서 읽힌 글자 원문. 서버는 파싱하지
+          * 않는다". 사용자가 <b>읽고 수치를 확정하라고</b> 둔 값인데 화면이
+          * 버리고 있었다. 확인 필요 옆에 있어야 쓸모가 있다.
+          */}
+        {d.labelText && <p className="row-sub">라벨: {d.labelText}</p>}
         {linked ? (
           <p className="row-sub">
             {linkedName ? <>내 목록의 <b>{linkedName}</b> 로 등록됨</> : '내 목록에 등록됨'}

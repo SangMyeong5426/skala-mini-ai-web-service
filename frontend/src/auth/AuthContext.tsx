@@ -44,8 +44,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let alive = true
     loadSessionOnce()
       .then((s) => {
-        if (!alive) return
+        /*
+         * 토큰은 `alive` 가드보다 먼저 받는다. 이 화면이 사라졌어도 토큰은
+         * 모듈에 있고 다음 요청이 쓴다.
+         *
+         * <b>StrictMode 의 이중 호출은 `loadSessionOnce` 가 막는다</b>(#50).
+         * 두 번 돌아도 요청은 하나라서 서버가 익명 세션을 하나만 만들고
+         * 토큰도 하나다 — 예전에는 요청이 둘이라 서로 다른 토큰 두 개가
+         * 발급되고 쿠키에는 나중 것이 남아, 첫 로그인이 403 으로 튕겼다.
+         * 요청을 합치는 쪽이 화면이 쿠키를 따라가게 하는 것보다 낫다.
+         */
         setCsrfToken(s.csrfToken)
+        if (!alive) return
         setUser(s.authenticated ? s.user : null)
       })
       // 세션 조회가 실패하면 미인증으로 둔다. 여기서 막으면 로그인조차 못 한다.
