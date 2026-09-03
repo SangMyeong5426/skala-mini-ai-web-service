@@ -1,6 +1,7 @@
 package com.skala.miniai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -152,9 +153,11 @@ class AllBackendApiTest {
                 + "(transport, keyword, verdict, condition_note, description, source_url, checked_at) "
                 + "values ('FLIGHT', '보조배터리', 'CABIN_OK', '100Wh 이하', "
                 + "'기내 반입 기준', 'https://example.test/rule', DATE '2026-09-03')");
+        // 순서로 집지 않는다. 규정 마스터에는 data.sql 이 넣은 공식 규정도 함께 있고,
+        // RuleEngine 이 그 표로 판정하므로 테스트가 규정표를 독차지할 수 없다.
         read(auth, get("/api/rules").queryParam("transport", "FLIGHT").queryParam("keyword", "보조배터리"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.rules[0].sourceUrl")
-                        .value("https://example.test/rule"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.rules[*].sourceUrl")
+                        .value(hasItem("https://example.test/rule")));
         read(auth, get("/api/trips/{tripId}/inspection", tripId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.readiness.prepared").isArray())

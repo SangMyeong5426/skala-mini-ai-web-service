@@ -22,9 +22,11 @@ import com.skala.miniai.domain.ai.MockAiClient;
 import com.skala.miniai.domain.ai.OpenAiChatApi;
 import com.skala.miniai.domain.ai.OpenAiClient;
 import com.skala.miniai.domain.ai.PackingListPrompt;
+import com.skala.miniai.domain.ai.RuleCheckPrompt;
 import com.skala.miniai.domain.ai.VisionImageLoader;
 import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
+import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
 import com.skala.miniai.domain.trip.Trip;
 import com.skala.miniai.domain.trip.TripRepository;
@@ -68,7 +70,8 @@ class OpenAiPackingListTest {
         given(trips.findById(7L)).willReturn(Optional.of(trip));
 
         return new OpenAiClient(mock(MockAiClient.class), api, new BagCheckPrompt(json),
-                new PackingListPrompt(json), mock(VisionImageLoader.class),
+                new PackingListPrompt(json), new RuleCheckPrompt(json), mock(RuleEngine.class),
+                mock(VisionImageLoader.class),
                 mock(TripPhotoRepository.class), trips, items,
                 Optional.ofNullable(weatherClient), json, 20);
     }
