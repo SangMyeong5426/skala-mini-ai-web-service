@@ -23,6 +23,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	// 로그인 필수 결정(docs/01·06)에 따라 서버 세션·CSRF·BCrypt 를 쓴다.
+	// 06 이 "Spring Security·HttpSession 을 사용한다" 고 못박았다 — JWT·Redis 는 넣지 않는다.
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
 	// Swagger UI(/swagger-ui/index.html)와 OpenAPI 문서(/v3/api-docs)를 자동 생성한다.
 	// Boot 4 지원 버전을 사용한다. 근거: https://springdoc.org/
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'

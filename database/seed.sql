@@ -8,9 +8,13 @@
 
 -- ── 사용자 ────────────────────────────────────────────────
 -- 이번 데모에서 인증 흐름을 구현하지 않으므로 이 사용자 하나를 고정으로 쓴다.
--- password_hash 는 데모용 bcrypt 해시다. 평문을 저장하지 않는다.
-INSERT INTO users (email, password_hash, nickname) VALUES
-  ('kim@skala.dev', '$2b$12$Kx8fJ0qN3vZ1sWmT7pLuAeR5yQdH2cVbXn9gM4tJ6oB1iE0aS3wDy', '김지우');
+-- password_hash 는 데모용 BCrypt 해시다. 평문을 저장하지 않는다.
+-- 데모 계정 로그인: jiwoo28 / skala1234
+-- 이 해시는 앱의 BCryptPasswordEncoder 로 실제 생성해 확인한 값이다.
+-- **데모 계정이라 저장소에 적는다.** 실제 사용자 비밀번호는 어디에도 적지 않는다.
+INSERT INTO users (login_id, email, password_hash, nickname) VALUES
+  ('jiwoo28', 'kim@skala.dev',
+   '$2a$10$RYoqAoiWyZnVTLi29EOAZ.9XyNvNutsciYMwfXKkzGnAdg4RbrYPG', '김지우');
 
 
 -- ── 품목별 무게 마스터 ────────────────────────────────────
@@ -176,3 +180,35 @@ INSERT INTO item_rule_checks (checklist_item_id, rule_id, verdict, missing_info)
 --
 -- 데모에는 오히려 이 편이 낫다. 화면에서 직접 작업을 만들어야
 -- POST → 202 → 폴링 → 렌더링 이 눈에 보인다.
+
+
+-- ── 여행 일정 (S-11 캘린더 · 일정) ────────────────────────
+-- 도쿄 여행(trip_id = 1)의 일정이다. 캘린더는 이 표와 trips 의 기간으로 그린다.
+-- 목적지는 trips 에만 있다 — 일정마다 다시 적지 않는다.
+--
+-- 시각은 UTC 로 저장한다. 도쿄는 UTC+9 라 09:20 KST 출발이면 00:20Z 다.
+-- 화면이 현지 시간으로 바꿔 보여준다 (06 의 ISO 8601 UTC 계약).
+INSERT INTO trip_itineraries (trip_id, kind, title, place, code, start_at, end_at, note) VALUES
+  (1, 'FLIGHT',   '인천 → 나리타',      'ICN',            'KE703',
+   '2026-10-01T00:20:00Z', '2026-10-01T02:50:00Z', '2시간 30분'),
+  (1, 'LODGING',  '신주쿠 체크인',      '호텔 그레이스 신주쿠', NULL,
+   '2026-10-01T06:00:00Z', NULL,                    '15:00 체크인'),
+  (1, 'ACTIVITY', '디즈니랜드',         '우라야스',        NULL,
+   '2026-10-02T00:00:00Z', '2026-10-02T12:00:00Z',  '개장 전 도착 권장'),
+  (1, 'ACTIVITY', '시부야 · 하라주쿠',  '시부야',          NULL,
+   '2026-10-03T01:00:00Z', '2026-10-03T09:00:00Z',  '관광 & 쇼핑'),
+  (1, 'FLIGHT',   '나리타 → 인천',      'NRT',            'KE704',
+   '2026-10-04T08:10:00Z', '2026-10-04T10:50:00Z',  '2시간 40분');
+
+
+-- ── 3D 가방 정리 배치 (S-12) ──────────────────────────────
+-- 준비 완료한 물품만 가방에 놓는다. 미완료 항목은 아직 자리가 없다.
+-- checklist_items 의 id 는 위 INSERT 순서를 따른다 (1 여권 … 10 우산).
+--
+-- 좌표는 0~1 상대값이다. 픽셀이 아니라서 화면 크기가 달라도 같은 자리다.
+INSERT INTO item_placements (checklist_item_id, compartment, pos_x, pos_y, pos_z, rotated) VALUES
+  (2, 'MAIN_LEFT',    0.300, 0.650, 0.200, FALSE),  -- 상의
+  (3, 'MAIN_LEFT',    0.300, 0.850, 0.100, FALSE),  -- 하의
+  (4, 'MAIN_RIGHT',   0.750, 0.700, 0.150, FALSE),  -- 속옷
+  (5, 'FRONT_POCKET', 0.200, 0.300, 0.000, FALSE),  -- 충전기
+  (6, 'MESH',         0.600, 0.250, 0.000, TRUE);   -- 보조배터리 (세워서)

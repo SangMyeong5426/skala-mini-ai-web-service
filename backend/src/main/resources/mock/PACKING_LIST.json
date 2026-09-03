@@ -1,0 +1,56 @@
+{
+  "items": [
+    {
+      "name": "변환 플러그",
+      "category": "ELECTRONIC",
+      "qty": 1,
+      "priority": "REQUIRED",
+      "reason": "여행지에서 충전기를 연결할 어댑터를 확인하세요.",
+      "source": "AI",
+      "acceptedItemId": null
+    },
+    {
+      "name": "상비약",
+      "category": "MEDICINE",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "reason": "평소 사용하는 약이 있다면 여행 기간에 맞게 준비하세요.",
+      "source": "AI",
+      "acceptedItemId": null
+    },
+    {
+      "name": "화장품",
+      "category": "TOILETRY",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "reason": "숙소 제공 여부에 따라 개인 세면용품을 검토하세요.",
+      "source": "AI",
+      "acceptedItemId": null
+    },
+    {
+      "name": "우산",
+      "category": "ETC",
+      "qty": 1,
+      "priority": "RECOMMENDED",
+      "reason": "여행 중 강수에 대비할 휴대용 우산을 검토하세요.",
+      "source": "AI",
+      "acceptedItemId": null
+    },
+    {
+      "name": "여권",
+      "category": "DOCUMENT",
+      "qty": 1,
+      "priority": "REQUIRED",
+      "reason": "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
+      "source": "RULE",
+      "acceptedItemId": null
+    }
+  ],
+  "tips": [
+    "일본 콘센트는 A타입, 100V입니다.",
+    "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다. 실시간 예보가 아닙니다.",
+    "디즈니랜드는 하루 2만 보 이상 걷습니다."
+  ],
+  "weatherSource": "SEASONAL",
+  "weatherAsOf": "2026-09-03"
+}

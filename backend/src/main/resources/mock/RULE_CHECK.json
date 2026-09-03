@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "itemId": 6,
+      "detectionId": null,
+      "name": "보조배터리",
+      "qty": 1,
+      "ruleKeyword": "보조배터리",
+      "attributes": {
+        "capacityMl": null,
+        "batteryWh": null,
+        "batteryMah": null,
+        "bladeCm": null
+      },
+      "verdict": "NEED_MORE_INFO",
+      "ruleId": 1,
+      "conditionNote": "100Wh 이하",
+      "reason": "보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.",
+      "missingInfo": "배터리 정격(Wh)",
+      "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+      "checkedAt": "2026-09-02"
+    },
+    {
+      "itemId": 11,
+      "detectionId": 7,
+      "name": "가위",
+      "qty": 1,
+      "ruleKeyword": "가위",
+      "attributes": {
+        "capacityMl": null,
+        "batteryWh": null,
+        "batteryMah": null,
+        "bladeCm": null
+      },
+      "verdict": "NEED_MORE_INFO",
+      "ruleId": 6,
+      "conditionNote": "날 길이 6cm 초과",
+      "reason": "날 길이를 확인해야 반입 조건을 비교할 수 있습니다. 라벨이나 실측 길이를 확인해 주세요.",
+      "missingInfo": "날 길이(cm)",
+      "sourceUrl": "https://www.airport.kr/ap_ko/907/subview.do",
+      "checkedAt": "2026-09-02"
+    }
+  ],
+  "answer": null,
+  "followUpQuestion": null
+}

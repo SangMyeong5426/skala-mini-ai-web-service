@@ -12,7 +12,7 @@
 
 | 읽을 문서 | 백엔드에서 확인할 내용 |
 | --- | --- |
-| [서비스 기획](../docs/01-service-plan.md) | 페르소나, 인증 흐름 미구현(`users.password_hash` 자리는 유지), 실제 AI 호출 제외 |
+| [서비스 기획](../docs/01-service-plan.md) | 페르소나, **로그인 필수**, 실제 AI 호출 제외 |
 | [Use-Case](../docs/02-use-case.md) · [화면 흐름](../docs/03-wireframe.md) | 사용자 승인과 사진 우선 흐름. 구현은 1차 S-01~S-06부터 |
 | [아키텍처](../docs/04-architecture.md) · [ADR 0001](../docs/adr/0001-backend-stack.md) | Java·Spring 선택 이유, 계층별 책임 |
 | [ERD](../docs/05-erd.md) · [DDL](../database/schema.sql) | 10개 테이블, 속성을 가진 N:M 연결 테이블 2개 |
@@ -273,8 +273,9 @@ DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spe
 두 줄을 확인하고 커밋한다.** CI의 `Backend Build`는 H2 + `create-drop`으로 실행하므로
 이 검증을 대신하지 못한다. 실행 위치와 규약은 [AGENTS.md](../AGENTS.md#엔티티를-만든-직후)를 따른다.
 
-현재 `/uploads/**`는 인증 없이 제공되는 데모용 경로다. 인증 흐름 미구현 결정에 따른
-기존 제약이며, 개인정보가 포함된 사진 대신 시연용 사진을 사용한다.
+`/uploads/**`는 **소유권을 확인하는 컨트롤러**(`PhotoFileController`)가 처리한다.
+정적 리소스 핸들러를 쓰지 않는다 — 06 이 "경로만 아는 다른 회원에게도 파일을 주지 않는다" 고
+못박았다. 응답에는 `Cache-Control: private, no-store` 를 붙인다.
 
 ### AI 작업 구현 기준
 

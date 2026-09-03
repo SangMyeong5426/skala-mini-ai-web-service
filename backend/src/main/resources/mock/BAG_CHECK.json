@@ -1,0 +1,77 @@
+{
+  "detections": [
+    {
+      "photoId": 1,
+      "name": "충전기",
+      "qty": 1,
+      "confidence": 0.93,
+      "confidenceLevel": "HIGH",
+      "missingInfo": null,
+      "labelText": null
+    },
+    {
+      "photoId": 1,
+      "name": "보조배터리",
+      "qty": 1,
+      "confidence": 0.88,
+      "confidenceLevel": "HIGH",
+      "missingInfo": "배터리 정격(Wh)",
+      "labelText": null
+    },
+    {
+      "photoId": 1,
+      "name": "상의",
+      "qty": 4,
+      "confidence": 0.81,
+      "confidenceLevel": "HIGH",
+      "missingInfo": null,
+      "labelText": null
+    },
+    {
+      "photoId": 1,
+      "name": "하의",
+      "qty": 2,
+      "confidence": 0.79,
+      "confidenceLevel": "MEDIUM",
+      "missingInfo": null,
+      "labelText": null
+    },
+    {
+      "photoId": 1,
+      "name": "속옷",
+      "qty": 4,
+      "confidence": 0.72,
+      "confidenceLevel": "MEDIUM",
+      "missingInfo": null,
+      "labelText": null
+    },
+    {
+      "photoId": 2,
+      "name": "화장품 용기",
+      "qty": 1,
+      "confidence": 0.64,
+      "confidenceLevel": "MEDIUM",
+      "missingInfo": "용량(ml)",
+      "labelText": null
+    },
+    {
+      "photoId": 2,
+      "name": "가위",
+      "qty": 1,
+      "confidence": 0.91,
+      "confidenceLevel": "HIGH",
+      "missingInfo": "날 길이(cm)",
+      "labelText": null
+    },
+    {
+      "photoId": 2,
+      "name": "검정 파우치",
+      "qty": 1,
+      "confidence": 0.43,
+      "confidenceLevel": "LOW",
+      "missingInfo": null,
+      "labelText": null
+    }
+  ],
+  "failedPhotoIds": []
+}
