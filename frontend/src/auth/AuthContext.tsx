@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, setCsrfLoader, setCsrfToken, setUnauthorizedHandler } from '../api/client'
-import type { AuthUserResponse, SessionResponse, SignupRequest, User } from '../types/api'
+import { api, loadSessionOnce, setCsrfLoader, setCsrfToken, setUnauthorizedHandler } from '../api/client'
+import type { AuthUserResponse, SignupRequest, User } from '../types/api'
 import { AuthCtx } from './context'
 
 /**
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /** 세션을 다시 읽어 사용자와 CSRF 토큰을 맞춘다 */
   const sync = useCallback(async (): Promise<User | null> => {
-    const s = await api.get<SessionResponse>('/auth/session')
+    const s = await loadSessionOnce()
     setCsrfToken(s.csrfToken)
     const next = s.authenticated ? s.user : null
     setUser(next)
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    api.get<SessionResponse>('/auth/session')
+    loadSessionOnce()
       .then((s) => {
         /*
          * <b>토큰은 alive 가드보다 먼저 받는다.</b>
