@@ -87,7 +87,7 @@ public class AiJobRunner {
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
             JsonNode input = json.read(job.getInputPayload());
-            JsonNode output = aiClient.run(job.getJobType(), input);
+            JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
                 ruleCheckContract.validateOutput(input, output);
             }

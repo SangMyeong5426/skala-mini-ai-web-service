@@ -9,8 +9,8 @@
 > 갱신하지 않으면 앱이 아예 뜨지 않는다.
 >
 > ```bash
-> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-itineraries-and-placements.sql
-> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-users-login-id.sql
+> # 순서를 가리지 않는다
+> for f in database/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
 > ```
 >
 > 데모 계정은 `jiwoo28` / `skala1234` 다 (`database/seed.sql`).
@@ -139,9 +139,11 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
 - `POST /api/ai-jobs`는 `202 Accepted`로 즉시 응답하고, 결과는
   `GET /api/ai-jobs/{id}`로 조회하게 한다. Mock이라도 이 구조를 지킨다.
   **Mock은 즉시 끝나므로 `@Async`나 큐가 없어도 된다.**
-- `AI_PROVIDER=mock`이면 Mock 응답을, 다른 값이면 실제 API를 호출하도록
-  인터페이스 하나에 구현 둘(`MockAiClient`, `RealAiClient`)을 두고 지금은
-  `mock` 쪽만 구현한다. **이 인터페이스가 아키텍처 다이어그램의 "교체되는 상자"다.**
+- `AI_PROVIDER=mock`이면 Mock 응답을, `openai`면 실제 API를 호출하도록
+  인터페이스 하나에 구현 둘(`MockAiClient`, `OpenAiClient`)을 둔다.
+  **이 인터페이스가 아키텍처 다이어그램의 "교체되는 상자"다.**
+  `BAG_CHECK`(사진 인식)와 `PACKING_LIST`(준비물 추천)에 실제로 갈아 끼워 봤고
+  부르는 쪽은 한 줄도 바뀌지 않았다. **기본값은 `mock`이다** — 발표 데모는 네트워크에 묶이면 안 된다.
 
 > 가상 스레드는 `spring.threads.virtual.enabled=true`로 이미 켜져 있다.
 > 실제 LLM을 붙였을 때 느린 요청이 스레드를 오래 잡아도 비용이 낮게 유지된다.
