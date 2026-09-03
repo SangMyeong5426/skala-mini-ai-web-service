@@ -53,8 +53,10 @@ public class RuleCheckContract {
         }
         for (int i = 0; i < items.size(); i++) validateInputItem(items.get(i), i);
 
-        if (input.get("question").isNull() && items.isEmpty() && attachedPhotoIds(input).isEmpty()) {
-            failInput("question · items · photoIds 중 하나는 필요합니다.", "input");
+        // 07 입력 스키마 그대로다. 사진만 보내는 요청은 받지 않는다 — 무엇을 묻는지 없이
+        // 사진만 오면 답할 것이 없고, 07 의 anyOf 와도 어긋난다.
+        if (input.get("question").isNull() && items.isEmpty()) {
+            failInput("question 또는 items 중 하나는 필요합니다.", "input");
         }
         return input;
     }
@@ -163,15 +165,15 @@ public class RuleCheckContract {
     }
 
     /**
-     * {@code results[]} 는 <b>{@code input.items} 를 순서대로 먼저</b> 담는다.
+     * {@code results[]} 는 {@code input.items} 와 <b>개수·순서·식별값이 정확히 같아야</b> 한다.
      *
-     * <p>사진을 붙였으면 인식된 물품이 그 <b>뒤에</b> 이어 붙는다. 접수 시점에는 아직 인식을
-     * 돌리지 않아 {@code input.items} 에 넣을 수 없기 때문이다 — 그래서 개수가 같기를 요구하지
-     * 않고, <b>앞부분이 입력과 같은지</b>만 본다.
+     * <p>사진을 붙인 요청도 마찬가지다. 서버가 인식한 물품을 {@code items} 뒤에 이어 붙이고
+     * {@code input_payload} 를 <b>다시 쓰기 때문에</b>, 판정할 때 이 배열이 이미 최종본이다.
+     * 한때 "앞부분만 일치" 로 느슨하게 뒀다가 되돌렸다 — 실제 모델이 결과를 더 붙여도 잡지 못했다.
      */
     private void matchInputItems(JsonNode items, JsonNode results) {
         if (items.isEmpty()) return;
-        if (items.size() > results.size()) failOutput("RULE_CHECK items와 results 개수가 다릅니다.");
+        if (items.size() != results.size()) failOutput("RULE_CHECK items와 results 개수가 다릅니다.");
 
         for (int i = 0; i < items.size(); i++) {
             JsonNode item = items.get(i);

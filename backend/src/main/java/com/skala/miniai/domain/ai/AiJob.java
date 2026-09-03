@@ -119,4 +119,15 @@ public class AiJob {
     public void replaceOutputPayload(String outputPayload) {
         this.outputPayload = outputPayload;
     }
+
+    /**
+     * 챗봇에 붙인 사진에서 나온 물품을 {@code items} 에 이어 붙인 뒤 기록을 맞춘다.
+     *
+     * <p>접수 시점에는 아직 인식을 돌리지 않아 사진 물품을 넣을 수 없다. 그대로 두면
+     * {@code GET /api/ai-jobs/{id}} 의 {@code input} 이 <b>실제로 판정한 것과 달라</b>,
+     * 답이 이상할 때 무엇을 보고 판정했는지 재구성할 수 없다.
+     */
+    public void replaceInputPayload(String inputPayload) {
+        this.inputPayload = inputPayload;
+    }
 }

@@ -3,6 +3,7 @@ package com.skala.miniai.domain.ai;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -149,6 +150,7 @@ public class MockAiClient implements AiClient {
         Map<String, JsonNode> resultByName = new HashMap<>();
         output.path("results").forEach(result -> resultByName.put(
                 RecommendationStore.normalize(result.path("name").asText("")), result));
+        boolean fromPhotos = !RuleCheckContract.attachedPhotoIds(input).isEmpty();
         JsonNode unknownOutput = load("RULE_CHECK_UNKNOWN");
         JsonNode unknown = unknownOutput.path("results").get(0);
         boolean allUnknown = true;
@@ -156,8 +158,15 @@ public class MockAiClient implements AiClient {
 
         ArrayNode results = root.putArray("results");
         for (JsonNode item : items) {
-            JsonNode template = resultByName.getOrDefault(
-                    RecommendationStore.normalize(item.path("name").asText("")), unknown);
+            String itemName = RecommendationStore.normalize(item.path("name").asText(""));
+            JsonNode template = resultByName.get(itemName);
+            // 이번 턴에 사진을 붙였으면, 인식된 물품은 질문이 그 물품을 말하지 않아도
+            // 규정 키워드가 붙어야 한다. detectionId 만으로는 구분되지 않는다 —
+            // 사용자가 보내는 후속 항목도 직전 사진의 detectionId 를 들고 온다.
+            if (template == null && fromPhotos && item.path("detectionId").isIntegralNumber()) {
+                template = structuredByName().get(itemName);
+            }
+            if (template == null) template = unknown;
             ObjectNode result = (ObjectNode) template.deepCopy();
             result.set("itemId", item.get("itemId"));
             result.set("detectionId", item.get("detectionId"));
@@ -173,6 +182,33 @@ public class MockAiClient implements AiClient {
             if (allUnknown) root.set("answer", unknownOutput.get("answer"));
         }
         return output;
+    }
+
+    /**
+     * <b>이름만 알아도 규정 키워드를 붙일 수 있게</b> 하는 대비표.
+     *
+     * <p>예전에는 질문으로 고른 픽스처 안의 이름만 연결했다. 그래서 사진을 붙이고
+     * <i>"이거 기내 되나요?"</i> 라고 물으면 UNKNOWN 픽스처가 뽑혀, {@code BAG_CHECK} 가
+     * 보조배터리를 정확히 인식해도 {@code ruleKeyword} 가 {@code null} 로 덮였다.
+     * 규칙 엔진이 규정을 못 찾으니 <b>07 에 적은 "사진 → 속성 확인" 흐름이 기본 Mock 에서
+     * 동작하지 않았다.</b>
+     *
+     * <p>쓰는 것은 <b>속성 미상</b> 픽스처들이다. 사진에는 용량도 정격도 보이지 않으므로
+     * 그 모양이 맞다 — 규칙 엔진이 그 자리에서 {@code NEED_MORE_INFO} 와 되물을 것을 만든다.
+     *
+     * <p>임의 자연어를 늘리는 것이 아니다. <b>이번 턴에 사진을 붙였을 때</b>({@code photoIds} 가
+     * 있고 그 물품이 {@code detectionId} 를 가질 때) 만 쓴다 — 사용자가 직접 보낸 후속 항목의
+     * 대응은 예전 그대로다.
+     */
+    private Map<String, JsonNode> structuredByName() {
+        Map<String, JsonNode> byName = new HashMap<>();
+        for (String fixture : List.of("RULE_CHECK_BATTERY_UNKNOWN", "RULE_CHECK_LIQUID_UNKNOWN",
+                "RULE_CHECK_SCISSORS_UNKNOWN", "RULE_CHECK_LAPTOP")) {
+            for (JsonNode result : load(fixture).path("results")) {
+                byName.putIfAbsent(RecommendationStore.normalize(result.path("name").asText("")), result);
+            }
+        }
+        return byName;
     }
 
     private JsonNode load(String fixtureName) {

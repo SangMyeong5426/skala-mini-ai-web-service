@@ -52,11 +52,25 @@ public class ItemRuleCheck {
         this.ruleId = ruleId;
         this.verdict = verdict;
         this.missingInfo = missingInfo;
+        // 생성자에서 채운다. @PrePersist 만 두면 <b>같은 (itemId, ruleId) 를 다시 판정할 때</b>
+        // save() 가 INSERT 가 아니라 MERGE 로 가고, 그 경로는 @PrePersist 를 타지 않아
+        // decided_at 이 null 인 채로 UPDATE 되어 NOT NULL 제약에 걸린다.
+        //
+        // 챗봇에서 "100Wh예요" 로 되묻기에 답하면 같은 물품·같은 규정을 다시 판정하므로
+        // 이 경로를 반드시 지난다. 즉 되묻기 → 답변 → 판정 완료가 끝나지 않았다.
+        this.decidedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
     @PrePersist
     void onCreate() {
         if (decidedAt == null) decidedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    /** 다시 판정했다. 판정 시각도 그때로 옮긴다 — 규정이 언제 기준이었는지가 화면 근거다. */
+    public void redecide(Codes.RuleVerdict verdict, String missingInfo) {
+        this.verdict = verdict;
+        this.missingInfo = missingInfo;
+        this.decidedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
     public Long getChecklistItemId() { return checklistItemId; }
