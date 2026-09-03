@@ -42,7 +42,11 @@ export default function Items() {
     api
       .get<ItemsResponse>(`/trips/${tripId}/items`)
       .then(async (r) => {
-        setData(r)
+        // 추천 작업이 바뀌었으면 옛 배열에서 고른 위치는 의미가 없다
+        setData((prev) => {
+          if (prev && prev.recommendationJobId !== r.recommendationJobId) setPicked(new Set())
+          return r
+        })
         // 추천 후보는 완료된 PACKING_LIST 작업에서 읽는다.
         // 여기서 실패해도 내 목록은 이미 받았으므로 화면 전체를 오류로 만들지 않는다.
         if (r.recommendationJobId) {
@@ -58,22 +62,55 @@ export default function Items() {
   }
   useEffect(load, [tripId])
 
+  /*
+   * S-06 의 `확인하기` 가 `#recommend` 로 보낸다(03:289). 해시만 붙이고 끝내면
+   * 목록 맨 위가 보여서 무엇을 확인하라는 것인지 알 수 없다.
+   */
+  useEffect(() => {
+    if (!data || window.location.hash !== '#recommend') return
+    document.getElementById('recommend')?.scrollIntoView({ behavior: 'smooth' })
+  }, [data])
+
   const recommend = async () => {
+    /*
+     * <b>고른 것을 먼저 비운다.</b> picked 는 후보 배열의 <b>위치</b>다
+     * (06 의 candidateIndex). 새 추천이 오면 같은 위치에 다른 물건이 온다.
+     * 비우지 않으면 사용자가 고르지 않은 후보가 새 jobId 와 옛 위치로 채택된다.
+     */
+    setPicked(new Set())
     // 07:470 — alreadyPacked 는 <b>PREPARED 만</b>이다. 전체를 보내면 아직 안 챙긴
     // 것까지 "이미 챙겼다" 로 넘어가 추천이 줄어든다.
     const alreadyPacked = (data?.items ?? [])
       .filter((i) => i.checkStatus === 'PREPARED')
       .map((i) => ({ name: i.name, category: i.category, qty: i.qty }))
 
-    // 07:513-521 required 7개를 전부 채운다. 07:121 "없을 수 있는 값은 null 을
-    // 허용하되 필드 자체는 반드시 낸다".
+    /*
+     * <b>여행 정보가 없으면 요청을 걸지 않는다.</b>
+     *
+     * 예전에는 `?? ''` · `?? 'FLIGHT'` 로 빈칸을 메웠다. 07:466 은 destination 에
+     * `minLength: 1` 과 `pattern: \S` 를, startDate·endDate 에 `format: date` 를
+     * 요구하고, `purpose` enum 에는 null 이 없다. 즉 <b>스키마 위반을 만들어
+     * 보내는 코드</b>였다. transport 를 FLIGHT 로 박는 것은 더 나쁘다 — 기차
+     * 여행에 항공 기준으로 추천이 나온다.
+     *
+     * 07:121 의 "없을 수 있는 값은 null 을 허용하되 필드는 반드시 낸다" 는
+     * <b>스키마가 null 을 허용한 필드</b>에만 해당한다. note 가 그렇다.
+     *
+     * S-04 의 자동 추천이 같은 판단을 이미 하고 있다 — 없으면 걸지 않는다.
+     */
+    if (!trip?.destination || !trip.startDate || !trip.endDate) {
+      setActionError('여행 정보를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.')
+      return
+    }
+
+    // 07:513-521 required 7개를 전부 채운다.
     await job.start('PACKING_LIST', {
-      destination: trip?.destination ?? '',
-      startDate: trip?.startDate ?? '',
-      endDate: trip?.endDate ?? '',
-      transport: trip?.transport ?? 'FLIGHT',
-      purpose: trip?.purpose ?? null,
-      note: trip?.note ?? null,
+      destination: trip.destination,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      transport: trip.transport,
+      purpose: trip.purpose ?? 'TOUR',
+      note: trip.note ?? null,
       alreadyPacked,
     }, Number(tripId))
     load()
@@ -226,7 +263,7 @@ export default function Items() {
                   <span>
                     {warn == null
                       ? '필수 추천 확인 전입니다'
-                      : <>아직 채택하지 않은 <b>필수 후보 {warn}건</b>이 있습니다</>}
+                      : <>미채택 <b>필수 후보 {warn}건</b></>}
                   </span>
                   <a href="#recommend" className="btn btn-ghost btn-sm">확인하기</a>
                 </div>
@@ -242,7 +279,10 @@ export default function Items() {
                       <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/photos`)}>
                         사진 등록하기
                       </button>
-                      <button type="button" className="btn btn-ghost" onClick={recommend}>추천 받기</button>
+                      <button
+                        type="button" className="btn btn-ghost" onClick={recommend}
+                        disabled={job.phase === 'running'}
+                      >추천 받기</button>
                     </div>
                   }
                 />
@@ -373,11 +413,19 @@ export default function Items() {
                     ))}
                   </ul>
                   {cands && (
+                    /*
+                     * 07:655 문구 그대로다. SEASONAL 은 <b>두 경우</b>다 —
+                     * 출발일이 16일을 넘거나, 날씨 조회가 실패했거나.
+                     * "예보 범위를 넘어" 라고 단정하면 조회가 실패했을 때
+                     * 틀린 이유를 말한다. 기준일이 없으면 그 사실만 알린다.
+                     */
                     <p className="disclaimer">
                       {cands.weatherSource === 'FORECAST'
                         ? '실시간 예보를 반영했습니다'
-                        : '예보 범위를 넘어 계절 평균을 썼습니다'}
-                      {cands.weatherAsOf && ` · 데이터 시점 ${cands.weatherAsOf}`}
+                        : '실시간 예보가 아닌 계절 평균 기준입니다'}
+                      {cands.weatherAsOf
+                        ? ` · 데이터 시점 ${cands.weatherAsOf}`
+                        : cands.weatherSource === 'SEASONAL' && ' · 날씨 자료를 받지 못했습니다'}
                     </p>
                   )}
                 </>

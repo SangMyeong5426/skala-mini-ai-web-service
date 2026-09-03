@@ -55,11 +55,18 @@ export default function InspectionPage() {
    * 둘을 따로 돌린다. 03 이 "세 영역이 각각 따로 로딩된다" 로 정했고,
    * 무게가 실패해도 반입 판정은 보여야 한다.
    */
-  useEffect(() => {
-    let alive = true
-    void (async () => {
+  /**
+   * 없는 결과를 <b>여기서 만들어 온다.</b> 조회만 하고 "아직 계산하지
+   * 않았습니다" 로 두면 사용자가 할 수 있는 일이 없다.
+   *
+   * 이름을 붙여 둔 것은 <b>재시도가 이 함수를 다시 부르기 위해서다.</b>
+   * effect 안에 묻어 두면 409 STALE_WEIGHT_INPUT 을 받았을 때 다시 걸 방법이
+   * 없어, "다시 시도" 가 조회만 하고 아무 일도 안 하는 버튼이 된다.
+   */
+  const startJobs = async (alive = true) => {
+    {
       const r = await load()
-      if (!alive || !r || kicked.current) return
+      if (!alive || !r) return
       kicked.current = true
 
       // 07 의 두 입력 스키마는 서로 다르다. 여행 정보가 있어야 채울 수 있고,
@@ -109,7 +116,12 @@ export default function InspectionPage() {
        * JS 에서 `![]` 는 false 라, 새로 만든 여행은 판정을 영영 걸지 않았다.
        * 데모에서 여행을 새로 만들어 여기까지 오면 반입 판정 칸이 계속 비어 있었다.
        */
-      const all = [...prepared, ...unprepared]
+      /*
+       * 07:1390 `items` 는 <b>maxItems 50</b> 이고, 서버는 51개부터 접수 전에
+       * 400 VALIDATION_FAILED 를 낸다(RuleCheckContract:36). 물품이 많은
+       * 여행에서 판정이 통째로 안 나오는 것보다 앞 50개라도 나오는 편이 낫다.
+       */
+      const all = [...prepared, ...unprepared].slice(0, 50)
       if (!r.customs?.length && all.length > 0) {
         void ruleJob.start('RULE_CHECK', {
           transport: trip.transport,
@@ -125,7 +137,12 @@ export default function InspectionPage() {
           })),
         }, Number(tripId)).then((done) => { if (done && alive) void load() })
       }
-    })()
+    }
+  }
+
+  useEffect(() => {
+    let alive = true
+    if (!kicked.current) void startJobs(alive)
     return () => { alive = false }
   }, [tripId])
 
@@ -197,11 +214,13 @@ export default function InspectionPage() {
                   <span>
                     {r.unacceptedRequiredCount === null
                       ? '필수 추천 확인 전입니다'
-                      : <>아직 채택하지 않은 <b>필수 후보 {r.unacceptedRequiredCount}건</b>이 있습니다</>}
+                      : <>미채택 <b>필수 후보 {r.unacceptedRequiredCount}건</b></>}
                   </span>
                   <button
                     type="button" className="btn btn-sm"
-                    onClick={() => nav(`/trips/${tripId}/items`)}
+                    /* 03:289 · 06:1029 — "확인하기는 S-05 의 필수 추천 영역으로
+                       이동한다". 목록 맨 위로 보내면 무엇을 확인하라는지 모른다 */
+                    onClick={() => nav(`/trips/${tripId}/items#recommend`)}
                   >확인하기</button>
                 </div>
               )}
@@ -218,7 +237,7 @@ export default function InspectionPage() {
                       {i.photoStatus === 'NEEDS_CHECK' && (
                         <button
                           type="button" className="btn btn-ghost btn-sm"
-                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                          onClick={() => nav(`/trips/${tripId}/detections?from=inspection`)}
                         >사진 확인</button>
                       )}
                     </div>
@@ -245,7 +264,7 @@ export default function InspectionPage() {
                       {i.photoStatus === 'NEEDS_CHECK' && (
                         <button
                           type="button" className="btn btn-ghost btn-sm"
-                          onClick={() => nav(`/trips/${tripId}/detections`)}
+                          onClick={() => nav(`/trips/${tripId}/detections?from=inspection`)}
                         >사진 확인</button>
                       )}
                     </div>
@@ -268,7 +287,16 @@ export default function InspectionPage() {
             {!data && !error && <Skeleton rows={3} />}
             {weightJob.phase === 'running' && <AiPending label="예상 무게를 계산하는 중" polls={weightJob.polls} />}
             {weightJob.phase === 'failed' && (
-              <Failed title="무게를 계산하지 못했습니다" detail={weightJob.error ?? ''} />
+              /*
+               * 07:1151 — 입력이 어긋나면 서버가 409 STALE_WEIGHT_INPUT 으로
+               * <b>재조회를 요청</b>한다. 그 뜻대로 다시 조회하고 다시 건다.
+               * 예전에는 실패 문구만 남아서 브라우저 새로고침 말고 길이 없었다.
+               */
+              <Failed
+                title="무게를 계산하지 못했습니다"
+                detail={weightJob.error ?? ''}
+                onRetry={() => { kicked.current = false; void startJobs() }}
+              />
             )}
             {/*
               * 06:537-538 — 60회를 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼.
@@ -279,7 +307,7 @@ export default function InspectionPage() {
               <Failed
                 title="시간이 오래 걸립니다"
                 detail="작업은 서버에 남아 있습니다"
-                onRetry={() => { void load() }}
+                onRetry={() => { kicked.current = false; void startJobs() }}
               />
             )}
             {data && !w && weightJob.phase === 'idle' && (

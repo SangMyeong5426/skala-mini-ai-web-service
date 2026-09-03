@@ -186,7 +186,9 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
           )}
           {job.phase === 'failed' && (
             <div className="bubble bot">
-              <p>답변을 만들지 못했습니다.</p>
+              {/* 서버가 왜 거절했는지 알려 줬으면 그대로 보여준다.
+                  "답변을 만들지 못했습니다" 만으로는 고칠 방법이 없다 */}
+              <p>{job.error ?? '답변을 만들지 못했습니다.'}</p>
               <button type="button" className="btn btn-sm" onClick={retry}>
                 다시 시도
               </button>
@@ -226,6 +228,10 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setText(e.target.value)}
             placeholder="예: 20000mAh 보조배터리 기내 되나요?"
             aria-label="질문 입력"
+            /* 07:1381 question 은 1~500자다. 넘겨 보내면 서버가 접수 전에
+               400 VALIDATION_FAILED 로 거절하고, 같은 글을 다시 보내는
+               "다시 시도" 는 영원히 실패한다. 아예 못 넘기게 막는다 */
+            maxLength={500}
           />
           <button type="submit" className="btn btn-sm" disabled={!text.trim() || job.phase === 'running'}>
             보내기
