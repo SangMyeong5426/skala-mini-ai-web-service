@@ -1,4 +1,5 @@
 import type { ApiError } from '../types/api'
+import { USE_MOCK, mockRequest } from './mock'
 
 /**
  * fetch 래퍼 하나로 통일한다. 화면마다 fetch 를 직접 부르면 오류 처리가 흩어진다.
@@ -28,6 +29,16 @@ export class ApiFailure extends Error {
   }
 }
 
+/** Mock 에 넘길 때만 쓴다. JSON.stringify 한 본문을 되돌린다. */
+function parseBody(body: BodyInit | null | undefined): unknown {
+  if (typeof body !== 'string') return undefined
+  try {
+    return JSON.parse(body)
+  } catch {
+    return undefined
+  }
+}
+
 async function toFailure(res: Response): Promise<ApiFailure> {
   // 06 은 모든 오류가 { error: { code, message, field? } } 라고 약속한다.
   // 그래도 방어한다 — 프록시나 서버가 HTML 을 돌려줄 수 있다.
@@ -43,6 +54,15 @@ async function toFailure(res: Response): Promise<ApiFailure> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // 백엔드가 붙기 전에는 가짜 서버를 쓴다. VITE_USE_MOCK=true 일 때만 켜진다.
+  // 다루지 않는 경로는 mockRequest 가 undefined 를 주므로 아래로 내려가 404 가 난다 —
+  // 안 만든 것을 조용히 성공시키지 않는다.
+  if (USE_MOCK) {
+    const mocked = mockRequest(init?.method ?? 'GET', path, parseBody(init?.body))
+    if (mocked) return (await mocked) as T
+    throw new ApiFailure(404, 'MOCK_MISS', `Mock 에 없는 경로입니다: ${init?.method ?? 'GET'} ${path}`)
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {

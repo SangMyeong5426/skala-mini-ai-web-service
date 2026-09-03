@@ -78,9 +78,11 @@ export interface Detection {
   confidence: number
   confidenceLevel: ConfidenceLevel
   approved: boolean
-  missingInfo?: string
-  labelText?: string
-  linkedItems: { itemId: number; name: string; confirmedByUser: boolean }[]
+  /** 보이지 않는 속성. `null` 이 아니면 S-04 「확인 필요」 묶음에 넣는다. */
+  missingInfo?: string | null
+  labelText?: string | null
+  /** `PATCH /detections/{id}` 응답에만 온다. `GET /detections` 목록에는 없다. */
+  linkedItems?: { itemId: number; name: string; confirmedByUser: boolean }[]
 }
 
 /** 06 PATCH /detections — `matchedItemIds` 는 **전체 교체**다. 증분이 아니다. */
@@ -93,21 +95,51 @@ export interface DetectionPatch {
 }
 
 // ── 검수 결과 (S-06) ──────────────────────────────────────
-export type WeightVerdict = 'ROOM' | 'NEAR' | 'OVER'
+/** 06: `ROOM`(여유) · `NEAR`(근접) · `OVER_RISK`(초과 가능성) · `UNKNOWN`(정보 부족) */
+export type WeightVerdict = 'ROOM' | 'NEAR' | 'OVER_RISK' | 'UNKNOWN'
 export type RuleVerdict =
   | 'CABIN_OK' | 'CHECKED_OK' | 'CHECKED_FORBIDDEN'
   | 'RESTRICTED' | 'NEED_MORE_INFO' | 'ASK_AIRLINE'
 
+export interface ReadyItem {
+  itemId: number
+  name: string
+  qty: number
+}
+
+export interface NeedsCheckItem extends ReadyItem {
+  /** 유사 후보. 사용자가 어느 것인지 고른다. */
+  candidates: { detectionId: number; name: string; matchConfidence: number }[]
+}
+
+export interface NotInPhotoItem {
+  itemId: number
+  name: string
+  priority: Priority
+}
+
+/** 사진에는 있는데 체크리스트에 없던 승인 물품. */
+export interface ExtraItem {
+  detectionId: number
+  name: string
+  confidence: number
+  verdict?: RuleVerdict
+  missingInfo?: string | null
+}
+
 export interface Inspection {
   tripId: number
+  /** 아직 계산 전이면 `null`. 프런트는 그 영역만 로딩으로 그린다. */
   readiness: {
-    prepared: ChecklistItem[]
-    needsCheck: ChecklistItem[]
-    notInPhoto: ChecklistItem[]
-    extra: { detectionId: number; name: string; qty: number }[]
+    prepared: ReadyItem[]
+    needsCheck: NeedsCheckItem[]
+    /** **`missing` 이 아니다.** 사진에서 못 찾았을 뿐 없다는 뜻이 아니다. */
+    notInPhoto: NotInPhotoItem[]
+    extra: ExtraItem[]
     completionRate: number
   } | null
   weight: {
+    /** 단일 값이 아니라 **범위**다. 실측값처럼 표현하지 않는다. */
     minG: number
     typicalG: number
     maxG: number
@@ -115,6 +147,7 @@ export interface Inspection {
     verdict: WeightVerdict
     confidence: ConfidenceLevel
     confidenceReason: string
+    /** 계산에서 뺀 항목 수를 숨기지 않는다. */
     excludedCount: number
     contributions: { name: string; typicalG: number; qty: number; subtotalG: number }[]
   } | null
@@ -122,10 +155,15 @@ export interface Inspection {
     itemId: number
     name: string
     verdict: RuleVerdict
+    /** 판정을 단정하지 않고 무엇이 부족한지 알려준다. */
+    missingInfo?: string | null
     reason: string
-    source?: string
+    /** 규정 최신성 — 출처와 확인 날짜를 항상 함께 보여준다. */
+    sourceUrl?: string
     checkedAt?: string
   }[] | null
+  /** 책임 범위 고지. 화면에 반드시 넣는다. */
+  notice?: string
 }
 
 // ── AI 작업 (S-04 · S-05 · S-06 · S-09) ───────────────────
