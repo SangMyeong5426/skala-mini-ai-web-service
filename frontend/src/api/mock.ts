@@ -786,6 +786,18 @@ export function mockRequest(
     return delay({ ...created })
   }
 
+  /*
+   * 06 — `PATCH /trips/{tripId}`. S-06 의 <b>최종 저장</b>이 이걸 부른다.
+   * 새 여행은 DRAFT 로 만들어지고(TripService:95), 준비가 끝나면 CONFIRMED 가
+   * 되어 내 여행 목록에서 "진행 중" 으로 선다.
+   */
+  if (method === 'PATCH' && /^\/trips\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    Object.assign(t.detail, b)
+    return delay({ ...t.detail })
+  }
+
   if (method === 'PATCH' && /^\/trips\/\d+\/items\/\d+$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND

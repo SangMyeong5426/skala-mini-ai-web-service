@@ -4,8 +4,8 @@ import { api } from '../api/client'
 import { AiPending, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { Shell, Steps, TopBar } from '../components/Shell'
-import { pct } from '../lib/format'
-import type { Inspection, PhotoStatus, RuleVerdict, TripDetail, WeightVerdict } from '../types/api'
+import { pct, VERDICT_CLASS, VERDICT_LABEL } from '../lib/format'
+import type { Inspection, PhotoStatus, TripDetail, WeightVerdict } from '../types/api'
 
 /**
  * S-06 검수 결과 ★AI — 준비 상태 · 예상 무게 · 반입 판정을 한 화면에서 본다.
@@ -26,15 +26,6 @@ const WEIGHT: Record<WeightVerdict, { label: string; cls: string }> = {
   UNKNOWN: { label: '판단 보류', cls: '' },
 }
 
-const RULE: Record<RuleVerdict, { label: string; cls: string }> = {
-  CABIN_OK: { label: '기내 가능', cls: 'badge-ok' },
-  CHECKED_OK: { label: '위탁 가능', cls: 'badge-ok' },
-  CHECKED_FORBIDDEN: { label: '반입 불가', cls: 'badge-danger' },
-  RESTRICTED: { label: '조건부', cls: 'badge-warn' },
-  NEED_MORE_INFO: { label: '정보 부족', cls: 'badge-warn' },
-  ASK_AIRLINE: { label: '항공사 확인', cls: 'badge-warn' },
-}
-
 const kg = (g: number) => (g / 1000).toFixed(1)
 
 export default function InspectionPage() {
@@ -42,6 +33,9 @@ export default function InspectionPage() {
   const nav = useNavigate()
   const [data, setData] = useState<Inspection | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [trip, setTrip] = useState<TripDetail | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const weightJob = useAiJob()
   const ruleJob = useAiJob()
   const kicked = useRef(false)
@@ -72,6 +66,7 @@ export default function InspectionPage() {
       // 없으면 요청을 걸지 않는다 — 07 이 minLength·enum 을 요구한다.
       const trip = await api.get<TripDetail>(`/trips/${tripId}`).catch(() => null)
       if (!alive || !trip) return
+      setTrip(trip)
 
       const prepared = r.readiness?.prepared ?? []
       const unprepared = r.readiness?.unprepared ?? []
@@ -133,6 +128,34 @@ export default function InspectionPage() {
     })()
     return () => { alive = false }
   }, [tripId])
+
+  /**
+   * 03:284 주요 요소의 <b>`최종 저장`</b>. 03:184 이 정한 흐름의 마지막 단계다 —
+   * <i>"검수 결과 확인·수정 → 최종 저장"</i>.
+   *
+   * 새 여행은 `DRAFT`(작성 중)로 만들어진다(TripService:95 — "생성 직후는
+   * DRAFT 다. 클라이언트가 status 를 정하지 않는다"). 준비가 끝났다는 뜻을
+   * 남기는 것이 이 버튼이고, 그러면 내 여행 목록에서 <b>진행 중</b>으로 선다.
+   *
+   * 06 은 `PATCH /trips/{tripId}` 가 `status` 를 받는다고 적어 두었지만 S-06 의
+   * 호출 API 목록에서 이 단계를 빠뜨렸다. 작성자 확인을 거쳐 06 에 함께 적었다.
+   *
+   * 06:289 — "경고는 완료율 계산·최종 저장을 막지 않는다". 미채택 필수 후보가
+   * 있어도 저장을 막지 않는다.
+   */
+  const confirm = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api.patch(`/trips/${tripId}`, { status: 'CONFIRMED' })
+      setSaveError(null)
+      nav('/trips')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const r = data?.readiness
   const w = data?.weight
@@ -203,8 +226,15 @@ export default function InspectionPage() {
                 ))}
               </Group>
 
+              {/*
+                * 03:288 빈 상태 — "내 목록이 비면 사진 등록·직접 추가 안내".
+                * 목록이 통째로 비었는데 "모두 챙기셨습니다" 라고 하면 거짓말이다.
+                * 챙긴 것도 챙길 것도 없는 상태다.
+                */}
               <Group title="아직 안 챙김" count={r.unprepared.length} tone="warn"
-                empty="모두 챙기셨습니다">
+                empty={r.prepared.length === 0
+                  ? '내 목록이 비어 있습니다. 사진을 올리거나 체크리스트에서 직접 추가하세요'
+                  : '모두 챙기셨습니다'}>
                 {r.unprepared.map((i) => (
                   <li key={i.itemId} className="row">
                     <div className="row-main">
@@ -263,11 +293,22 @@ export default function InspectionPage() {
                   <span>{kg(w.maxG)}</span>
                   <small>kg</small>
                 </p>
-                <div className="bar bar-lg" style={{ margin: '12px 0 10px' }}>
-                  <span style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }} />
-                </div>
+                {/*
+                  * <b>한도가 없으면 막대를 그리지 않는다.</b> `limitG` 는 nullable 이다
+                  * — 가방 정보를 안 넣은 여행이 있다(시드의 지난 여행이 그렇다).
+                  *
+                  * null 로 나누면 JS 에서 `Infinity` 가 되고 `Math.min(100, …)` 이
+                  * 100 을 골라, 한도를 모르는데 <b>가득 찬 막대</b>가 그려졌다.
+                  * 아래 문구도 "한도 0.0kg" 이 됐다. 둘 다 거짓말이다.
+                  */}
+                {w.limitG !== null && (
+                  <div className="bar bar-lg" style={{ margin: '12px 0 10px' }}>
+                    <span style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }} />
+                  </div>
+                )}
                 <p className="card-sub">
-                  한도 {kg(w.limitG)}kg · 신뢰도 {w.confidence === 'HIGH' ? '높음' : w.confidence === 'MEDIUM' ? '보통' : '낮음'}
+                  {w.limitG === null ? '한도 정보 없음' : `한도 ${kg(w.limitG)}kg`}
+                  {' · '}신뢰도 {w.confidence === 'HIGH' ? '높음' : w.confidence === 'MEDIUM' ? '보통' : '낮음'}
                   {w.excludedCount > 0 && ` · 계산 제외 ${w.excludedCount}개`}
                 </p>
                 <p className="row-sub" style={{ marginTop: 6 }}>{w.confidenceReason}</p>
@@ -316,7 +357,7 @@ export default function InspectionPage() {
               <div key={x.itemId} className="verdict">
                 <div className="verdict-head">
                   <b>{x.name}</b>
-                  <span className={`badge ${RULE[x.verdict].cls}`}>{RULE[x.verdict].label}</span>
+                  <span className={`badge ${VERDICT_CLASS[x.verdict]}`}>{VERDICT_LABEL[x.verdict]}</span>
                 </div>
                 <p className="verdict-why">{x.reason}</p>
                 {x.missingInfo && (
@@ -334,6 +375,17 @@ export default function InspectionPage() {
         </div>
 
         {data?.notice && <p className="disclaimer">{data.notice}</p>}
+
+        {saveError && <Failed title="저장하지 못했습니다" detail={saveError} />}
+
+        {/* 03:284 — 검수 결과 아래 `최종 저장`. 흐름의 마지막 단추다 */}
+        {data && (
+          <div className="form-foot">
+            <button type="button" className="btn" onClick={confirm} disabled={saving}>
+              {saving ? '저장하는 중…' : trip?.status === 'DRAFT' ? '최종 저장' : '저장하고 목록으로'}
+            </button>
+          </div>
+        )}
       </div>
     </Shell>
   )

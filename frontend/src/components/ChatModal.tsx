@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAiJob } from '../hooks/useAiJob'
-import { VERDICT_LABEL } from '../lib/format'
+import { VERDICT_CLASS, VERDICT_LABEL } from '../lib/format'
 import type { RuleCheckOutput } from '../types/api'
 
 /**
@@ -161,7 +161,7 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
                 <div key={k} className="verdict">
                   <div className="verdict-head">
                     <b>{r.name}</b>
-                    <span className={`badge ${r.verdict === 'CABIN_OK' ? 'badge-ok' : r.verdict === 'CHECKED_FORBIDDEN' ? 'badge-danger' : 'badge-warn'}`}>
+                    <span className={`badge ${VERDICT_CLASS[r.verdict] ?? 'badge-warn'}`}>
                       {VERDICT_LABEL[r.verdict] ?? r.verdict}
                     </span>
                   </div>
@@ -208,7 +208,18 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
           className="chat-input"
           onSubmit={(e) => { e.preventDefault(); ask(text) }}
         >
-          <button type="button" className="attach" aria-label="사진 첨부" title="사진 첨부">▤</button>
+          {/*
+            * 03 이 S-09 에 둔 자리이지만 <b>아직 붙일 데가 없다.</b> 06 에
+            * 챗봇 사진 API 가 없고 07 도 그 흐름을 TBD 로 남겼다.
+            * (백엔드에서 PR #49 로 만들고 있다 — 나오면 여기에 연결한다.)
+            *
+            * 핸들러 없는 버튼을 살려 두면 발표 중 눌렀을 때 <b>아무 일도 일어나지
+            * 않는다.</b> 고장난 것처럼 보이느니 준비 중이라고 말하는 편이 낫다.
+            */}
+          <button
+            type="button" className="attach" disabled
+            aria-label="사진 첨부 (준비 중)" title="사진 첨부는 준비 중입니다"
+          >▤</button>
           <input
             ref={inputRef}
             value={text}

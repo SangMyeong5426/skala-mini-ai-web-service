@@ -166,7 +166,12 @@ export interface Inspection {
     minG: number
     typicalG: number
     maxG: number
-    limitG: number
+    /**
+     * <b>nullable 이다.</b> 서버가 `input.weightLimitG` 를 그대로 옮기는데
+     * 가방 정보를 모르는 여행이 있다(`InspectionDtos` 의 `Integer limitG`).
+     * null 이면 07:1163 산식대로 verdict 는 UNKNOWN 이다.
+     */
+    limitG: number | null
     verdict: WeightVerdict
     confidence: ConfidenceLevel
     confidenceReason: string
