@@ -31,6 +31,7 @@ entity "users" as users {
   * id : bigint <<PK>>
   --
   * email : varchar(255) <<UQ>>
+  * password_hash : varchar(255)
   * nickname : varchar(50)
   * created_at : timestamptz
 }
@@ -54,6 +55,7 @@ entity "trips" as trips {
   weight_limit_g : integer
   note : text
   * status : varchar(20)
+  * created_at : timestamptz
 }
 
 entity "checklist_items" as items {
@@ -67,6 +69,7 @@ entity "checklist_items" as items {
   * priority : varchar(20)
   * source : varchar(10)
   * check_status : varchar(20)
+  * created_at : timestamptz
   ..
   UNCHECKED / PREPARED /
   NEEDS_CHECK / **NOT_IN_PHOTO**
@@ -92,6 +95,7 @@ entity "detected_objects" as detected {
   missing_info : varchar(100)
   label_text : varchar(200)
   * approved : boolean
+  * created_at : timestamptz
   ..
   승인 전에는 다음 단계에
   반영하지 않는다
@@ -136,6 +140,7 @@ entity "item_weights" as weights <<MASTER>> {
   * typical_g : integer
   * max_g : integer
   * is_dense : boolean
+  note : text
 }
 
 entity "ai_jobs" as jobs <<AI>> {
@@ -149,6 +154,8 @@ entity "ai_jobs" as jobs <<AI>> {
   output_payload : **jsonb**
   model_name : varchar(100)
   error_message : text
+  * created_at : timestamptz
+  completed_at : timestamptz
   ..
   PACKING_LIST / BAG_CHECK /
   WEIGHT_ESTIMATE / RULE_CHECK
