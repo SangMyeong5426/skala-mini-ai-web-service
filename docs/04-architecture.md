@@ -9,17 +9,17 @@
 ```text
 ┌─────────────────┐         ┌──────────────────────┐         ┌───────────────┐
 │   Frontend      │  HTTP   │      Backend         │   SQL   │  PostgreSQL   │
-│   React + TS    │ ──────▶ │      Spring Boot 4   │ ──────▶ │  Supabase/Neon│
+│   React + TS    │ ──────▶ │      Spring Boot 4   │ ──────▶ │   Supabase    │
 │                 │  JSON   │                      │         │   (Cloud)     │
 │  - 라우팅        │ ◀────── │  - REST Controller   │ ◀────── │               │
 │  - 화면 컴포넌트  │         │  - 서비스 로직        │         │  - 테이블      │
 │  - API 클라이언트 │         │  - Repository        │         │  - 관계        │
 └─────────────────┘         └──────────┬───────────┘         └───────────────┘
                                        │
-                                       │ ◀─── AI 확장 지점 (지금은 비어 있음)
+                                       │ ◀─── AI 확장 지점 (데모는 Mock)
                                        ▼
                             ┌──────────────────────┐
-                            │   Mock AI Service    │   지금: 고정 JSON 반환
+                            │   Mock AI Service    │   지금: 입력에 맞춘 후보·범위
                             │   ─────────────────  │
                             │   나중: OpenAI /     │   나중: 같은 스키마로
                             │        Claude API    │        LLM 응답 반환
@@ -33,14 +33,14 @@
 
 ![시스템 아키텍처](images/04-architecture.png)
 
-> PNG·PUML·SVG의 시스템 구성은 유지한다. 이번 개정의 승인·저장 책임은 아래 표로 보완하며,
-> 그림 주석 갱신은 TBD다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
+> **2026-09-03 PNG·PUML·SVG에 승인·채택·계산 책임을 반영했다.** 그림은 시스템 목표 구조이며
+> 구현 완료를 뜻하지 않는다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
 > 교체할 때**의 의미다. 기능 정의 자체가 달라질 때 API·화면까지 불변이라는 뜻은 아니다.
 
 - 원본: [`images/04-architecture.puml`](images/04-architecture.puml) (PlantUML)
 - 벡터: [`images/04-architecture.svg`](images/04-architecture.svg) — 발표 슬라이드용
-- **고치는 법**: `.puml`을 수정하고 <https://www.plantuml.com/plantuml/uml/> 에 붙여넣거나
-  VS Code 확장 `PlantUML`에서 `Alt+D`. **위 텍스트 다이어그램과 함께 고친다.**
+- **고치는 법**: `.puml` 수정 후 [로컬 재생성 명령](images/README.md#저장소-다이어그램-재생성)으로
+  PNG·SVG를 함께 만든다. **위 텍스트 다이어그램과 함께 고친다.**
 
 ## 기술 스택
 

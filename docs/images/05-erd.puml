@@ -9,11 +9,13 @@
 
 hide circle
 skinparam backgroundColor #FFFFFF
+skinparam dpi 160
 skinparam shadowing false
 skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 11
 skinparam linetype ortho
 skinparam ArrowColor #46524E
+title 데이터 모델 — 내 목록과 추천 후보의 저장 경계
 
 skinparam class {
   BackgroundColor #F5F7F6
@@ -73,6 +75,8 @@ entity "checklist_items" as items {
   ..
   UNCHECKED / PREPARED /
   NEEDS_CHECK / **NOT_IN_PHOTO**
+  PREPARED만 실제 완료
+  photoStatus는 별도 조회 계산값
 }
 
 entity "trip_photos" as photos {
@@ -97,8 +101,8 @@ entity "detected_objects" as detected {
   * approved : boolean
   * created_at : timestamptz
   ..
-  승인 전에는 다음 단계에
-  반영하지 않는다
+  승인 전: 확정 결과에서 제외
+  승인 시: 내 목록 생성·연결·완료
 }
 
 entity "★ item_detections" as idt <<NM>> {
@@ -180,6 +184,7 @@ note bottom of idt
   **N:M** 체크리스트 항목 ↔ 인식 물품
   한 항목에 후보 여럿, 한 후보가 여러 항목
   연결마다 신뢰도·승인 여부가 다르다
+  사진 승인·확정 연결·완료 등록을 한 트랜잭션으로 처리
 end note
 
 note bottom of irc
@@ -189,11 +194,13 @@ note bottom of irc
 end note
 
 note right of jobs
-  jsonb 는 의도적 비정규화다.
-  job_type 4종의 출력 모양이 달라
-  컬럼으로 펴면 대부분 null 이 된다.
-  내부 구조는 07-ai-ready.md 의
-  JSON Schema 로 고정한다.
+  **PACKING_LIST 후보는 output_payload에만 저장**
+  source · acceptedItemId는 JSON 내부 서버 필드
+  선택·승인 시에만 내 목록에 UNCHECKED로 등록
+  acceptedItemId는 내 항목 ID 참조 (DB FK 아님)
+  서버가 소유권·중복·삭제 시 연결 해제를 검증
+  입력·출력 JSON Schema는 07-ai-ready.md
+  완료율·사진 상태·미채택 필수 후보 수는 조회 시 계산
 end note
 
 legend bottom

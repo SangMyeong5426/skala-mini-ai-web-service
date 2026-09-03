@@ -1,150 +1,86 @@
 @startdot
 digraph UserFlow {
-  graph [
-    rankdir=TB,
-    splines=ortho,
-    nodesep=0.55,
-    ranksep=0.62,
-    pad=0.25,
-    bgcolor="#FFFFFF",
-    fontname="Apple SD Gothic Neo",
-    fontsize=18,
-    label="사용자 흐름 — 사진으로 시작해 검수 완료까지",
-    labelloc=t
-  ]
-
-  node [
-    shape=box,
-    style="rounded,filled",
-    margin="0.16,0.10",
-    color="#8A9A94",
-    fillcolor="#F5F7F6",
-    fontcolor="#14201C",
-    fontname="Apple SD Gothic Neo",
-    fontsize=11,
-    penwidth=1
-  ]
-
-  edge [
-    color="#606B67",
-    fontcolor="#34403B",
-    fontname="Apple SD Gothic Neo",
-    fontsize=10,
-    arrowsize=0.7,
-    penwidth=1
-  ]
-
-  start [shape=circle, label="", width=0.20, fixedsize=true, fillcolor="#2B302E", color="#2B302E"]
+  // docs/03-wireframe.md · 2026-09-03 개정. 사진 승인과 추천 채택을 분리한다.
+  graph [rankdir=TB, splines=ortho, nodesep=0.5, ranksep=0.55, pad=0.3,
+    bgcolor="#FFFFFF", fontname="Apple SD Gothic Neo", fontsize=20,
+    label="사용자 흐름 — 사진 승인 · 추천 선택 · 실제 준비 확인", labelloc=t]
+  node [shape=box, style="rounded,filled", margin="0.18,0.12",
+    color="#8A9A94", fillcolor="#F5F7F6", fontcolor="#14201C",
+    fontname="Apple SD Gothic Neo", fontsize=13, penwidth=1]
+  edge [color="#606B67", fontcolor="#34403B", fontname="Apple SD Gothic Neo",
+    fontsize=11, arrowsize=0.7, penwidth=1]
 
   subgraph cluster_main {
-    label="여행가방 검수 — 주 경로";
-    labelloc=t;
-    color="#C7D0C7";
-    fontcolor="#516059";
-    fontname="Apple SD Gothic Neo";
-    fontsize=13;
-    style="rounded";
-    margin=20;
+    label="여행 준비 — 내 목록과 추천 후보를 따로 관리";
+    color="#C7D0C7"; fontcolor="#516059"; fontsize=15; style=rounded; margin=20;
 
-    home [label="S-01 홈\n진행 중 여행·과거 기록 확인"]
-    trip_route [shape=diamond, label="여행을 어떻게\n시작할까?", style=filled, fillcolor="#F3F1EA"]
-    trip [label="S-02 여행 등록\n일정·지역·목적·이동수단 입력"]
-    history [label="S-10 여행 기록 상세\n과거 체크리스트 확인·복사"]
-    resume [label="진행 중 여행\nS-03~S-06의 마지막 저장 화면부터 재개", peripheries=2]
-    trip_valid [shape=diamond, label="필수 입력이\n올바른가?", style=filled, fillcolor="#F3F1EA"]
+    home [label="S-01 홈\n새 여행 · 과거 기록 · 이어가기\n이어가기: S-03~S-06 마지막 저장 화면 복귀"]
+    history [label="S-10 여행 기록 상세\n지난 체크리스트 확인 · 재사용"]
+    trip [label="S-02 여행 등록\n일정 · 지역 · 목적 · 이동수단 · 가방 입력\n입력 오류는 값을 유지하고 수정"]
+    photo_choice [shape=diamond, style=filled, fillcolor="#F3F1EA", label="사진으로\n시작할까?"]
+    photo [label="S-03 짐 사진 등록\n촬영 · 업로드 · 가방 구분\n실패한 사진은 다시 선택"]
+    analyze [label="S-04 사진 분석 중\n성공한 인식 결과부터 표시", fillcolor="#DDEEE9", color="#75A89C"]
+    review [label="S-04 인식 결과 확인\n물품명 · 수량 수정 / 내 항목과 연결\n승인 전에는 확정 결과에서 제외"]
+    approve [shape=diamond, style=filled, fillcolor="#F3F1EA", label="확인한 물품을\n승인할까?"]
+    prepared [label="내 목록 생성 · 연결\n승인한 물품은 챙김 완료로 등록", fillcolor="#E9F0B6", color="#7D8B3F"]
+    recommend [label="S-05 추가 준비물 추천 중\n이미 내 목록에 있는 물품은 제외\n추천 실패 시에도 내 목록 유지", fillcolor="#DDEEE9", color="#75A89C"]
+    list [label="S-05 내 체크리스트 · 추가 추천\n위쪽: 내 목록 · 직접 추가 · 실제 완료 체크 · 준비율\n아래쪽: 후보 · 추천 이유 · 필수/권장 · 선택\n미채택 필수 후보 n건 → 확인하기"]
+    adopt [label="선택한 추천만 내 목록에 추가\n미완료로 등록 · 중복 추가 방지", fillcolor="#FFF8D5", color="#A08B3C"]
+    pack [label="실제로 챙긴 뒤 완료 체크\n준비율 · 예상 무게 갱신", fillcolor="#E9F0B6", color="#7D8B3F"]
+    result [label="S-06 검수 결과\n내 목록 준비율 + 별도 사진 확인 상태\n실제 완료 물품의 예상 무게 · 반입 판정\n100%여도 미채택 필수 후보 경고 유지\n추천 미확인 상태는 0건으로 표시하지 않음"]
+    details [label="S-07 무게 상세 / S-08 반입 규정 상세\n제외 이유 · 규정 근거 · 추가정보 확인"]
+    photo_recheck [label="S-04 사진 재확인\n인식 후보와 내 항목 연결 · 이름/수량 확인\n승인 → 내 목록 완료 등록\nS-06 복귀 시 준비 상태 · 무게 다시 조회"]
+    saved [label="S-06 최종 저장\n준비 결과 저장 완료", fillcolor="#E9F0B6", color="#7D8B3F", penwidth=1.3]
 
-    photo [label="S-03 짐 사진 등록\n싸 놓은 짐 촬영·업로드·가방 구분"]
-    photo_route [shape=diamond, label="사진을\n올릴까?", style=filled, fillcolor="#F3F1EA"]
-    photo_valid [shape=diamond, label="분석할 수 있는\n사진인가?", style=filled, fillcolor="#F3F1EA"]
+    home -> trip [xlabel="새 여행"]
+    home -> history [xlabel="과거 기록"]
+    history -> trip [xlabel="다시 사용"]
+    trip -> photo_choice [xlabel="저장"]
+    photo_choice -> photo [xlabel="사진 등록"]
+    photo_choice -> recommend [xlabel="사진 없이 시작"]
+    photo -> analyze
+    analyze -> review
+    review -> approve
+    approve -> review [xlabel="수정 · 제외", constraint=false]
+    approve -> photo [xlabel="다시 촬영", constraint=false]
+    approve -> prepared [xlabel="승인"]
+    prepared -> recommend
+    recommend -> list [xlabel="후보 표시 / 실패 안내"]
+    list -> adopt [xlabel="선택한 항목 추가"]
+    adopt -> list [constraint=false]
+    list -> pack [xlabel="실제로 챙김"]
+    list -> photo [xlabel="추가 사진 등록", constraint=false]
+    pack -> list [constraint=false]
+    list -> result [xlabel="검수하기 · 추천 미채택도 가능", minlen=2]
+    result -> list [xlabel="필수 후보 확인 · 준비 수정", constraint=false]
+    result -> photo_recheck [xlabel="사진 확인 필요"]
+    photo_recheck -> result [xlabel="승인 후 검수 복귀", constraint=false]
+    result -> details [xlabel="상세 보기"]
+    details -> result [xlabel="돌아가기", constraint=false]
+    result -> saved [xlabel="최종 저장"]
 
-    item_loading [label="S-04 인식 결과·승인\n‘사진을 분석하는 중’", fillcolor="#DDEEE9", color="#75A89C"]
-    item_review [label="S-04 인식 결과·승인\n물품 후보·수량·신뢰도 확인"]
-    item_action [shape=diamond, label="인식 결과를\n승인할까?", style=filled, fillcolor="#F3F1EA"]
-
-    list_loading [label="S-05 체크리스트\n‘빠뜨린 물건을 찾는 중’", fillcolor="#DDEEE9", color="#75A89C"]
-    list [label="S-05 체크리스트\n승인 물품 + AI 추천 부족분 확인·수정"]
-    list_done [shape=diamond, label="체크리스트를\n확정할까?", style=filled, fillcolor="#F3F1EA"]
-
-    result_loading [label="S-06 검수 결과\n준비 상태·무게·반입 판정 처리 중", fillcolor="#DDEEE9", color="#75A89C"]
-    result [label="S-06 검수 결과\n세 결과와 안내 문구 확인"]
-    result_action [shape=diamond, label="최종 저장할까?", style=filled, fillcolor="#F3F1EA"]
-    follow_up [label="상세 확인 또는 결과 수정\nS-07 무게 상세 · S-08 반입 규정 상세\nS-05/S-04 목록·인식 결과 수정"]
-    saved [label="S-06 최종 저장\n검수 결과 저장 완료", fillcolor="#E9F0B6", color="#7D8B3F", penwidth=1.3]
-
-    home -> trip_route [xlabel="여행 선택"]
-    trip_route -> trip [xlabel="새 여행"]
-    trip_route -> history [xlabel="과거 여행"]
-    trip_route -> resume [xlabel="진행 중 여행"]
-    history -> trip
-
-    trip -> trip_valid [xlabel="저장"]
-    trip_valid -> trip [xlabel="아니오 · 오류 항목 수정", constraint=false]
-    trip_valid -> photo_route [xlabel="예"]
-
-    photo_route -> photo [xlabel="예 · 짐 사진 찍기"]
-    photo_route -> list_loading [xlabel="아니오 · 사진 없이 추천만"]
-
-    photo -> photo_valid [xlabel="분석 시작"]
-    photo_valid -> photo [xlabel="아니오 · 해당 사진만 다시 선택", constraint=false]
-    photo_valid -> item_loading [xlabel="예"]
-
-    item_loading -> item_review [xlabel="인식 결과 표시"]
-    item_review -> item_action
-    item_action -> item_review [xlabel="아니오 · 수정·제외·직접 입력", constraint=false]
-    item_action -> photo [xlabel="다시 촬영", constraint=false]
-    item_action -> list_loading [xlabel="예 · 승인"]
-
-    list_loading -> list [xlabel="승인 물품 등록 + 부족분 추천"]
-    list -> list_done
-    list_done -> list [xlabel="아니오 · 계속 수정", constraint=false]
-    list_done -> result_loading [xlabel="예 · 검수하기"]
-
-    result_loading -> result [xlabel="결과 영역별 표시"]
-    result -> result_action
-    result_action -> saved [xlabel="예"]
-    result_action -> follow_up [xlabel="아니오"]
-    follow_up -> result [xlabel="확인·수정 후 돌아가기", constraint=false]
-    resume -> saved [xlabel="남은 단계 완료"]
-
-    { rank=same; trip; history; resume }
+    { rank=same; trip; history }
+    { rank=same; adopt; pack }
+    { rank=same; details; photo_recheck; saved }
   }
 
   subgraph cluster_chat {
-    label="보조 흐름 — 챗봇으로 반입 규정 묻기 (어느 화면에서든)";
-    labelloc=t;
-    color="#E6B9C5";
-    fontcolor="#9B5669";
-    fontname="Apple SD Gothic Neo";
-    fontsize=13;
-    style="rounded";
-    margin=20;
-
-    chat [label="S-09 챗봇\n질문 입력 또는 사진 첨부", fillcolor="#FAE3E9", color="#D997AA"]
-    chat_loading [label="S-09 챗봇\n‘답변을 만드는 중’", fillcolor="#F4CED9", color="#D997AA"]
-    chat_info [shape=diamond, label="판정 정보가\n충분한가?", style=filled, fillcolor="#FAE3E9", color="#D997AA"]
-    add_info [label="추가 질문에 답하기", fillcolor="#FAE3E9", color="#D997AA"]
-    chat_result [label="S-09 챗봇\n판정·근거·출처 확인", fillcolor="#FAE3E9", color="#D997AA"]
-    chat_detail [shape=diamond, label="근거 상세를\n볼까?", style=filled, fillcolor="#FAE3E9", color="#D997AA"]
-    chat_rule [label="S-08 반입 규정 상세\n공식 근거 확인", fillcolor="#FAE3E9", color="#D997AA"]
-    chat_done [label="반입 규정 확인 완료", fillcolor="#EFA1B5", color="#B85F78", fontcolor="#5E2636", penwidth=1.3]
-
-    chat -> chat_loading [xlabel="질문 보내기"]
-    chat_loading -> chat_info
-    chat_info -> add_info [xlabel="아니오"]
-    add_info -> chat [xlabel="정보 보완", constraint=false]
-    chat_info -> chat_result [xlabel="예"]
-    chat_result -> chat_detail
-    chat_detail -> chat_rule [xlabel="예"]
-    chat_detail -> chat_done [xlabel="아니오"]
-    chat_rule -> chat_done [xlabel="확인 완료"]
+    label="보조 흐름 — 어느 화면에서든 반입 규정 질문";
+    color="#E6B9C5"; fontcolor="#9B5669"; fontsize=15; style=rounded; margin=20;
+    node [fillcolor="#FAE3E9", color="#D997AA"]
+    chat [label="S-09 챗봇\n여행 등록 없이 질문 가능"]
+    answer [label="답변 생성 중\n확인된 정보로 규정 조회", fillcolor="#F4CED9"]
+    enough [shape=diamond, style=filled, label="판정 정보가\n충분한가?"]
+    more [label="추가 질문에 답하기\n모르는 용량 · Wh는 추정하지 않음"]
+    chat_result [label="S-09 답변 확인\n판정 · 근거 · 출처"]
+    chat_detail [label="S-08 반입 규정 상세\n필요하면 공식 근거 확인"]
+    chat -> answer
+    answer -> enough
+    enough -> more [xlabel="아니오"]
+    more -> chat [xlabel="정보 보완", constraint=false]
+    enough -> chat_result [xlabel="예"]
+    chat_result -> chat_detail [xlabel="상세 보기"]
   }
-
-  start -> home [xlabel="서비스 접속"]
   home -> chat [xlabel="언제든 열기", style=dashed, color="#C48EA0", fontcolor="#9B5669"]
-
-  main_done [shape=doublecircle, label="", width=0.22, fixedsize=true, fillcolor="#2B302E", color="#2B302E"]
-  chat_end [shape=doublecircle, label="", width=0.22, fixedsize=true, fillcolor="#B85F78", color="#B85F78"]
-  saved -> main_done [xlabel="목표 달성"]
-  chat_done -> chat_end
 }
 @enddot
