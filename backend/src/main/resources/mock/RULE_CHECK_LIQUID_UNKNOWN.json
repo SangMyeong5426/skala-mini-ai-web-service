@@ -1,0 +1,19 @@
+{
+  "results": [{
+    "itemId": null,
+    "detectionId": null,
+    "name": "화장품",
+    "qty": 1,
+    "ruleKeyword": "액체",
+    "attributes": {"capacityMl": null, "batteryWh": null, "batteryMah": null, "bladeCm": null},
+    "verdict": "NEED_MORE_INFO",
+    "ruleId": 4,
+    "conditionNote": "용기당 100ml 이하, 총 1L 이하",
+    "reason": "화장품 용기 크기에 따라 반입 조건이 달라지므로 용량을 확인해 주세요.",
+    "missingInfo": "용량(ml)",
+    "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+    "checkedAt": "2026-09-02"
+  }],
+  "answer": "화장품 용량을 몰라 반입 조건을 아직 판단할 수 없습니다. 용기를 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": "용기 용량은 몇 ml인가요?"
+}

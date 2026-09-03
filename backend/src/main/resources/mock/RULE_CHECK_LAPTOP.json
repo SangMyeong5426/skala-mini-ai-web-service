@@ -1,0 +1,19 @@
+{
+  "results": [{
+    "itemId": null,
+    "detectionId": null,
+    "name": "노트북",
+    "qty": 1,
+    "ruleKeyword": "노트북",
+    "attributes": {"capacityMl": null, "batteryWh": null, "batteryMah": null, "bladeCm": null},
+    "verdict": "CABIN_OK",
+    "ruleId": 8,
+    "conditionNote": null,
+    "reason": "노트북은 기내 반입할 수 있으며 보안검색 시 가방에서 꺼내 주세요.",
+    "missingInfo": null,
+    "sourceUrl": "https://www.airportal.go.kr/library/security.do",
+    "checkedAt": "2026-09-02"
+  }],
+  "answer": "노트북은 기내 반입할 수 있으며 보안검색 시 가방에서 꺼내 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}
