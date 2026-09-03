@@ -144,8 +144,8 @@ export const ITEMS_META = {
 // 06 에 GET /photos 응답 예시가 아직 없다. schema.sql 과 seed.sql 로 만들었다.
 // 06 이 채워지면 여기도 맞춘다.
 export const PHOTOS: TripPhoto[] = [
-  { photoId: 1, fileUrl: '/uploads/demo/bag-01.jpg', bagKind: 'CABIN' },
-  { photoId: 2, fileUrl: '/uploads/demo/bag-02.jpg', bagKind: 'CABIN' },
+  { photoId: 1, fileUrl: '/uploads/demo/bag-01.jpg', bagKind: 'CABIN', uploadedAt: '2026-09-02T01:12:00Z' },
+  { photoId: 2, fileUrl: '/uploads/demo/bag-02.jpg', bagKind: 'CABIN', uploadedAt: '2026-09-02T01:12:30Z' },
 ]
 
 // ── 인식 결과 (S-04) — 06 예시 그대로 ─────────────────────

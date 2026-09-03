@@ -53,6 +53,8 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
 
   // 화면을 벗어나면 폴링을 멈춘다. 작업 자체는 서버에 남는다.
   const alive = useRef(true)
+  /** 접수 중인 작업이 있나. 같은 훅으로 두 건을 걸지 않는다 */
+  const busy = useRef(false)
   useEffect(() => {
     alive.current = true
     return () => {
@@ -70,6 +72,14 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
 
   const start = useCallback(
     async (jobType: JobType, input: unknown, tripId?: number): Promise<boolean> => {
+      /*
+       * <b>한 훅에 한 작업이다.</b> 호출부의 `disabled` 에만 기대면 버튼을 하나
+       * 빠뜨렸을 때 같은 작업이 두 건 접수되고, 두 폴링 루프가 하나의
+       * phase·output·polls 를 서로 덮어쓴다. state 가 아니라 ref 로 막는다 —
+       * setState 는 다음 렌더에나 반영돼서 연타를 못 잡는다.
+       */
+      if (busy.current) return false
+      busy.current = true
       const startedAt = nowMs()
       setPhase('running')
       setPolls(0)
@@ -90,7 +100,7 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
           setPolls(n)
 
           if (job.status === 'COMPLETED') {
-            setOutput(job.output)
+            setOutput(job.output ?? null)
             setPhase('done')
             return true
           }
@@ -112,6 +122,8 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
         setError(e instanceof Error ? e.message : '알 수 없는 오류입니다.')
         setPhase('failed')
         return false
+      } finally {
+        busy.current = false
       }
     },
     [],
