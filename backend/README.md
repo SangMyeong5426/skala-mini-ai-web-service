@@ -4,11 +4,15 @@
 
 스캐폴딩은 **끝나 있다.** clone 후 아래만 하면 빌드가 돈다.
 
+처음 합류했다면 **[백엔드 환경·개발 가이드 (`SETUP.md`)](SETUP.md)**를 먼저 읽는다.
+JDK·IDE 설정, Supabase 연결, 환경 변수, 개발 순서와 검증 결과를 모아 두었다.
+
 ## 실행
 
 ```bash
 ./gradlew build      # DB 없이도 통과한다 (테스트는 인메모리 H2로 돈다)
-./gradlew bootRun    # .env 가 있어야 뜬다. DATABASE_URL 이 필요하다
+./gradlew bootTestRun --args='--spring.profiles.active=test' # DB 없이 Swagger 확인
+./gradlew bootRun    # Supabase 접속 정보가 필요하다 (.env 또는 환경 변수)
 ```
 
 | | |
@@ -35,8 +39,10 @@ cp .env.example .env
 DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한다.**
 
 **`.env`는 `build.gradle`의 `bootRun` 태스크가 읽어서 넘긴다.** 따로 할 일은 없다.
-IDE에서 실행할 때는 실행 구성에 환경 변수를 직접 넣거나, 셸에서
-`set -a; source .env; set +a`를 먼저 실행한다.
+IDE에서도 Gradle `bootRun`을 실행하면 같은 방식으로 동작한다.
+Java 클래스를 직접 실행하거나 JAR를 실행할 때는 실행 구성에 환경 변수를 넣는다.
+`.env`를 셸에서 `source`하지 않는다. 특수문자가 셸 문법으로 해석될 수 있다.
+파일 형식과 우선순위는 [SETUP.md](SETUP.md#4-환경-변수)를 따른다.
 
 > JDBC URL 접두사는 `jdbc:postgresql://` 다. Supabase·Neon 대시보드가 주는
 > `postgresql://USER:PASSWORD@HOST/DB` 를 그대로 붙여넣으면 뜨지 않는다.
@@ -47,9 +53,12 @@ IDE에서 실행할 때는 실행 구성에 환경 변수를 직접 넣거나, �
 | | |
 | --- | --- |
 | `config/CorsConfig.java` | `CORS_ALLOWED_ORIGINS`를 읽어 `/api/**`에 적용 |
-| `application.properties` | 모든 값을 환경 변수에서 읽는다 (AI-Ready 원칙 4) |
+| `config/UploadConfig.java` | `UPLOAD_DIR`의 파일을 `/uploads/**`로 제공 |
+| `application.properties` | DB·CORS·AI 환경 변수, JPA·연결 풀·UTC 설정 |
 | `application-test.properties` | 테스트용 H2. DB 없이 빌드가 통과하는 이유 |
-| springdoc | Swagger UI와 OpenAPI 문서 자동 생성 |
+| springdoc 3.1.0 | Boot 4 지원 계열. Swagger UI와 OpenAPI 문서 자동 생성 |
+| `MiniAiWebServiceApplicationTests` | Swagger 문서·UI, CORS 허용·차단·`Location` 노출 검증 |
+| `../.github/workflows/backend.yml` | PR·main 반영 시 Java 21로 빌드와 테스트 |
 
 **엔터티·Repository·Controller는 아직 없다.** 데이터 모델과 API 명세
 ([`docs/05`](../docs/05-erd.md) · [`06`](../docs/06-api-spec.md))가 확정된 뒤에 만든다.
@@ -60,11 +69,11 @@ IDE에서 실행할 때는 실행 구성에 환경 변수를 직접 넣거나, �
 
 | 함정 | 내용 |
 | --- | --- |
-| `spring-boot-starter-web`이 없다 | Boot 4에서 **`spring-boot-starter-webmvc`** 로 이름이 바뀌었다 |
-| `spring-dotenv`가 안 먹는다 | `META-INF/spring.factories`로 등록하는데 **Boot 4가 그 방식을 없앴다.** 조용히 무시된다. 그래서 Gradle이 직접 `.env`를 읽게 해 뒀다 |
+| Boot 3 예제를 그대로 복사 | 이 프로젝트는 **`spring-boot-starter-webmvc`**, springdoc **3.1.0**을 사용한다 |
+| `.env`가 자동으로 적용될 것이라고 가정 | 여기서는 Gradle **`bootRun`만** `.env`를 읽는다. IDE 직접 실행·JAR 실행은 환경 변수를 직접 전달한다 |
 | `src/test/resources/application.properties` | 이름이 같으면 main의 설정을 **통째로 가린다.** main에 넣은 `app.*` 값이 테스트에서 사라져 컨텍스트가 안 뜬다. 그래서 `application-test.properties` + `@ActiveProfiles("test")`를 쓴다 |
 | DB 없이 테스트가 깨진다 | JPA가 DataSource를 요구한다. 테스트 프로필의 H2로 해결해 뒀다 |
-| Spring Boot 3을 못 만든다 | `start.spring.io`가 **4.0.0 미만을 거부한다.** ADR 0001 참조 |
+| 다른 Boot 버전으로 재생성 | 생성기를 다시 돌리지 않고 저장소의 **4.1.1** 설정을 사용한다. 최초 생성 경위는 ADR 0001 참조 |
 
 ## 구현 시 지킬 것
 
@@ -78,6 +87,7 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
 
 `CorsConfig`가 이미 `CORS_ALLOWED_ORIGINS`(기본 `http://localhost:5173`)를 읽어
 `/api/**`에 적용한다. 프런트엔드 포트를 바꾸면 `.env`만 고친다.
+생성 응답의 `Location` 헤더도 브라우저에 노출한다.
 
 ### AI 확장 지점
 

@@ -111,6 +111,14 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 > 이 절은 결정을 뒤집는 것이 아니라 **같은 결정(Java + Spring Boot)의 버전이
 > 외부 사정으로 정해졌다는 기록**이다. 그래서 새 ADR을 만들지 않고 여기에 남긴다.
 
+#### 2026-09-03 개발환경 보완
+
+위 표는 초기 검증 기록이다. 현재 `springdoc-openapi`는 **3.1.0**을 사용한다.
+2.8.6으로 빈 OpenAPI 문서가 열리는 것은 재확인했지만, 이후 컨트롤러를 구현할
+환경은 [공식 Boot 4 지원 계열](https://springdoc.org/)로 맞춘다.
+Swagger JSON·설정·UI와 CORS를 기존 테스트에서 검증한다.
+설치·실행·검증 절차는 [`backend/SETUP.md`](../../backend/SETUP.md)에 정리한다.
+
 ### 21이 지불하는 비용
 
 | 비용 | 대응 |
