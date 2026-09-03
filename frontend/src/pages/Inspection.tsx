@@ -26,6 +26,9 @@ const WEIGHT: Record<WeightVerdict, { label: string; cls: string }> = {
   UNKNOWN: { label: '판단 보류', cls: '' },
 }
 
+/** 07:1390 — RULE_CHECK `items` 의 maxItems. 서버는 51개부터 400 이다 */
+const RULE_CHECK_MAX_ITEMS = 50
+
 const kg = (g: number) => (g / 1000).toFixed(1)
 
 export default function InspectionPage() {
@@ -39,6 +42,8 @@ export default function InspectionPage() {
   const weightJob = useAiJob()
   const ruleJob = useAiJob()
   const kicked = useRef(false)
+  /** 화면을 떠났나. effect cleanup 과 비동기 함수가 같은 값을 본다 */
+  const cancelled = useRef(false)
 
   const load = () =>
     api.get<Inspection>(`/trips/${tripId}/inspection`)
@@ -63,16 +68,16 @@ export default function InspectionPage() {
    * effect 안에 묻어 두면 409 STALE_WEIGHT_INPUT 을 받았을 때 다시 걸 방법이
    * 없어, "다시 시도" 가 조회만 하고 아무 일도 안 하는 버튼이 된다.
    */
-  const startJobs = async (alive = true) => {
+  const startJobs = async () => {
     {
       const r = await load()
-      if (!alive || !r) return
+      if (cancelled.current || !r) return
       kicked.current = true
 
       // 07 의 두 입력 스키마는 서로 다르다. 여행 정보가 있어야 채울 수 있고,
       // 없으면 요청을 걸지 않는다 — 07 이 minLength·enum 을 요구한다.
       const trip = await api.get<TripDetail>(`/trips/${tripId}`).catch(() => null)
-      if (!alive || !trip) return
+      if (cancelled.current || !trip) return
       setTrip(trip)
 
       const prepared = r.readiness?.prepared ?? []
@@ -100,7 +105,7 @@ export default function InspectionPage() {
           weightLimitG: trip.weightLimitG ?? null,
           items: prepared.map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty })),
           excluded: unprepared.map((i) => ({ name: i.name, reason: 'UNCHECKED' })),
-        }, Number(tripId)).then((done) => { if (done && alive) void load() })
+        }, Number(tripId)).then((r) => { if (r.done && !cancelled.current) void load() })
       }
 
       /*
@@ -121,7 +126,7 @@ export default function InspectionPage() {
        * 400 VALIDATION_FAILED 를 낸다(RuleCheckContract:36). 물품이 많은
        * 여행에서 판정이 통째로 안 나오는 것보다 앞 50개라도 나오는 편이 낫다.
        */
-      const all = [...prepared, ...unprepared].slice(0, 50)
+      const all = [...prepared, ...unprepared].slice(0, RULE_CHECK_MAX_ITEMS)
       if (!r.customs?.length && all.length > 0) {
         void ruleJob.start('RULE_CHECK', {
           transport: trip.transport,
@@ -135,15 +140,29 @@ export default function InspectionPage() {
             // 속성은 서버가 채운다. FE 는 모르는 값을 지어내지 않는다.
             attributes: { capacityMl: null, batteryWh: null, batteryMah: null, bladeCm: null },
           })),
-        }, Number(tripId)).then((done) => { if (done && alive) void load() })
+        }, Number(tripId)).then((r) => { if (r.done && !cancelled.current) void load() })
       }
     }
   }
 
   useEffect(() => {
-    let alive = true
-    if (!kicked.current) void startJobs(alive)
-    return () => { alive = false }
+    /*
+     * <b>취소 상태는 ref 로 공유한다.</b>
+     *
+     * 예전에는 effect 의 지역 `let alive` 를 `startJobs(alive)` 로 <b>값으로</b>
+     * 넘겼다. 함수 안에는 `true` 사본이 남으므로 cleanup 이 바깥 변수를 false 로
+     * 바꿔도 안쪽 검사는 계속 통과했다. 그래서 조회 응답이 늦게 오면 <b>이미
+     * 떠난 화면에서 WEIGHT_ESTIMATE·RULE_CHECK 를 새로 접수했다.</b>
+     *
+     * useAiJob 의 이탈 검사는 첫 폴링 대기 <b>뒤에</b> 있어서 접수 자체를 막지
+     * 못한다. 실제 모델을 부르는 설정에서는 모델 호출로도 이어진다.
+     *
+     * 재시도 경로도 같은 ref 를 본다 — 이탈 처리가 두 갈래가 되면 한쪽이 또
+     * 빠진다.
+     */
+    cancelled.current = false
+    if (!kicked.current) void startJobs()
+    return () => { cancelled.current = true }
   }, [tripId])
 
   /**
@@ -173,6 +192,30 @@ export default function InspectionPage() {
       setSaving(false)
     }
   }
+
+  /**
+   * <b>50개 상한에 걸려 판정에 못 보낸 물품.</b>
+   *
+   * 07:1390 이 `items` 를 maxItems 50 으로 정해서 51번째부터는 요청에 담지
+   * 못한다. 조용히 자르면 물품 60개인 여행은 50개만 보이고 사용자는 60개 다
+   * 봤다고 생각한다. 서버도 판정 기록이 없는 물품을 `customs` 에서 빼므로
+   * 다음 방문에 저절로 채워지지 않는다.
+   *
+   * 이 저장소에는 같은 상황의 전례가 있다 — #46 의 `AI_VISION_MAX_PHOTOS` 는
+   * 넘는 사진을 `failedPhotoIds` 로 남기며 <i>"조용히 버리면 사용자는 그 사진이
+   * 분석된 줄 안다"</i> 고 적었다.
+   *
+   * <b>`customs` 에 없는 물품으로 세면 안 된다.</b> 규칙이 없어 판정이 나오지
+   * 않은 물품도 서버가 `customs` 에서 빼기 때문에, 두 가지가 섞여 "판정 못 했다"
+   * 고 잘못 말한다. 상한을 넘긴 것만 정확히 센다 — 목록 길이만 보면 되고
+   * 재진입해도 같은 값이 나온다.
+   */
+  const unjudged = (() => {
+    const r0 = data?.readiness
+    if (!r0) return []
+    // 요청에 담는 순서 그대로 세야 실제로 빠진 것이 나온다
+    return [...r0.prepared, ...r0.unprepared].slice(RULE_CHECK_MAX_ITEMS).map((i) => i.name)
+  })()
 
   const r = data?.readiness
   const w = data?.weight
@@ -369,6 +412,16 @@ export default function InspectionPage() {
             {ruleJob.phase === 'running' && <AiPending label="반입 규정을 확인하는 중" polls={ruleJob.polls} />}
             {ruleJob.phase === 'failed' && (
               <Failed title="판정하지 못했습니다" detail={ruleJob.error ?? ''} />
+            )}
+            {/* 조용히 빠뜨리지 않는다. 무엇이 안 봤는지 이름으로 말한다 */}
+            {unjudged.length > 0 && ruleJob.phase !== 'running' && (
+              <p className="notice-warn" style={{ display: 'block' }}>
+                <b>{unjudged.length}개는 판정하지 못했습니다</b> — 한 번에{' '}
+                {RULE_CHECK_MAX_ITEMS}개까지 확인합니다.{' '}
+                항공사 규정을 직접 확인해 주세요 —{' '}
+                {unjudged.slice(0, 5).join(' · ')}
+                {unjudged.length > 5 && ` 외 ${unjudged.length - 5}개`}
+              </p>
             )}
             {ruleJob.phase === 'timeout' && (
               <Failed

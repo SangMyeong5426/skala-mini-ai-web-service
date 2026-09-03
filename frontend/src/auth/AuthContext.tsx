@@ -45,15 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSessionOnce()
       .then((s) => {
         /*
-         * <b>토큰은 alive 가드보다 먼저 받는다.</b>
+         * 토큰은 `alive` 가드보다 먼저 받는다. 이 화면이 사라졌어도 토큰은
+         * 모듈에 있고 다음 요청이 쓴다.
          *
-         * StrictMode 는 개발 모드에서 이 effect 를 두 번 돌린다. 두 요청 모두
-         * 아직 XSRF-TOKEN 쿠키가 없어 서버가 <b>서로 다른 토큰 두 개</b>를
-         * 발급하고, 브라우저 쿠키에는 <b>나중에 도착한 응답</b>의 값이 남는다.
-         *
-         * 먼저 도착한 응답이 alive 가드에 걸려 버려지면 메모리 토큰과 쿠키가
-         * 어긋나고, 첫 로그인 클릭이 403 CSRF_INVALID 로 튕긴다.
-         * 마지막에 도착한 응답의 토큰을 그대로 들고 있으면 쿠키와 같아진다.
+         * <b>StrictMode 의 이중 호출은 `loadSessionOnce` 가 막는다</b>(#50).
+         * 두 번 돌아도 요청은 하나라서 서버가 익명 세션을 하나만 만들고
+         * 토큰도 하나다 — 예전에는 요청이 둘이라 서로 다른 토큰 두 개가
+         * 발급되고 쿠키에는 나중 것이 남아, 첫 로그인이 403 으로 튕겼다.
+         * 요청을 합치는 쪽이 화면이 쿠키를 따라가게 하는 것보다 낫다.
          */
         setCsrfToken(s.csrfToken)
         if (!alive) return

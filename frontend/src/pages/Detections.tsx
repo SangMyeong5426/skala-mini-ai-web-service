@@ -68,7 +68,7 @@ export default function Detections() {
     // 사진 ID 를 박아 두면 다른 여행에서 남의 사진을 분석하려 든다.
     // 06 의 소유권 검증에서 거절되는 요청이다.
     // 완료를 확인하고 넘어간다. FAILED·timeout 이면 후속 추천을 걸지 않는다.
-    const ok = await job.start('BAG_CHECK', { photoIds: ids }, Number(tripId))
+    const { done: ok, output } = await job.start('BAG_CHECK', { photoIds: ids }, Number(tripId))
     const fresh = (await load()).items
     if (!ok) return
 
@@ -84,7 +84,7 @@ export default function Detections() {
      * 무시하고 여행의 사진을 전부 분석한다(AiJobService:141). 그래서 사실만
      * 알리고 재시도는 `다시 분석` 하나로 둔다.
      */
-    setFailedPhotos(job.output?.failedPhotoIds ?? [])
+    setFailedPhotos(output?.failedPhotoIds ?? [])
 
     /*
      * 06:705 · 03:262 — 자동 등록 뒤 <b>곧바로 추가 추천을 요청</b>한다.
