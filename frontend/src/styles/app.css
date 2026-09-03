@@ -288,7 +288,27 @@ select:focus-visible, textarea:focus-visible {
   border-radius: var(--r-sm); border: 1px solid var(--line);
   background: var(--surface);
 }
-.thumb figcaption { margin-top: 6px; }
+.thumb figcaption { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+
+/* 썸네일 삭제 — 03:245. 사진을 빼는 길이 여기 말고 없다 */
+.thumb-x {
+  margin-left: auto; width: 24px; height: 24px; line-height: 1;
+  border: 1px solid var(--line-strong); border-radius: 50%;
+  background: var(--surface); color: var(--text-2);
+  font-size: 15px; cursor: pointer;
+}
+.thumb-x:hover { color: var(--text); border-color: var(--text-2); }
+
+/* 올라가는 중인 파일 자리 */
+.thumb-pending .badge {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.thumb-ph {
+  width: 100%; aspect-ratio: 4 / 3;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); border: 1px dashed var(--line-strong);
+  background: var(--surface-2, var(--surface));
+}
 
 .guide { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text-2); }
 .guide li { padding-left: 14px; position: relative; }
@@ -1018,6 +1038,18 @@ select:focus-visible, textarea:focus-visible {
   font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
 }
 .edit-row input[type='number'] { width: 76px; }
+
+/* 내 체크리스트 직접 추가 — 03:271 주요 요소. 목록 아래 한 줄로 늘 열려 있다 */
+.add-row {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.add-row input {
+  padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
+}
+.add-row input:first-child { flex: 1; min-width: 0; }
+
 
 /* 헤더의 로그인 사용자 — 03-wireframe "공통 헤더는 닉네임과 로그아웃을 표시한다" */
 .site-who {
