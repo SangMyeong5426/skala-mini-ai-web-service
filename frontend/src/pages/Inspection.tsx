@@ -79,18 +79,25 @@ export default function InspectionPage() {
       /*
        * 07:927 WEIGHT_ESTIMATE required — bagType · bagEmptyG · weightLimitG ·
        * items · excluded. items 는 <b>PREPARED 만</b>이고 미완료는 excluded 로
-       * 분리한다(07:900 "내 목록의 미완료 항목만 excluded 에 UNCHECKED 로").
+       * 분리한다(07:939 "내 목록의 미완료 항목만 excluded 에 UNCHECKED 로").
+       *
+       * <b>서버가 같은 입력을 스스로 만들어 놓고 우리 것과 대조한다.</b> 한 글자라도
+       * 다르면 409 STALE_WEIGHT_INPUT 이고 무게가 통째로 안 나온다. 그래서
+       * 여기서는 값을 <b>보정하지 않는다.</b>
+       *
+       * - reason 은 <b>언제나 UNCHECKED</b> 다. photoStatus 로 NOT_IN_PHOTO 를
+       *   보내면 서버(UNCHECKED)와 어긋난다. enum 에 NOT_IN_PHOTO 가 있는 것은
+       *   구 데이터를 읽기 위한 것이지 우리가 만들어 보낼 값이 아니다(07:941).
+       * - 가방 값에 ?? 0 · ?? 'CARRY_ON' 같은 기본값을 넣지 않는다. 서버는
+       *   비어 있으면 null 을 그대로 보내므로 기본값을 채우는 순간 어긋난다.
        */
       if (!r.weight && prepared.length > 0) {
         void weightJob.start('WEIGHT_ESTIMATE', {
-          bagType: trip.bagType ?? 'CARRY_ON',
-          bagEmptyG: trip.bagEmptyG ?? 0,
-          weightLimitG: trip.weightLimitG ?? 0,
+          bagType: trip.bagType ?? null,
+          bagEmptyG: trip.bagEmptyG ?? null,
+          weightLimitG: trip.weightLimitG ?? null,
           items: prepared.map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty })),
-          excluded: unprepared.map((i) => ({
-            name: i.name,
-            reason: i.photoStatus === 'NOT_IN_PHOTO' ? 'NOT_IN_PHOTO' : 'UNCHECKED',
-          })),
+          excluded: unprepared.map((i) => ({ name: i.name, reason: 'UNCHECKED' })),
         }, Number(tripId)).then((done) => { if (done && alive) void load() })
       }
 
