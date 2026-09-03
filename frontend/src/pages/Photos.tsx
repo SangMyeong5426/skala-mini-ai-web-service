@@ -18,6 +18,8 @@ export default function Photos() {
   const [error, setError] = useState<string | null>(null)
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState(false)
+  // 03 S-03: "기내용·위탁용 구분". 값을 정할 수단이 없으면 배지가 거짓말이 된다
+  const [bagKind, setBagKind] = useState<'CABIN' | 'CHECKED'>('CABIN')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
@@ -36,13 +38,20 @@ export default function Photos() {
    * 실제 서버로 바꿀 때 이 함수의 body 만 FormData 로 바꾸면 된다.
    */
   const upload = async (files: FileList | null) => {
-    const picked = Array.from(files ?? []).filter((f) => f.type.startsWith('image/'))
-    if (!picked.length) return
+    const all = Array.from(files ?? [])
+    const picked = all.filter((f) => f.type.startsWith('image/'))
+    const rejected = all.length - picked.length
+    if (!picked.length) {
+      // 조용히 버리면 사용자는 "느린 건가" 와 "거부됐다" 를 구분할 수 없다
+      if (all.length) setError('이미지 파일만 올릴 수 있습니다.')
+      return
+    }
+    if (rejected > 0) setError(`이미지가 아닌 파일 ${rejected}개는 제외했습니다.`)
     setBusy(true)
     setError(null)
     try {
       await api.post(`/trips/${tripId}/photos`, {
-        files: picked.map((f) => ({ fileUrl: URL.createObjectURL(f), bagKind: 'CABIN' })),
+        files: picked.map((f) => ({ fileUrl: URL.createObjectURL(f), bagKind })),
       })
       load()
     } catch (e) {
@@ -52,7 +61,7 @@ export default function Photos() {
     }
   }
 
-  const empty = photos !== null && photos.length === 0
+  const empty = !photos?.length
 
   return (
     <Shell>
@@ -100,6 +109,16 @@ export default function Photos() {
                   >
                     {busy ? '올리는 중…' : '사진 추가'}
                   </button>
+                  <div className="chips" style={{ marginLeft: 'auto' }}>
+                    {(['CABIN', 'CHECKED'] as const).map((k) => (
+                      <button
+                        key={k} type="button"
+                        className={`pick${bagKind === k ? ' is-on' : ''}`}
+                        aria-pressed={bagKind === k}
+                        onClick={() => setBagKind(k)}
+                      >{k === 'CABIN' ? '기내용' : '위탁용'}</button>
+                    ))}
+                  </div>
                 </div>
 
                 <div

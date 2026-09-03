@@ -14,8 +14,8 @@ export interface ApiError {
 
 // ── 여행 (S-01 · S-02) ────────────────────────────────────
 export type TripStatus = 'DRAFT' | 'CONFIRMED' | 'DONE'
-export type Transport = 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAR' | 'SHIP'
-export type Purpose = 'TOUR' | 'BUSINESS' | 'STUDY' | 'ETC'
+export type Transport = 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAR'
+export type Purpose = 'TOUR' | 'BUSINESS' | 'REST' | 'STUDY'
 export type BagType = 'CARRY_ON' | 'MEDIUM' | 'LARGE'
 
 export interface TripSummary {

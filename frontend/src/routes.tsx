@@ -57,11 +57,11 @@ export interface ScreenRoute {
 export const SCREENS: ScreenRoute[] = [
   { id: 'S-00', name: '로그인·회원가입', path: '/login', tier: 1 },
   { id: 'S-01', name: '홈 · 내 여행', path: '/trips', tier: 1 },
-  { id: 'S-02', name: '여행 등록', path: '/trips/new', tier: 1, todo: true },
+  { id: 'S-02', name: '여행 등록', path: '/trips/new', tier: 1 },
   { id: 'S-03', name: '짐 사진 등록', path: '/trips/:tripId/photos', tier: 1 },
   { id: 'S-04', name: '인식 결과 · 사후 수정', path: '/trips/:tripId/detections', tier: 1, ai: true },
   { id: 'S-05', name: '내 체크리스트 · AI 추천', path: '/trips/:tripId/items', tier: 1, ai: true },
-  { id: 'S-06', name: '검수 결과', path: '/trips/:tripId/inspection', tier: 1, ai: true, todo: true },
+  { id: 'S-06', name: '검수 결과', path: '/trips/:tripId/inspection', tier: 1, ai: true },
   { id: 'S-07', name: '무게 상세', path: '/trips/:tripId/weight', tier: 2, todo: true },
   { id: 'S-08', name: '반입 규정 상세', path: '/trips/:tripId/rules', tier: 2, todo: true },
   { id: 'S-09', name: '챗봇', path: null, tier: 3, ai: true },

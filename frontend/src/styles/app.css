@@ -1047,3 +1047,64 @@ select:focus-visible, textarea:focus-visible {
 
 /* 오류 입력 — aria-invalid 와 짝이다 */
 .field input.is-bad, .pw input.is-bad { border-color: var(--danger); }
+
+/* ── 입력 폼 (S-02) ──────────────────────────────────────
+ * 한 줄에 여러 칸을 두되 좁아지면 세로로 접는다.
+ * ────────────────────────────────────────────────────── */
+.form { display: flex; flex-direction: column; gap: 20px; }
+.form-row { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+.cell { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.cell label { font-size: 13.5px; font-weight: 700; color: var(--text-2); }
+.cell input {
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 15px;
+}
+.cell input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 고르는 값은 select 대신 칩으로 — 선택지가 넷뿐이라 다 보이는 편이 빠르다 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick {
+  padding: 9px 15px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--surface);
+  color: var(--text-2); font: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer;
+}
+.pick:hover { border-color: var(--accent-line); color: var(--text); }
+.pick.is-on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+.form-foot { display: flex; justify-content: flex-end; padding-top: 4px; }
+.form-foot .btn { padding: 12px 22px; font-size: 15px; }
+
+/* ── 검수 결과 (S-06) ────────────────────────────────────
+ * 준비 상태를 네 묶음으로 나눈다. 묶음 제목이 곧 그 물품의 상태다.
+ * ────────────────────────────────────────────────────── */
+.group + .group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.group-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 13.5px; font-weight: 700; color: var(--text-2);
+}
+
+/* 무게 기여도 — 무엇을 더해 그 값이 나왔는지 보여준다 */
+.contrib { margin-top: 14px; display: flex; flex-direction: column; }
+.contrib li {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 0; border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.contrib li b { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* 반입 판정 카드 — 근거와 출처를 항상 붙인다 */
+.verdict + .verdict { margin-top: 12px; }
+.verdict {
+  padding: 14px; border-radius: var(--r-sm); background: var(--surface-2);
+}
+.verdict-head { display: flex; align-items: center; gap: 8px; }
+.verdict-head .badge { margin-left: auto; }
+.verdict-why { margin-top: 6px; font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+.verdict-src { margin-top: 8px; font-size: 12px; color: var(--text-3); }
+.verdict-src a { color: var(--accent); }

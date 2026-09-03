@@ -66,7 +66,12 @@ export function Field({
         ? cloneElement(children as React.ReactElement<Record<string, unknown>>, {
             'aria-invalid': error ? true : undefined,
             'aria-describedby': msgId,
-            className: error ? 'is-bad' : undefined,
+            // 원래 className 을 <b>지우지 않고 더한다.</b> 덮어쓰면 .pw 같은
+            // 레이아웃 클래스가 사라져 칸이 통째로 깨진다.
+            className: [
+              (children.props as { className?: string }).className,
+              error ? 'is-bad' : null,
+            ].filter(Boolean).join(' ') || undefined,
           })
         : children}
       {error

@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { AiPending, Empty, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
-import type { BagCheckOutput, ChecklistItem, Detection } from '../types/api'
+import type { BagCheckOutput, ChecklistItem, Detection, TripDetail } from '../types/api'
 
 const LEVEL: Record<string, { label: string; cls: string }> = {
   HIGH: { label: '신뢰도 높음', cls: 'badge-ok' },
@@ -30,9 +30,10 @@ export default function Detections() {
   const [error, setError] = useState<string | null>(null)
   const job = useAiJob<BagCheckOutput>()
 
-  const load = () => {
+  /** 재조회. 갱신된 내 목록을 돌려준다 — 추천 요청이 그 값을 써야 한다 */
+  const load = (): Promise<ChecklistItem[]> => {
     setError(null)
-    Promise.all([
+    return Promise.all([
       api.get<{ detections: Detection[] }>(`/trips/${tripId}/detections`),
       api.get<{ items: ChecklistItem[] }>(`/trips/${tripId}/items`),
       api.get<{ photos: { photoId: number }[] }>(`/trips/${tripId}/photos`),
@@ -40,16 +41,48 @@ export default function Detections() {
       .then(([d, i, ph]) => {
         setDets(d.detections); setItems(i.items)
         setPhotoIds(ph.photos.map((x) => x.photoId))
+        return i.items
       })
-      .catch((e) => setError(e instanceof Error ? e.message : '알 수 없는 오류'))
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : '알 수 없는 오류')
+        return [] as ChecklistItem[]
+      })
   }
-  useEffect(load, [tripId])
+  useEffect(() => { void load() }, [tripId])
 
   const analyze = async () => {
     // 사진 ID 를 박아 두면 다른 여행에서 남의 사진을 분석하려 든다.
     // 06 의 소유권 검증에서 거절되는 요청이다.
     await job.start('BAG_CHECK', { photoIds }, Number(tripId))
-    load()
+    const fresh = await load()
+
+    /*
+     * 06:705 · 03:262 — 자동 등록 뒤 <b>곧바로 추가 추천을 요청</b>한다.
+     * "S-04 에서 사용자 입력을 기다리지 않는다."
+     *
+     * 07:470 대로 alreadyPacked 는 PREPARED 만 보낸다. 실패해도 이 화면은
+     * 이미 제 일을 했으므로 오류로 덮지 않는다 — S-05 에서 다시 시도할 수 있다.
+     */
+    try {
+      const t = await api.get<TripDetail>(`/trips/${tripId}`)
+      await api.post('/ai-jobs', {
+        jobType: 'PACKING_LIST',
+        tripId: Number(tripId),
+        input: {
+          destination: t.destination,
+          startDate: t.startDate,
+          endDate: t.endDate,
+          transport: t.transport,
+          purpose: t.purpose ?? null,
+          note: t.note ?? null,
+          alreadyPacked: fresh
+            .filter((i) => i.checkStatus === 'PREPARED')
+            .map((i) => ({ name: i.name, category: i.category, qty: i.qty })),
+        },
+      })
+    } catch {
+      /* 추천 실패는 S-05 에서 다시 시도한다 */
+    }
   }
 
   /** 잘못 인식한 이름·수량을 고친다. 승인이 아니라 <b>사후 수정</b>이다 */
