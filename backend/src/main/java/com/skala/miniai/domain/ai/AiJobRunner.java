@@ -1,6 +1,7 @@
 package com.skala.miniai.domain.ai;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +37,10 @@ import com.skala.miniai.domain.photo.DetectedObjectRepository;
  * 폴링으로 읽는 이 구조가 비동기다 (07).
  *
  * <p>07 "작업이 끝나면 서버가 쓰는 곳" 을 <b>Mock 도 똑같이</b> 수행한다 — 그래야 S-04·S-05 가 이어진다.
+ *
+ * <p>{@code BAG_CHECK} 는 인식 결과 저장에서 끝나지 않는다. 06 개정에서 <b>승인 없이
+ * 내 목록까지 한 트랜잭션으로</b> 등록하므로 {@link PhotoAutoRegistrar} 가 이어서 돈다.
+ * 저장이 실패하면 전체가 롤백되고 작업은 실패로 남는다 — 목록 저장 전에 완료 응답을 내지 않는다.
  */
 @Component
 public class AiJobRunner {
@@ -48,12 +53,13 @@ public class AiJobRunner {
     private final DetectedObjectRepository detections;
     private final ChecklistItemRepository items;
     private final ItemRuleCheckRepository ruleChecks;
+    private final PhotoAutoRegistrar autoRegistrar;
     private final Json json;
     private final long mockDelayMs;
 
     public AiJobRunner(AiJobRepository jobs, AiJobService jobService, AiClient aiClient,
                        DetectedObjectRepository detections, ChecklistItemRepository items,
-                       ItemRuleCheckRepository ruleChecks, Json json,
+                       ItemRuleCheckRepository ruleChecks, PhotoAutoRegistrar autoRegistrar, Json json,
                        @Value("${app.ai.mock-delay-ms:0}") long mockDelayMs) {
         this.jobs = jobs;
         this.jobService = jobService;
@@ -61,6 +67,7 @@ public class AiJobRunner {
         this.detections = detections;
         this.items = items;
         this.ruleChecks = ruleChecks;
+        this.autoRegistrar = autoRegistrar;
         this.json = json;
         this.mockDelayMs = mockDelayMs;
     }
@@ -107,7 +114,7 @@ public class AiJobRunner {
 
     private void persistSideEffects(AiJob job, JsonNode output) {
         switch (job.getJobType()) {
-            case BAG_CHECK -> saveDetections(output);
+            case BAG_CHECK -> autoRegistrar.register(job.getTripId(), saveDetections(output));
             case RULE_CHECK -> saveRuleChecks(job, output);
             // 07: 추천과 무게는 output_payload 에만 남는다. 내 목록에 자동으로 넣지 않는다.
             case PACKING_LIST, WEIGHT_ESTIMATE -> { }
@@ -118,7 +125,7 @@ public class AiJobRunner {
      * 07: 같은 사진의 <b>미승인</b> 행은 지우고 다시 넣는다. 승인된 행은 건드리지 않는다 —
      * 재분석이 사용자가 이미 확인한 결과를 지우면 안 된다.
      */
-    private void saveDetections(JsonNode output) {
+    private List<DetectedObject> saveDetections(JsonNode output) {
         // 사진마다 한 번만 지운다. 인식 결과 수만큼 반복하면 같은 삭제를 여러 번 돌린다.
         Set<Long> photoIds = new LinkedHashSet<>();
         output.path("detections").forEach(d -> photoIds.add(d.path("photoId").asLong()));
@@ -130,10 +137,11 @@ public class AiJobRunner {
             detections.flush();
         }
 
+        List<DetectedObject> saved = new ArrayList<>();
         for (JsonNode d : output.path("detections")) {
             BigDecimal confidence = new BigDecimal(d.path("confidence").asText("0"))
                     .setScale(3, java.math.RoundingMode.HALF_UP);
-            detections.save(new DetectedObject(
+            saved.add(detections.save(new DetectedObject(
                     d.path("photoId").asLong(),
                     d.path("name").asText(),
                     d.path("qty").asInt(1),
@@ -141,8 +149,11 @@ public class AiJobRunner {
                     // 07: confidenceLevel 은 서버가 confidence 로 채운다. 모델 값이 있어도 덮어쓴다.
                     DetectedObject.levelOf(confidence),
                     d.path("missingInfo").isNull() ? null : d.path("missingInfo").asText(null),
-                    d.path("labelText").isNull() ? null : d.path("labelText").asText(null)));
+                    d.path("labelText").isNull() ? null : d.path("labelText").asText(null))));
         }
+        // 자동 등록이 이 id 들을 써야 하므로 먼저 내보낸다.
+        detections.flush();
+        return saved;
     }
 
     /** 07: {@code itemId} 와 {@code ruleId} 가 모두 있는 결과만 저장한다. {@code ASK_AIRLINE} 은 JSON 에만 남는다. */

@@ -11,8 +11,6 @@ import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
-import com.skala.miniai.domain.photo.DetectedObject;
-import com.skala.miniai.domain.photo.DetectionService;
 import com.skala.miniai.domain.trip.Trip;
 
 /**
@@ -29,12 +27,10 @@ import com.skala.miniai.domain.trip.Trip;
 public class AiInputBuilder {
 
     private final ChecklistItemRepository items;
-    private final DetectionService detectionService;
     private final Json json;
 
-    public AiInputBuilder(ChecklistItemRepository items, DetectionService detectionService, Json json) {
+    public AiInputBuilder(ChecklistItemRepository items, Json json) {
         this.items = items;
-        this.detectionService = detectionService;
         this.json = json;
     }
 
@@ -64,8 +60,12 @@ public class AiInputBuilder {
     /**
      * 07 {@code WEIGHT_ESTIMATE input}.
      *
-     * <p>계산에 넣는 것은 <b>실제 완료 항목만</b>이다. 미완료 항목과 미승인 인식 후보는
-     * {@code excluded} 에 이유와 함께 남긴다 — 무엇을 뺐는지 숨기지 않는다 (명세 F-10).
+     * <p>계산에 넣는 것은 <b>실제 완료 항목만</b>이다. 미완료 항목은 {@code excluded} 에
+     * 이유와 함께 남긴다 — 무엇을 뺐는지 숨기지 않는다 (명세 F-10).
+     *
+     * <p>개정 전에는 미승인 인식 후보를 {@code PENDING_APPROVAL} 로 함께 뺐다. 지금은
+     * 사진 물품이 승인 없이 등록되므로 그런 후보가 없고, 07 의 입력 스키마에서도
+     * 그 사유가 사라졌다({@code NOT_IN_PHOTO} · {@code UNCHECKED} 만 남는다).
      */
     @Transactional(readOnly = true)
     public ObjectNode weightEstimate(Trip trip) {
@@ -93,13 +93,6 @@ public class AiInputBuilder {
             }
         }
 
-        // 승인 전 인식 후보도 계산에서 빼고 이유를 남긴다.
-        for (DetectedObject d : detectionService.detectionsOf(trip.getId())) {
-            if (d.isApproved()) continue;
-            ObjectNode node = excluded.addObject();
-            node.put("name", d.getName());
-            node.put("reason", "PENDING_APPROVAL");
-        }
         return input;
     }
 

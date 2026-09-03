@@ -8,9 +8,13 @@
 
 -- ── 사용자 ────────────────────────────────────────────────
 -- 이번 데모에서 인증 흐름을 구현하지 않으므로 이 사용자 하나를 고정으로 쓴다.
--- password_hash 는 데모용 bcrypt 해시다. 평문을 저장하지 않는다.
-INSERT INTO users (email, password_hash, nickname) VALUES
-  ('kim@skala.dev', '$2b$12$Kx8fJ0qN3vZ1sWmT7pLuAeR5yQdH2cVbXn9gM4tJ6oB1iE0aS3wDy', '김지우');
+-- password_hash 는 데모용 BCrypt 해시다. 평문을 저장하지 않는다.
+-- 데모 계정 로그인: jiwoo28 / skala1234
+-- 이 해시는 앱의 BCryptPasswordEncoder 로 실제 생성해 확인한 값이다.
+-- **데모 계정이라 저장소에 적는다.** 실제 사용자 비밀번호는 어디에도 적지 않는다.
+INSERT INTO users (login_id, email, password_hash, nickname) VALUES
+  ('jiwoo28', 'kim@skala.dev',
+   '$2a$10$RYoqAoiWyZnVTLi29EOAZ.9XyNvNutsciYMwfXKkzGnAdg4RbrYPG', '김지우');
 
 
 -- ── 품목별 무게 마스터 ────────────────────────────────────

@@ -2,10 +2,10 @@ package com.skala.miniai.domain.checklist;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,17 +15,18 @@ import com.skala.miniai.domain.photo.DetectedObject;
 import com.skala.miniai.domain.photo.DetectedObjectRepository;
 
 /**
- * 항목별 <b>사진 상태</b>를 계산한다. 컬럼이 아니다 (05-erd 개정).
+ * 항목별 <b>사진 상태</b>를 계산한다. 컬럼이 아니라 조회 시 계산값이다 (05-erd).
  *
- * <p>06 규약:
+ * <p>06 규약 (로그인·자동 등록 개정):
  * <ul>
- *   <li>승인된 인식 결과와 <b>사용자 확정 연결</b>이 있으면 {@code CONFIRMED}
- *   <li>미승인 연결 후보만 있으면 {@code NEEDS_CHECK}
+ *   <li>유효한 연결 중 <b>HIGH/MEDIUM</b> 이거나 <b>사후 확인된</b> 연결이 있으면 {@code CONFIRMED}
+ *   <li><b>LOW 연결만</b> 있고 사후 확인되지 않았으면 {@code NEEDS_CHECK}
  *   <li>연결이 없으면 {@code NOT_IN_PHOTO}
  * </ul>
  *
- * <p><b>실제 완료 상태와 독립적이다.</b> 사진에서 못 찾았다는 이유로 {@code PREPARED} 를
- * 취소하지 않는다 — 사진 없이 직접 챙긴 물건이 있기 때문이다.
+ * <p><b>{@code approved} 를 쓰지 않는다.</b> 사진 물품은 승인 없이 자동 등록되므로
+ * 그 컬럼은 등록·집계 조건이 아니다(05). 신뢰도가 낮아도 등록은 되고, 다만 화면이
+ * "확인 필요" 를 띄울 근거로 이 상태를 쓴다.
  *
  * <p>항목 하나씩 조회하면 N+1 이 난다. 목록을 한 번에 받아 두 번의 조회로 끝낸다.
  */
@@ -51,20 +52,22 @@ public class PhotoStatusResolver {
         List<ItemDetection> all = links.findByChecklistItemIdIn(checklistItemIds);
         if (all.isEmpty()) return result;
 
-        Set<Long> approvedDetectionIds = new HashSet<>(
-                detections.findAllById(all.stream().map(ItemDetection::getDetectedObjectId).toList())
-                        .stream()
-                        .filter(DetectedObject::isApproved)
-                        .map(DetectedObject::getId)
-                        .toList());
+        Map<Long, DetectedObject> byId = detections
+                .findAllById(all.stream().map(ItemDetection::getDetectedObjectId).toList()).stream()
+                .collect(Collectors.toMap(DetectedObject::getId, Function.identity()));
 
         for (ItemDetection link : all) {
             Long itemId = link.getChecklistItemId();
-            boolean confirmed = link.isConfirmedByUser() && approvedDetectionIds.contains(link.getDetectedObjectId());
-            if (confirmed) {
+            DetectedObject detection = byId.get(link.getDetectedObjectId());
+            if (detection == null) continue;   // 사진이 지워졌으면 연결도 곧 사라진다
+
+            boolean strong = link.isConfirmedByUser()
+                    || detection.getConfidenceLevel() != Codes.ConfidenceLevel.LOW;
+
+            if (strong) {
                 result.put(itemId, Codes.PhotoStatus.CONFIRMED);
             } else if (result.get(itemId) != Codes.PhotoStatus.CONFIRMED) {
-                // 확정 연결 하나면 CONFIRMED 다. 나머지 후보가 있어도 덮어쓰지 않는다.
+                // 강한 연결 하나면 CONFIRMED 다. LOW 가 더 있어도 덮어쓰지 않는다.
                 result.put(itemId, Codes.PhotoStatus.NEEDS_CHECK);
             }
         }

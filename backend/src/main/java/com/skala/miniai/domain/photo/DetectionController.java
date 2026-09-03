@@ -8,10 +8,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 06 엔드포인트 13~14 — 인식 결과·승인 (S-04).
+ * 06 엔드포인트 13~14 — 인식 결과·<b>사후 수정</b> (S-04).
  *
- * <p><b>14번이 이 서비스의 핵심 게이트다.</b> 승인 전에는 어떤 결과도 준비 상태·무게·규정에
- * 반영되지 않는다.
+ * <p>개정 전에는 14번이 승인 게이트였다. 지금은 인식 물품이 {@code BAG_CHECK} 완료 시
+ * 자동 등록되므로, 이 API 는 <b>이미 등록된 것</b>의 이름·수량·연결을 고치는 용도다.
+ * 등록용 승인 버튼·요청을 FE 에 두지 않는다 (06).
  */
 @RestController
 @RequestMapping("/api/trips/{tripId}/detections")
@@ -29,8 +30,8 @@ public class DetectionController {
     }
 
     @PatchMapping("/{detectionId}")
-    public PhotoDtos.ApproveResponse approve(@PathVariable Long tripId, @PathVariable Long detectionId,
-                                             @RequestBody PhotoDtos.ApproveRequest req) {
-        return service.approve(tripId, detectionId, req);
+    public PhotoDtos.PatchResponse patch(@PathVariable Long tripId, @PathVariable Long detectionId,
+                                         @RequestBody PhotoDtos.PatchRequest req) {
+        return service.patch(tripId, detectionId, req);
     }
 }

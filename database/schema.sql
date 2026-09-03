@@ -23,7 +23,12 @@ DROP TABLE IF EXISTS users              CASCADE;
 -- ── 사용자 ────────────────────────────────────────────────
 CREATE TABLE users (
     id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- 로그인용 아이디. 내부 PK(id)와 구분한다 — id 는 URL·FK 에, login_id 는 사람이 친다.
+    -- 소문자로 정규화해 저장하므로 대소문자만 다른 중복 가입이 막힌다.
+    login_id      VARCHAR(30)  NOT NULL UNIQUE,
     email         VARCHAR(255) NOT NULL UNIQUE,
+
+    -- BCrypt 해시만 저장한다. 원문·해시는 응답·로그·AI 입력에 남기지 않는다.
     password_hash VARCHAR(255) NOT NULL,
     nickname      VARCHAR(50)  NOT NULL,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()

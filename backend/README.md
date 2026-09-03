@@ -5,11 +5,15 @@
 스캐폴딩은 **끝나 있다.** clone 후 아래만 하면 빌드가 돈다.
 
 > **이 브랜치를 pull 했다면 DB 를 먼저 갱신한다.** 테이블 둘(`trip_itineraries` ·
-> `item_placements`)이 늘었고 `ddl-auto=validate` 라, 갱신하지 않으면 앱이 아예 뜨지 않는다.
+> `item_placements`)과 컬럼 하나(`users.login_id`)가 늘었고 `ddl-auto=validate` 라,
+> 갱신하지 않으면 앱이 아예 뜨지 않는다.
 >
 > ```bash
 > psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-itineraries-and-placements.sql
+> psql "$DATABASE_URL" -f database/migrations/2026-09-03-add-users-login-id.sql
 > ```
+>
+> 데모 계정은 `jiwoo28` / `skala1234` 다 (`database/seed.sql`).
 >
 > **`schema.sql` 전체 재실행·`scripts/db-apply` 는 쓰지 않는다** — 맨 앞에서 모든 테이블을
 > DROP 해 팀 DB 의 실데이터를 지운다. 자세한 내용은 [`database/README.md`](../database/README.md).
@@ -64,14 +68,15 @@ DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한�
 | `../.github/workflows/backend.yml` | PR·main 반영 시 Java 21로 빌드와 테스트 |
 
 **도메인 API 26개가 구현돼 있다.** `docs/05-erd.md` 의 테이블 12개에 대응하는 엔터티와
-`docs/06-api-spec.md` 의 엔드포인트 중 **30개 가운데 26개**다 — 업무 18개(1~18)와
-일정·캘린더 5개(23~27) · 3D 가방 정리 3개(28~30). **인증 4개(19~22)는 아직 구현하지 않았다.**
+`docs/06-api-spec.md` 의 엔드포인트 **30개 전부**다 — 업무 18개(1~18) · 인증 4개(19~22) ·
+일정·캘린더 5개(23~27) · 3D 가방 정리 3개(28~30).
 
 ```
 com.skala.miniai
 ├── common/      오류 봉투 · 도메인 코드값 · 완료율 계산 · jsonb 접근 · 시드 사용자
 ├── config/      CORS · 업로드 · 비동기
 └── domain/
+    ├── auth/         가입·로그인·세션·로그아웃 (서버 세션 · CSRF · BCrypt)
     ├── trip/         여행 (소유권 확인을 다른 도메인이 빌려 쓴다)
     ├── itinerary/    여행 일정
     ├── calendar/     캘린더 (테이블 없음 — 여행 기간 + 일정 조합)

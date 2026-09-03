@@ -6,7 +6,7 @@
   "bagEmptyG": 3200,
   "verdict": "ROOM",
   "confidence": "MEDIUM",
-  "confidenceReason": "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+  "confidenceReason": "자동 등록 8개 중 6개의 무게를 계산했습니다. 미완료 1개와 무게 정보가 없는 2개는 제외했습니다.",
   "excludedCount": 3,
   "excluded": [
     {
@@ -15,11 +15,11 @@
     },
     {
       "name": "화장품 용기",
-      "reason": "PENDING_APPROVAL"
+      "reason": "NO_WEIGHT_INFO"
     },
     {
       "name": "검정 파우치",
-      "reason": "PENDING_APPROVAL"
+      "reason": "NO_WEIGHT_INFO"
     }
   ],
   "contributions": [

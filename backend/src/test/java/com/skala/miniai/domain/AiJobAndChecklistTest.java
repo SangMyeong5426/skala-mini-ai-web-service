@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -60,9 +62,11 @@ class AiJobAndChecklistTest {
         jdbc.update("delete from trip_itineraries");
         jdbc.update("delete from trips");
         jdbc.update("delete from users");
-        // CurrentUser 가 시드 사용자 1번으로 고정돼 있다.
-        jdbc.update("insert into users (id, email, password_hash, nickname, created_at) "
-                + "values (1, 'test@skala.dev', 'x', '테스트', current_timestamp)");
+        jdbc.update("insert into users (id, login_id, email, password_hash, nickname, created_at) "
+                + "values (1, 'tester', 'test@skala.dev', 'x', '테스트', current_timestamp)");
+        // CurrentUser 는 세션에서 읽는다. HTTP 없이 부르는 테스트라 컨텍스트를 직접 채운다.
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(1L, null, java.util.List.of()));
 
         tripId = trips.create(new TripDtos.CreateRequest(
                 "서울", "도쿄", "JP",
@@ -151,6 +155,83 @@ class AiJobAndChecklistTest {
         assertThat(checklist.list(tripId).items())
                 .as("같은 후보로 항목이 두 개 생기면 안 된다")
                 .hasSize(1);
+    }
+
+
+    /**
+     * 사진 인식 물품은 <b>승인 없이</b> 내 목록에 {@code PREPARED} 로 등록된다 (06 개정).
+     *
+     * <p>개정 전에는 S-04 에서 사용자가 승인해야 목록에 들어갔다. 그 게이트가 사라졌으므로
+     * BAG_CHECK 가 끝나는 것만으로 목록이 채워져야 한다. 신뢰도가 LOW 여도 등록한다 —
+     * 등록을 막는 대신 화면이 "확인 필요" 를 표시한다.
+     */
+    @Test
+    void photoDetectionsAreRegisteredWithoutApproval() {
+        jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
+                + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
+        Long photoId = jdbc.queryForObject(
+                "select id from trip_photos where trip_id = ?", Long.class, tripId);
+
+        given(aiClient.run(any(), any())).willReturn(json.read(
+                "{\"detections\":["
+                + "{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,\"confidence\":0.93,"
+                + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null},"
+                + "{\"photoId\":" + photoId + ",\"name\":\"검정 파우치\",\"qty\":1,\"confidence\":0.43,"
+                + "\"confidenceLevel\":\"LOW\",\"missingInfo\":null,\"labelText\":null}],"
+                + "\"failedPhotoIds\":[]}"));
+
+        Long jobId = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
+                Codes.JobType.BAG_CHECK, tripId, null)).jobId();
+        assertThat(awaitSettled(jobId).getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+
+        var items = checklist.list(tripId).items();
+        assertThat(items).as("LOW 신뢰도도 등록된다").hasSize(2);
+        assertThat(items).allSatisfy(i -> {
+            assertThat(i.checkStatus()).isEqualTo(Codes.CheckStatus.PREPARED);
+            assertThat(i.source()).isEqualTo(Codes.ItemSource.PHOTO);
+        });
+        assertThat(checklist.list(tripId).completionRate())
+                .as("자동 등록 물품은 완료 집계에 들어간다")
+                .isEqualByComparingTo(new java.math.BigDecimal("1.000"));
+    }
+
+    /**
+     * 같은 작업을 다시 돌려도 항목이 늘지 않고, 사용자가 되돌린 준비 상태를 덮어쓰지 않는다.
+     *
+     * <p>06 4·5번: "같은 완료 처리 재시도는 항목을 다시 생성하거나 사용자의 수정·삭제를
+     * 되돌리지 않는다", "이미 반영된 연결을 다시 읽는 것만으로 사용자가 바꾼 UNCHECKED 를
+     * 되돌리지 않는다."
+     */
+    @Test
+    void reanalysisDoesNotDuplicateOrOverwriteUserEdits() {
+        jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
+                + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
+        Long photoId = jdbc.queryForObject(
+                "select id from trip_photos where trip_id = ?", Long.class, tripId);
+
+        String output = "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,"
+                + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
+                + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}";
+        given(aiClient.run(any(), any())).willReturn(json.read(output));
+
+        Long first = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
+                Codes.JobType.BAG_CHECK, tripId, null)).jobId();
+        awaitSettled(first);
+
+        Long itemId = checklist.list(tripId).items().get(0).itemId();
+        // 사용자가 "아직 안 챙겼다" 로 되돌린다.
+        checklist.update(tripId, itemId, new ChecklistDtos.UpdateRequest(
+                null, null, null, null, Codes.CheckStatus.UNCHECKED));
+
+        Long second = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
+                Codes.JobType.BAG_CHECK, tripId, null)).jobId();
+        awaitSettled(second);
+
+        var items = checklist.list(tripId).items();
+        assertThat(items).as("재분석이 항목을 또 만들면 안 된다").hasSize(1);
+        assertThat(items.get(0).checkStatus())
+                .as("사용자가 되돌린 UNCHECKED 를 재분석이 뒤집으면 안 된다")
+                .isEqualTo(Codes.CheckStatus.UNCHECKED);
     }
 
     /**
