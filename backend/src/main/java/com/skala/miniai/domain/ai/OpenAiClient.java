@@ -393,6 +393,7 @@ public class OpenAiClient implements AiClient {
             return;
         }
 
+        boolean[] used = new boolean[structured.size()];
         for (JsonNode item : items) {
             if (results.size() >= MAX_RULE_RESULTS) break;
             ObjectNode result = results.addObject();
@@ -400,39 +401,91 @@ public class OpenAiClient implements AiClient {
             result.set("detectionId", item.get("detectionId"));
             result.set("name", item.get("name"));
             result.set("qty", item.get("qty"));
-            fillFromModel(result, matchModelResult(item, items, structured), item.path("attributes"), input);
+            fillFromModel(result, matchModelResult(item, items, structured, used), item.path("attributes"), input);
         }
     }
 
     /**
-     * 이 입력 물품에 대응하는 모델 응답을 찾는다. 못 찾거나 <b>모호하면</b> 빈 객체다.
+     * 이 입력 물품에 대응하는 모델 응답을 찾는다. 못 찾거나 <b>어긋나면</b> 빈 객체다.
      *
-     * <p>{@code itemId} · {@code detectionId} 는 07 이 "그대로 되돌려 보낸다" 고 정한 값이라
-     * 대응의 근거가 된다. 둘 다 {@code null} 인 물품(질문에서 뽑은 것)만 이름으로 찾는다.
+     * <p>세 가지를 함께 지켜야 한 응답이 엉뚱한 물품에 붙지 않는다.
      *
-     * <p><b>이름은 양쪽에서 유일할 때만 쓴다.</b> 예전에는 같은 이름의 첫 결과를 매번 돌려줘서,
-     * {@code 보조배터리} 두 개를 <i>"첫 번째는 100Wh, 두 번째는 200Wh"</i> 로 물으면 모델이 제대로
-     * 둘을 답해도 <b>서버가 첫 결과를 두 번 써서</b> 둘 다 100Wh 로 만들었다 — 리뷰에서 재현된
-     * 결함이다. 모델이 틀리지 않아도 서버가 값을 잃었다.
+     * <ol>
+     *   <li><b>식별값이 서로 맞는가.</b> {@code itemId} 로 찾았어도 이름이 다르면 버린다.
+     *       모델이 {@code itemId} 를 틀리게 적으면 <b>배터리에 가위 규정이</b> 붙는다 —
+     *       리뷰에서 재현된 결함이다. 07 이 "그대로 되돌려 보낸다" 고 정한 값들이라 어긋나면
+     *       그 응답 자체를 믿을 수 없다.
+     *   <li><b>이름은 양쪽에서 유일할 때만.</b> 같은 이름이 둘이면 어느 응답이 어느 물품인지 모른다.
+     *   <li><b>한 응답은 한 물품에만.</b> 이미 쓴 응답을 이름으로 다시 고르지 않는다.
+     * </ol>
      *
-     * <p>모호하면 판정을 보류한다. 키워드가 없으면 규칙 엔진이 {@code ASK_AIRLINE} 을 내고
-     * 화면은 항공사 확인을 안내한다 — 엉뚱한 값으로 확정하는 것보다 낫다.
+     * <p>어느 하나라도 걸리면 판정을 보류한다. 키워드가 없으면 규칙 엔진이 {@code ASK_AIRLINE} 을
+     * 내고 화면은 항공사 확인을 안내한다 — 엉뚱한 규정으로 확정하는 것보다 낫다.
      */
-    private JsonNode matchModelResult(JsonNode item, JsonNode items, JsonNode structured) {
-        JsonNode byId = findModelResult(structured, "itemId", item.path("itemId"));
-        if (byId != null) return byId;
-        JsonNode byDetection = findModelResult(structured, "detectionId", item.path("detectionId"));
-        if (byDetection != null) return byDetection;
-
-        String name = RecommendationStore.normalize(item.path("name").asText(""));
-        if (countByName(items, name) == 1 && countByName(structured, name) == 1) {
-            for (JsonNode model : structured) {
-                if (name.equals(RecommendationStore.normalize(model.path("name").asText("")))) return model;
-            }
+    private JsonNode matchModelResult(JsonNode item, JsonNode items, JsonNode structured, boolean[] used) {
+        int index = findModelIndex(item, items, structured, used);
+        if (index < 0) {
+            log.warn("모델 응답에서 '{}' 를 유일하게 짝지을 수 없습니다. 규정 키워드 없이 판정합니다.",
+                    item.path("name").asText(""));
+            return json.newObject();
         }
 
-        log.warn("모델 응답에서 '{}' 를 유일하게 짝지을 수 없습니다. 규정 키워드 없이 판정합니다.", name);
-        return json.newObject();
+        JsonNode model = structured.get(index);
+        if (!identifiersAgree(item, model)) {
+            log.warn("모델이 '{}' 에 대해 어긋난 식별값을 냈습니다. 규정 키워드 없이 판정합니다.",
+                    item.path("name").asText(""));
+            return json.newObject();
+        }
+
+        used[index] = true;
+        return model;
+    }
+
+    /** {@code itemId} → {@code detectionId} → <b>유일한</b> 이름 순. 이미 쓴 응답은 건너뛴다. */
+    private static int findModelIndex(JsonNode item, JsonNode items, JsonNode structured, boolean[] used) {
+        int byId = indexOfId(structured, "itemId", item.path("itemId"), used);
+        if (byId >= 0) return byId;
+        int byDetection = indexOfId(structured, "detectionId", item.path("detectionId"), used);
+        if (byDetection >= 0) return byDetection;
+
+        String name = RecommendationStore.normalize(item.path("name").asText(""));
+        if (countByName(items, name) != 1 || countByName(structured, name) != 1) return -1;
+        for (int i = 0; i < structured.size(); i++) {
+            if (used[i]) continue;
+            if (name.equals(RecommendationStore.normalize(structured.get(i).path("name").asText("")))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 07 이 "그대로 되돌려 보낸다" 고 정한 값들이 서로 맞는가.
+     *
+     * <p>양쪽에 다 있는 값만 견준다. 질문에서 뽑은 물품은 {@code itemId}·{@code detectionId} 가
+     * 없으므로 이름만 본다.
+     */
+    private static boolean identifiersAgree(JsonNode item, JsonNode model) {
+        if (conflicts(item.path("itemId"), model.path("itemId"))) return false;
+        if (conflicts(item.path("detectionId"), model.path("detectionId"))) return false;
+
+        String modelName = RecommendationStore.normalize(model.path("name").asText(""));
+        if (modelName.isEmpty()) return true;
+        return modelName.equals(RecommendationStore.normalize(item.path("name").asText("")));
+    }
+
+    private static boolean conflicts(JsonNode mine, JsonNode theirs) {
+        return mine.isIntegralNumber() && theirs.isIntegralNumber() && mine.asLong() != theirs.asLong();
+    }
+
+    private static int indexOfId(JsonNode structured, String field, JsonNode value, boolean[] used) {
+        if (value == null || !value.isIntegralNumber()) return -1;
+        for (int i = 0; i < structured.size(); i++) {
+            if (used[i]) continue;
+            JsonNode candidate = structured.get(i).path(field);
+            if (candidate.isIntegralNumber() && candidate.asLong() == value.asLong()) return i;
+        }
+        return -1;
     }
 
     private static int countByName(JsonNode nodes, String name) {
@@ -441,15 +494,6 @@ public class OpenAiClient implements AiClient {
             if (name.equals(RecommendationStore.normalize(node.path("name").asText("")))) count++;
         }
         return count;
-    }
-
-    private static JsonNode findModelResult(JsonNode structured, String field, JsonNode value) {
-        if (value == null || !value.isIntegralNumber()) return null;
-        for (JsonNode model : structured) {
-            JsonNode candidate = model.path(field);
-            if (candidate.isIntegralNumber() && candidate.asLong() == value.asLong()) return model;
-        }
-        return null;
     }
 
     /** 모델에게서 받는 것은 {@code ruleKeyword} 와 {@code attributes} 뿐이다. */
@@ -495,7 +539,7 @@ public class OpenAiClient implements AiClient {
      * 되물을 것을 만든다 — 07 이 원래 그리려던 흐름이다.
      */
     private ObjectNode attributesOf(JsonNode model, JsonNode confirmed, JsonNode input) {
-        Set<String> stated = statedValues(
+        Map<String, Set<Double>> stated = statedValues(
                 input.path("question").isTextual() ? input.path("question").asText() : "");
         ObjectNode attributes = json.newObject();
 
@@ -507,8 +551,7 @@ public class OpenAiClient implements AiClient {
             }
 
             JsonNode fromModel = model.path(field);
-            if (fromModel.isNumber()
-                    && stated.contains(numberToken(fromModel.asDouble(), ATTRIBUTE_UNITS.get(field)))) {
+            if (fromModel.isNumber() && stated(stated, field, fromModel.asDouble())) {
                 putNumber(attributes, field, fromModel.asDouble());
             } else {
                 if (fromModel.isNumber()) {
@@ -523,28 +566,36 @@ public class OpenAiClient implements AiClient {
     /**
      * 질문에서 {@code <숫자><단위>} 를 <b>토큰으로</b> 뽑는다. 공백과 대소문자는 무시한다.
      *
-     * <p><b>부분 문자열로 찾으면 안 된다.</b> {@code "170Wh"} 안에는 {@code "70wh"} 가 들어 있어서,
-     * 모델이 {@code batteryWh: 70} 을 내면 사용자가 말한 값으로 인정돼 버린다. 시드 기준 170Wh 는
-     * 전면 금지인데 반입 가능으로 뒤집힌다 — 리뷰에서 재현된 결함이다.
+     * <p><b>큰 수의 일부부터 다시 맞추면 안 된다.</b> 앞을 보지 않으면 {@code "1,100Wh"} 에서
+     * {@code "1,"} 를 건너뛰고 {@code "100wh"} 를 집는다. 모델이 {@code 100} 을 내면 사용자가
+     * 말한 값으로 인정돼, 시드 기준 전면 금지인 1100Wh 가 반입 가능이 된다 — 리뷰에서 재현된
+     * 결함이다. {@code "170Wh"} 안의 {@code "70wh"} 도 같은 종류다.
      *
-     * <p>{@code \\d+} 가 붙어 있는 숫자를 통째로 집으므로 {@code "170wh"} 는 {@code 170} 하나만
-     * 나온다. 단위는 긴 것부터 본다 — {@code mah} 를 {@code m} + {@code ah} 로 쪼개지 않기 위해서다.
+     * <p>그래서 숫자 앞에 <b>숫자·쉼표·마침표가 오면 집지 않는다.</b> 쉼표 표기를 새로 지원하는
+     * 대신 그 수 전체를 미확인으로 둔다 — 되묻는 편이 안전하고, 규정이 걸리는 값일수록 더 그렇다.
+     *
+     * <p>값은 문자열이 아니라 <b>수로</b> 담는다. {@code "100.0Wh"} 와 모델의 {@code 100} 은
+     * 같은 값인데 문자열로 견주면 다르다고 버린다.
      */
-    private static final Pattern STATED_VALUE = Pattern.compile("(\\d+(?:\\.\\d+)?)(mah|wh|ml|cm)");
+    private static final Pattern STATED_VALUE =
+            Pattern.compile("(?<![\\d.,])(\\d+(?:\\.\\d+)?)(mah|wh|ml|cm)");
 
-    private static Set<String> statedValues(String question) {
-        Set<String> tokens = new LinkedHashSet<>();
+    private static Map<String, Set<Double>> statedValues(String question) {
+        Map<String, Set<Double>> byUnit = new LinkedHashMap<>();
         Matcher m = STATED_VALUE.matcher(question.replaceAll("\\s+", "").toLowerCase(Locale.ROOT));
-        while (m.find()) tokens.add(m.group(1) + m.group(2));
-        return tokens;
+        while (m.find()) {
+            byUnit.computeIfAbsent(m.group(2), unit -> new LinkedHashSet<>())
+                    .add(Double.parseDouble(m.group(1)));
+        }
+        return byUnit;
     }
 
-    private static String numberToken(double value, String unit) {
-        String number = value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
-        return number + unit;
+    private static boolean stated(Map<String, Set<Double>> statedValues, String field, double value) {
+        return statedValues.getOrDefault(ATTRIBUTE_UNITS.get(field), Set.of()).contains(value);
     }
 
     private static void putNumber(ObjectNode node, String field, double value) {
+
 
         // 20000.0 이 아니라 20000 으로 남긴다. 07 예시와 Mock 픽스처가 정수이고,
         // 후속 턴이 이 값을 그대로 items[] 로 되보내므로 모양이 오가며 달라지지 않게 한다.

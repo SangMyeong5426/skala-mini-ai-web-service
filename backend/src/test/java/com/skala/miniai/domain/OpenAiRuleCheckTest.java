@@ -306,4 +306,88 @@ class OpenAiRuleCheckTest {
             assertThat(r.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
         }
     }
+
+    /**
+     * {@code "1,100Wh"} 에서 {@code "1,"} 을 건너뛰고 {@code "100wh"} 를 집으면, 모델이 낸
+     * {@code 100} 이 사용자 확인값이 된다. 시드 기준 1100Wh 는 전면 금지다.
+     *
+     * <p>쉼표 표기를 새로 지원하지 않는다 — 그 수 전체를 미확인으로 두고 되묻는다.
+     */
+    @Test
+    void 쉼표가_섞인_숫자의_뒷부분을_확인값으로_쓰지_않는다() {
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":100,"batteryMah":null,"bladeCm":null}}]}
+                """, """
+                {"results":[{"reason":"확인이 필요합니다."}],
+                 "answer":"확인이 필요합니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+                 "followUpQuestion":"배터리 라벨에 표시된 정격 Wh는 얼마인가요?"}
+                """);
+
+        JsonNode battery = client.run(Codes.JobType.RULE_CHECK, 7L, json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"1,100Wh 보조배터리 기내 되나요?","items":[]}
+                """)).path("results").path(0);
+
+        assertThat(battery.path("attributes").path("batteryWh").isNull())
+                .as("1,100Wh 의 뒷부분 100 을 확인값으로 쓰면 전면 금지가 반입 가능이 된다")
+                .isTrue();
+        assertThat(battery.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
+    }
+
+    /** 소수 표기와 정수는 같은 값이다. 문자열로 견주면 멀쩡한 답을 버린다. */
+    @Test
+    void 소수_표기와_정수를_같은_값으로_본다() {
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":null,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":100,"batteryMah":null,"bladeCm":null}}]}
+                """, """
+                {"results":[{"reason":"100Wh 이하라 기내 반입만 가능합니다."}],
+                 "answer":"기내로 가져가세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+                 "followUpQuestion":null}
+                """);
+
+        JsonNode battery = client.run(Codes.JobType.RULE_CHECK, 7L, json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"100.0Wh 보조배터리 기내 되나요?","items":[]}
+                """)).path("results").path(0);
+
+        assertThat(battery.path("attributes").path("batteryWh").asInt()).isEqualTo(100);
+        assertThat(battery.path("verdict").asText()).isEqualTo("CABIN_OK");
+    }
+
+    /**
+     * 모델이 {@code itemId} 를 틀리게 적으면 <b>한 응답이 두 물품에 붙는다.</b>
+     * 배터리에는 ID 로, 가위에는 유일한 이름으로 붙어 둘 다 가위 규정을 받았다.
+     */
+    @Test
+    void 식별값이_어긋난_응답은_두_물품_어디에도_쓰지_않는다() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,
+                 "question":"200Wh 보조배터리랑 날 길이 7cm 가위 기내 되나요?","items":[
+                  {"itemId":1,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":200,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":2,"detectionId":null,"name":"가위","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":7}}]}
+                """);
+
+        // 모델이 배터리를 빠뜨리고, 가위 결과에 배터리의 itemId 를 잘못 적었다.
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":1,"detectionId":null,"name":"가위","qty":1,"ruleKeyword":"가위",
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":7}}]}
+                """, TWO_REASONS);
+
+        JsonNode results = client.run(Codes.JobType.RULE_CHECK, 7L, input).path("results");
+
+        JsonNode battery = byName(results, "보조배터리");
+        assertThat(battery.path("ruleKeyword").isNull())
+                .as("200Wh 배터리에 가위 규정이 붙으면 전면 금지가 위탁 가능이 된다")
+                .isTrue();
+        assertThat(battery.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+
+        // 어긋난 응답은 가위에도 쓰지 않는다 — 그 응답 자체를 믿을 수 없다.
+        assertThat(byName(results, "가위").path("ruleKeyword").isNull()).isTrue();
+        assertThat(byName(results, "가위").path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+    }
 }
