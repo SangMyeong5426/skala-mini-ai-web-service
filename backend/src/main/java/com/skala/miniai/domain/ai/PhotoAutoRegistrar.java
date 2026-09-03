@@ -2,6 +2,7 @@ package com.skala.miniai.domain.ai;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,9 +56,12 @@ public class PhotoAutoRegistrar {
      *
      * @param tripId     대상 여행
      * @param detections 이번 작업이 저장한 인식 결과
+     * @return 인식 결과 id → 연결된 내 목록 항목 id. 이름이 없어 항목을 만들지 않은 인식은 빠진다.
+     *         챗봇이 사진을 붙였을 때 그 물품의 반입 판정을 <b>내 항목에</b> 남기려면 이 연결이 필요하다.
      */
-    public void register(Long tripId, List<DetectedObject> detections) {
-        if (detections.isEmpty()) return;
+    public Map<Long, Long> register(Long tripId, List<DetectedObject> detections) {
+        Map<Long, Long> linkedItemIds = new LinkedHashMap<>();
+        if (detections.isEmpty()) return linkedItemIds;
 
         // 같은 이름을 가진 내 항목을 한 번에 찾아 둔다. 물품마다 조회하면 N+1 이다.
         Map<String, ChecklistItem> byName = new HashMap<>();
@@ -73,6 +77,7 @@ public class PhotoAutoRegistrar {
             List<ItemDetection> existing = links.findByDetectedObjectId(detection.getId());
             if (!existing.isEmpty()) {
                 existing.forEach(link -> reflect(link.getChecklistItemId(), detection));
+                linkedItemIds.put(detection.getId(), existing.get(0).getChecklistItemId());
                 continue;
             }
 
@@ -90,7 +95,9 @@ public class PhotoAutoRegistrar {
             }
 
             links.save(new ItemDetection(target.getId(), detection.getId(), DEFAULT_MATCH, false));
+            linkedItemIds.put(detection.getId(), target.getId());
         }
+        return linkedItemIds;
     }
 
     /**

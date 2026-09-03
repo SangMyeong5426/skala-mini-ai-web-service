@@ -1,6 +1,8 @@
 package com.skala.miniai.domain.ai;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -14,6 +16,8 @@ import com.skala.miniai.common.ApiException;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.CurrentUser;
 import com.skala.miniai.common.Json;
+import com.skala.miniai.domain.checklist.ChecklistItemRepository;
+import com.skala.miniai.domain.photo.DetectedObjectRepository;
 import com.skala.miniai.domain.photo.TripPhoto;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
 import com.skala.miniai.domain.trip.Trip;
@@ -39,10 +43,14 @@ public class AiJobService {
     private final CurrentUser currentUser;
     private final Json json;
     private final RuleCheckContract ruleCheckContract;
+    private final ChecklistItemRepository items;
+    private final DetectedObjectRepository detections;
     private final ApplicationEventPublisher events;
     private final long pollAfterMs;
 
-    public AiJobService(AiJobRepository jobs, TripPhotoRepository photos, AiInputBuilder inputBuilder,
+    public AiJobService(AiJobRepository jobs, TripPhotoRepository photos,
+                        ChecklistItemRepository items, DetectedObjectRepository detections,
+                        AiInputBuilder inputBuilder,
                         TripService tripService, CurrentUser currentUser, Json json,
                         RuleCheckContract ruleCheckContract,
                         ApplicationEventPublisher events,
@@ -54,6 +62,8 @@ public class AiJobService {
         this.currentUser = currentUser;
         this.json = json;
         this.ruleCheckContract = ruleCheckContract;
+        this.items = items;
+        this.detections = detections;
         this.events = events;
         this.pollAfterMs = pollAfterMs;
     }
@@ -150,8 +160,67 @@ public class AiJobService {
                 if (clientInput == null || clientInput.isNull()) {
                     throw ApiException.badRequest("input 은 필수입니다.", "input");
                 }
-                yield ruleCheckContract.validateInput(clientInput);
+                yield checkOwnership(trip, ruleCheckContract.validateInput(clientInput));
             }
         };
+    }
+
+    /**
+     * 07 「로그인과 AI 작업의 경계」 — <b>남의 자료를 가리키지 못하게 막는다.</b>
+     *
+     * <p>지금까지 {@code RULE_CHECK} 는 모양만 검사하고 {@code itemId}·{@code detectionId} 가
+     * 누구 것인지 보지 않았다. 07 이 <i>"tripId·photoIds·itemIds·추천 jobId가 본인 자료이며 서로
+     * 같은 여행인지 확인한다"</i> 고 정한 부분이라 여기서 채운다. 사진 첨부가 생기면서 더 중요해졌다 —
+     * 붙인 사진의 인식 결과가 <b>내 체크리스트에 자동 등록</b>되기 때문이다.
+     *
+     * <p>없는 것과 남의 것을 구분하지 않고 모두 {@code 404} 로 답한다. 구분하면 남의 여행에 어떤
+     * id 가 있는지 세어 볼 수 있다.
+     */
+    private JsonNode checkOwnership(Trip trip, JsonNode input) {
+        List<Long> photoIds = RuleCheckContract.attachedPhotoIds(input);
+
+        if (!photoIds.isEmpty() && trip == null) {
+            // 사진을 저장할 곳도, 인식 물품을 등록할 곳도 없다.
+            // trip_photos.trip_id 와 checklist_items.trip_id 가 NOT NULL 이다.
+            throw ApiException.badRequest(
+                    "사진을 붙이려면 여행을 먼저 선택해 주세요.", "tripId");
+        }
+
+        if (trip == null) {
+            // 여행 없이 묻는 챗봇이다. 가리킬 내 자료가 없으므로 id 도 없어야 한다.
+            for (JsonNode item : input.path("items")) {
+                if (!item.path("itemId").isNull() || !item.path("detectionId").isNull()) {
+                    throw ApiException.badRequest(
+                            "여행 없이 묻는 질문에는 itemId·detectionId 를 넣을 수 없습니다.", "input.items");
+                }
+            }
+            return input;
+        }
+
+        Set<Long> ownPhotoIds = new LinkedHashSet<>();
+        photos.findByTripIdOrderById(trip.getId()).forEach(photo -> ownPhotoIds.add(photo.getId()));
+        for (Long photoId : photoIds) {
+            if (!ownPhotoIds.contains(photoId)) throw ApiException.notFound("사진", photoId);
+        }
+
+        Set<Long> ownItemIds = new LinkedHashSet<>();
+        items.findByTripIdOrderById(trip.getId()).forEach(item -> ownItemIds.add(item.getId()));
+        Set<Long> ownDetectionIds = new LinkedHashSet<>();
+        if (!ownPhotoIds.isEmpty()) {
+            detections.findByPhotoIdInOrderById(ownPhotoIds)
+                    .forEach(detection -> ownDetectionIds.add(detection.getId()));
+        }
+
+        for (JsonNode item : input.path("items")) {
+            JsonNode itemId = item.path("itemId");
+            if (!itemId.isNull() && !ownItemIds.contains(itemId.asLong())) {
+                throw ApiException.notFound("체크리스트 항목", itemId.asLong());
+            }
+            JsonNode detectionId = item.path("detectionId");
+            if (!detectionId.isNull() && !ownDetectionIds.contains(detectionId.asLong())) {
+                throw ApiException.notFound("인식 물품", detectionId.asLong());
+            }
+        }
+        return input;
     }
 }

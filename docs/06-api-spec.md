@@ -396,6 +396,12 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 | `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다.** 챗봇(UC-08 · 화면 `S-09`)은 여행을 등록하지 않아도 쓸 수 있는 보조 흐름이다. 나머지 `jobType` 은 필수 |
 | `input` | ✅ | `jobType` 별 스키마는 `07-ai-ready.md` |
 
+**챗봇은 사진을 붙일 수 있다(S-09).** `input.photoIds` 에 `trip_photos.id` 를 최대 5개까지 넣는다.
+**선택 필드라 붙이지 않으면 보내지 않는다.** 붙이면 `tripId` 가 필수다 — 서버가 사진을 인식해
+`detected_objects` 에 저장하고 내 목록에 `PREPARED` 로 자동 등록한 뒤 그 물품까지 함께 판정한다.
+여행 없이 붙이면 `400`, 남의 사진이면 `404` 다. 사진에서 나온 물품은 `results[]` 의
+`input.items` **뒤에** 붙으므로 **`results` 가 `items` 보다 길 수 있다.**
+
 **판정은 Mock 이 아니라 규칙 엔진이 낸다.** `AI_PROVIDER` 와 무관하게 `verdict`·`ruleId`·
 `conditionNote`·`sourceUrl`·`checkedAt` 은 `transport_rules` 에서 나온다. 아래 표의 판정도
 그 결과이고, Mock 이 정하는 것은 **물품과 속성을 어떻게 구조화하느냐**까지다.
