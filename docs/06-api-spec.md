@@ -401,9 +401,13 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 있어야 한다 — 서버가 사진을 인식해 `detected_objects` 에 저장하고 내 목록에 `PREPARED` 로
 자동 등록한 뒤 그 물품까지 함께 판정한다. 여행 없이 붙이면 `400`, 남의 사진이면 `404` 다.
 
-**서버는 인식한 물품을 `items[]` 뒤에 이어 붙여 `input_payload` 를 다시 쓴다.** 그래서
-`GET /api/ai-jobs/{jobId}` 의 `input` 은 실제로 판정한 그대로이고, `results` 와 `items` 의
-**개수·순서·식별값은 여전히 정확히 일치한다.**
+**서버는 인식한 물품을 `items[]` 뒤에 이어 붙여 `ai_jobs.input_payload` 를 다시 쓴다.**
+이미 문맥에 있는 인식 물품은 새 id 로 옮기기만 하고 다시 붙이지 않는다. 그래서 저장된
+입력이 실제로 판정한 그대로이고, `results` 와 `items` 의 **개수·순서·식별값이 정확히 일치한다.**
+
+**이 기록은 DB 안에만 있다.** `GET /api/ai-jobs/{jobId}` 응답에는 `input` 필드가 없다
+(`jobId` · `jobType` · `status` · `output` · `modelName` · `errorMessage` · 시각 · `pollAfterMs`).
+화면이 입력까지 조회해야 한다면 **FE 담당자와 응답 계약을 먼저 정한다** — 여기서 임의로 넓히지 않는다.
 
 **판정은 Mock 이 아니라 규칙 엔진이 낸다.** `AI_PROVIDER` 와 무관하게 `verdict`·`ruleId`·
 `conditionNote`·`sourceUrl`·`checkedAt` 은 `transport_rules` 에서 나온다. 아래 표의 판정도
