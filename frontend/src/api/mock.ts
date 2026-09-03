@@ -176,6 +176,11 @@ const jobs = new Map<number, {
   question?: string
   /** 06:278 — ai_jobs.user_id == 세션 userId. 없으면 남의 작업을 폴링할 수 있다 */
   ownerId: number
+  /**
+   * 접수 당시의 입력 지문. 06:1026 — "현재 입력과 같은 결과만 반환한다".
+   * 없으면 체크리스트를 바꿔도 옛 무게가 계속 유효한 것처럼 남는다.
+   */
+  stamp?: string
   /** 완료 결과를 도메인에 한 번만 반영한다. 반복 GET 으로 중복 삽입하지 않는다. */
   applied: boolean
 }>()
@@ -239,6 +244,21 @@ function itemsOf(t: TripState): ChecklistItem[] {
   return t.items.map((i) => ({ ...i }))
 }
 
+/**
+ * 여행 상태의 지문.
+ *
+ * 06:1026 — 무게는 "현재 입력과 같은 결과" 만 낸다. 완료 여부·이름·수량·가방
+ * 정보가 하나라도 달라지면 옛 결과를 현재 값으로 쓰지 않는다.
+ */
+function stampOf(t: TripState): string {
+  const items = t.items
+    .map((i) => `${i.itemId}:${i.name}:${i.qty}:${i.checkStatus}`)
+    .sort()
+    .join('|')
+  const bag = `${t.detail.bagType ?? ''}:${t.detail.bagEmptyG ?? ''}:${t.detail.weightLimitG ?? ''}`
+  return `${bag}#${items}`
+}
+
 function completionRate(t: TripState): number {
   if (t.items.length === 0) return 0
   const done = t.items.filter((i) => i.checkStatus === 'PREPARED').length
@@ -281,14 +301,24 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
   const target = out.detections.map((d) => ({ ...d, photoId: map.get(d.photoId) ?? photoIds[0] }))
   const scope = new Set(photoIds)
 
-  // 대상 사진의 미승인 행과 그 연결을 먼저 걷어낸다.
-  const dropped = t.detections.filter((d) => scope.has(d.photoId) && !d.approved)
+  /*
+   * 재분석이면 대상 사진의 <b>손대지 않은</b> 행을 걷어낸다.
+   *
+   * 예전에는 `!approved` 를 기준으로 지웠다. 승인 게이트가 폐기돼 그 값은 이제
+   * 의미가 없고, 시드 인식은 approved:false 로 남아 있어서 <b>사후 수정한
+   * 것까지 지워졌다.</b> 이름을 고친 뒤 다시 분석하면 그 인식이 사라지고
+   * 원래 이름이 새 항목으로 되살아났다.
+   *
+   * 06:702 — 사용자가 사후 확인한 것은 이후 분석에서 보존한다.
+   */
+  const keep = (d: Detection) => t.confirmed.has(d.detectionId)
+  const dropped = t.detections.filter((d) => scope.has(d.photoId) && !keep(d))
   const touched = new Set<number>()
   for (const d of dropped) {
     for (const itemId of t.links.get(d.detectionId) ?? []) touched.add(itemId)
     t.links.delete(d.detectionId)
   }
-  t.detections = t.detections.filter((d) => !(scope.has(d.photoId) && !d.approved))
+  t.detections = t.detections.filter((d) => !(scope.has(d.photoId) && !keep(d)))
 
   for (const d of target) {
     if (t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)) continue
@@ -297,6 +327,8 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
      * 이름이 같은지로만 보면, S-04 에서 이름을 고친 뒤 다시 분석할 때 원래
      * 이름으로 하나 더 생긴다. 사후 확인된 인식이 그 사진에 이미 있으면 건너뛴다.
      */
+    // 사후 확인된 인식이 그 사진에 남아 있으면 같은 물건을 또 만들지 않는다.
+    // 이름은 사용자가 고쳤을 수 있으므로 이름으로 비교하지 않는다.
     if (t.detections.some((x) => x.photoId === d.photoId && t.confirmed.has(x.detectionId))) continue
     const detectionId = nextDetectionId++
     t.detections.push({
@@ -441,6 +473,8 @@ export function mockRequest(
       photoIds: Array.isArray(input.photoIds) ? (input.photoIds as number[]) : undefined,
       // 챗봇인지 물품 목록 호출인지 가르는 값. 07 이 출력을 다르게 정했다.
       question: typeof input.question === 'string' && input.question.trim() ? input.question : undefined,
+      // 접수 시점의 여행 상태를 찍어 둔다. 나중에 현재 상태와 비교한다.
+      stamp: target ? stampOf(target) : undefined,
       applied: false,
     })
     return delay(fx.AI_JOB_CREATED(jobType, jobId))
@@ -694,8 +728,12 @@ export function mockRequest(
      * 그때 WEIGHT_ESTIMATE 를 요청한다. 고정값을 늘 돌려주면 물품이 하나도 없는
      * 여행에도 5.5kg 이 떠서 화면의 누락을 가린다.
      */
-    const doneJob = (jobType: JobType) => [...jobs.values()].some(
-      (j) => j.jobType === jobType && j.tripId === t.detail.tripId && j.left === 0 && j.applied,
+    // 06:1026 — 접수 당시의 지문이 지금과 같아야 현재 결과다.
+    // "완료된 작업이 있다" 만 보면 체크리스트를 바꿔도 옛 값이 남는다.
+    const now = stampOf(t)
+    const fresh = (jobType: JobType) => [...jobs.values()].some(
+      (j) => j.jobType === jobType && j.tripId === t.detail.tripId
+        && j.left === 0 && j.applied && j.stamp === now,
     )
 
     return delay({
@@ -706,8 +744,8 @@ export function mockRequest(
         completionRate: completionRate(t),
         unacceptedRequiredCount: unacceptedRequired(t),
       },
-      weight: doneJob('WEIGHT_ESTIMATE') ? fx.INSPECTION.weight : null,
-      customs: doneJob('RULE_CHECK') ? fx.INSPECTION.customs : null,
+      weight: fresh('WEIGHT_ESTIMATE') ? fx.INSPECTION.weight : null,
+      customs: fresh('RULE_CHECK') ? fx.INSPECTION.customs : null,
       notice: fx.INSPECTION.notice,
     })
   }

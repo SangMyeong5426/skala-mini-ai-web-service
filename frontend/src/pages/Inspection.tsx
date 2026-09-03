@@ -5,7 +5,7 @@ import { AiPending, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { pct } from '../lib/format'
-import type { Inspection, PhotoStatus, RuleVerdict, WeightVerdict } from '../types/api'
+import type { Inspection, PhotoStatus, RuleVerdict, TripDetail, WeightVerdict } from '../types/api'
 
 /**
  * S-06 검수 결과 ★AI — 준비 상태 · 예상 무게 · 반입 판정을 한 화면에서 본다.
@@ -68,22 +68,54 @@ export default function InspectionPage() {
       if (!alive || !r || kicked.current) return
       kicked.current = true
 
-      const items = [
-        ...(r.readiness?.prepared ?? []),
-        ...(r.readiness?.unprepared ?? []),
-      ].map((i) => ({ name: i.name, qty: i.qty }))
+      // 07 의 두 입력 스키마는 서로 다르다. 여행 정보가 있어야 채울 수 있고,
+      // 없으면 요청을 걸지 않는다 — 07 이 minLength·enum 을 요구한다.
+      const trip = await api.get<TripDetail>(`/trips/${tripId}`).catch(() => null)
+      if (!alive || !trip) return
 
-      if (!r.weight && items.length > 0) {
-        void weightJob.start('WEIGHT_ESTIMATE', { items }, Number(tripId)).then((done) => {
-          if (done && alive) void load()
-        })
+      const prepared = r.readiness?.prepared ?? []
+      const unprepared = r.readiness?.unprepared ?? []
+
+      /*
+       * 07:927 WEIGHT_ESTIMATE required — bagType · bagEmptyG · weightLimitG ·
+       * items · excluded. items 는 <b>PREPARED 만</b>이고 미완료는 excluded 로
+       * 분리한다(07:900 "내 목록의 미완료 항목만 excluded 에 UNCHECKED 로").
+       */
+      if (!r.weight && prepared.length > 0) {
+        void weightJob.start('WEIGHT_ESTIMATE', {
+          bagType: trip.bagType ?? 'CARRY_ON',
+          bagEmptyG: trip.bagEmptyG ?? 0,
+          weightLimitG: trip.weightLimitG ?? 0,
+          items: prepared.map((i) => ({ itemId: i.itemId, name: i.name, qty: i.qty })),
+          excluded: unprepared.map((i) => ({
+            name: i.name,
+            reason: i.photoStatus === 'NOT_IN_PHOTO' ? 'NOT_IN_PHOTO' : 'UNCHECKED',
+          })),
+        }, Number(tripId)).then((done) => { if (done && alive) void load() })
       }
-      if (!r.customs && items.length > 0) {
+
+      /*
+       * 07:1436 RULE_CHECK required — transport · airline · question · items.
+       * 항목마다 itemId · detectionId · name · qty · attributes 가 필요하다.
+       *
+       * <b>이동수단은 이 여행의 것</b>이다. FLIGHT 로 박아 두면 기차·버스
+       * 여행도 항공 규정으로 판정한다 — 그건 여행 없는 챗봇의 기본값이다.
+       */
+      const all = [...prepared, ...unprepared]
+      if (!r.customs && all.length > 0) {
         void ruleJob.start('RULE_CHECK', {
-          transport: 'FLIGHT', airline: null, question: null, items,
-        }, Number(tripId)).then((done) => {
-          if (done && alive) void load()
-        })
+          transport: trip.transport,
+          airline: trip.airline ?? null,
+          question: null,
+          items: all.map((i) => ({
+            itemId: i.itemId,
+            detectionId: null,
+            name: i.name,
+            qty: i.qty,
+            // 속성은 서버가 채운다. FE 는 모르는 값을 지어내지 않는다.
+            attributes: { capacityMl: null, batteryWh: null, batteryMah: null, bladeCm: null },
+          })),
+        }, Number(tripId)).then((done) => { if (done && alive) void load() })
       }
     })()
     return () => { alive = false }
