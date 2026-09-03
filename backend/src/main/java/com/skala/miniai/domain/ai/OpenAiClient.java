@@ -462,15 +462,19 @@ public class OpenAiClient implements AiClient {
     /**
      * 07 이 "그대로 되돌려 보낸다" 고 정한 값들이 서로 맞는가.
      *
-     * <p>양쪽에 다 있는 값만 견준다. 질문에서 뽑은 물품은 {@code itemId}·{@code detectionId} 가
-     * 없으므로 이름만 본다.
+     * <p>id 는 양쪽에 다 있을 때만 견준다. 질문에서 뽑은 물품은 둘 다 없기 때문이다.
+     *
+     * <p><b>이름은 반드시 있어야 한다.</b> 비어 있으면 "일치" 로 봐주던 것이 구멍이었다 —
+     * 모델이 틀린 {@code itemId} 에 이름을 비워 보내면 id 충돌 검사만 남는데, 그 id 가 바로
+     * 틀린 값이라 아무것도 걸리지 않는다. 200Wh 배터리에 가위 규정이 붙었다.
+     * 07 이 이름을 "그대로 되돌려 보낸다" 고 정했으므로 없으면 그 응답을 믿지 않는다.
      */
     private static boolean identifiersAgree(JsonNode item, JsonNode model) {
         if (conflicts(item.path("itemId"), model.path("itemId"))) return false;
         if (conflicts(item.path("detectionId"), model.path("detectionId"))) return false;
 
         String modelName = RecommendationStore.normalize(model.path("name").asText(""));
-        if (modelName.isEmpty()) return true;
+        if (modelName.isEmpty()) return false;
         return modelName.equals(RecommendationStore.normalize(item.path("name").asText("")));
     }
 
@@ -478,14 +482,24 @@ public class OpenAiClient implements AiClient {
         return mine.isIntegralNumber() && theirs.isIntegralNumber() && mine.asLong() != theirs.asLong();
     }
 
+    /**
+     * 이 id 를 가진 응답이 <b>하나뿐일 때만</b> 그 자리를 돌려준다.
+     *
+     * <p>여럿이면 모호하다. 모델이 두 응답에 같은 {@code itemId} 를 적으면 먼저 나온 것이
+     * 뽑혀 <b>100Wh 와 200Wh 중 아무거나</b> 확정됐다. 이름까지 같으면 충돌 검사도 못 잡는다.
+     * 이름 경로와 같은 규칙으로 — 유일하지 않으면 보류한다.
+     */
     private static int indexOfId(JsonNode structured, String field, JsonNode value, boolean[] used) {
         if (value == null || !value.isIntegralNumber()) return -1;
+
+        int found = -1;
         for (int i = 0; i < structured.size(); i++) {
-            if (used[i]) continue;
             JsonNode candidate = structured.get(i).path(field);
-            if (candidate.isIntegralNumber() && candidate.asLong() == value.asLong()) return i;
+            if (!candidate.isIntegralNumber() || candidate.asLong() != value.asLong()) continue;
+            if (found >= 0) return -1;   // 같은 id 가 둘 이상이다
+            found = i;
         }
-        return -1;
+        return found >= 0 && !used[found] ? found : -1;
     }
 
     private static int countByName(JsonNode nodes, String name) {

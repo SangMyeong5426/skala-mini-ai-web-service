@@ -390,4 +390,67 @@ class OpenAiRuleCheckTest {
         assertThat(byName(results, "가위").path("ruleKeyword").isNull()).isTrue();
         assertThat(byName(results, "가위").path("verdict").asText()).isEqualTo("ASK_AIRLINE");
     }
+
+    /**
+     * 이름을 비워 보내면 id 충돌 검사만 남는데, 그 id 가 바로 틀린 값이라 아무것도 걸리지 않았다.
+     * 빈 이름을 "일치" 로 봐주던 것이 구멍이었다.
+     */
+    @Test
+    void 이름이_빈_응답은_식별값이_맞는_것으로_보지_않는다() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,
+                 "question":"200Wh 보조배터리랑 날 길이 7cm 가위 기내 되나요?","items":[
+                  {"itemId":1,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":200,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":2,"detectionId":null,"name":"가위","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":7}}]}
+                """);
+
+        // 가위 결과 하나에 배터리의 itemId 를 적고 이름은 비웠다.
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":1,"detectionId":null,"name":"","qty":1,"ruleKeyword":"가위",
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":7}}]}
+                """, TWO_REASONS);
+
+        JsonNode battery = byName(client.run(Codes.JobType.RULE_CHECK, 7L, input).path("results"), "보조배터리");
+        assertThat(battery.path("ruleKeyword").isNull())
+                .as("200Wh 배터리에 가위 규정이 붙으면 전면 금지가 위탁 가능이 된다")
+                .isTrue();
+        assertThat(battery.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+    }
+
+    /**
+     * 모델이 두 응답에 같은 {@code itemId} 를 적으면 먼저 나온 것이 뽑혀
+     * <b>100Wh 와 200Wh 중 아무거나</b> 확정됐다. 이름까지 같아 충돌 검사도 못 잡는다.
+     */
+    @Test
+    void 같은_id_를_가진_응답이_둘이면_판정을_보류한다() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,
+                 "question":"첫 번째 보조배터리는 200Wh, 두 번째는 100Wh예요. 기내 되나요?","items":[
+                  {"itemId":1,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":2,"detectionId":null,"name":"보조배터리","qty":1,
+                   "attributes":{"capacityMl":null,"batteryWh":null,"batteryMah":null,"bladeCm":null}}]}
+                """);
+
+        // 두 결과 모두 itemId 를 1 로 잘못 적었다.
+        givenModelReturns("""
+                {"results":[
+                  {"itemId":1,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":100,"batteryMah":null,"bladeCm":null}},
+                  {"itemId":1,"detectionId":null,"name":"보조배터리","qty":1,"ruleKeyword":"보조배터리",
+                   "attributes":{"capacityMl":null,"batteryWh":200,"batteryMah":null,"bladeCm":null}}]}
+                """, TWO_REASONS);
+
+        JsonNode results = client.run(Codes.JobType.RULE_CHECK, 7L, input).path("results");
+        assertThat(results).hasSize(2);
+        for (JsonNode r : results) {
+            assertThat(r.path("attributes").path("batteryWh").isNull())
+                    .as("어느 응답이 어느 물품인지 모른다. 먼저 나온 100Wh 를 쓰면 200Wh 가 사라진다")
+                    .isTrue();
+            assertThat(r.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        }
+    }
 }
