@@ -36,8 +36,10 @@ SKALA Full-Stack Engineering의 **3일짜리 Mini-project**다. 운영 서비스
     날씨는 Open-Meteo에서 읽어 프롬프트에 넣는다(키 불필요).
 
   이 서비스의 약속이 그 둘이라 Mock으로는 설계 타당성을 보일 수 없어서 실제로 붙였다.
-  `WEIGHT_ESTIMATE`·`RULE_CHECK`는 07이 **애초에 AI를 두지 않기로 한 자리**다(무게는 산식,
-  반입 판정은 규칙 엔진). `openai`에서도 Mock 그대로 둔다.
+- **`WEIGHT_ESTIMATE`·`RULE_CHECK`는 아직 Mock이다.** 07이 이 둘에도 AI 자리를 뒀지만
+  **판정과 합산은 AI가 아니다** — 무게 합산은 산식, 반입 판정은 규칙 엔진(`transport_rules`)이
+  정본이고, AI는 `RULE_CHECK`의 속성 구조화·이유 설명과 `WEIGHT_ESTIMATE`의 무게 보정만 맡는다.
+  이 경계를 지운 채 AI에게 판정을 시키지 않는다.
 - **`openai`는 회사가 아니라 프로토콜 이름이다.** 실제로 어디로 나갈지는 `AI_BASE_URL`이 정한다.
   팀은 무료 티어를 쓰려고 Gemini의 OpenAI 호환 엔드포인트를 가리켜 두었다
   (`backend/.env.example`). 코드는 어느 쪽인지 모르고, 알 필요도 없다.

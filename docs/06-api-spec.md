@@ -396,6 +396,10 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 | `tripId` | — | **`RULE_CHECK` 는 여행 없이도 된다.** 챗봇(UC-08 · 화면 `S-09`)은 여행을 등록하지 않아도 쓸 수 있는 보조 흐름이다. 나머지 `jobType` 은 필수 |
 | `input` | ✅ | `jobType` 별 스키마는 `07-ai-ready.md` |
 
+**판정은 Mock 이 아니라 규칙 엔진이 낸다.** `AI_PROVIDER` 와 무관하게 `verdict`·`ruleId`·
+`conditionNote`·`sourceUrl`·`checkedAt` 은 `transport_rules` 에서 나온다. 아래 표의 판정도
+그 결과이고, Mock 이 정하는 것은 **물품과 속성을 어떻게 구조화하느냐**까지다.
+
 `RULE_CHECK` 챗봇 Mock은 S-09의 대표 질문 3개를 지원한다. 질문 문구의 공백·영문 대소문자는
 달라도 되지만 물품과 기준값을 함께 포함해야 한다. 그 밖의 질문은 규정을 지어내지 않고
 `ASK_AIRLINE`으로 응답한다. 내부 `input`·`output` 필드는 07의 스키마를 그대로 사용한다.

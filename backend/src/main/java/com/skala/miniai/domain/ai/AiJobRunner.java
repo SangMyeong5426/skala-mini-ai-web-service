@@ -23,6 +23,7 @@ import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
 import com.skala.miniai.domain.checklist.ItemRuleCheck;
 import com.skala.miniai.domain.checklist.ItemRuleCheckRepository;
+import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.DetectedObject;
 import com.skala.miniai.domain.photo.DetectedObjectRepository;
 
@@ -55,13 +56,14 @@ public class AiJobRunner {
     private final ItemRuleCheckRepository ruleChecks;
     private final PhotoAutoRegistrar autoRegistrar;
     private final RuleCheckContract ruleCheckContract;
+    private final RuleEngine ruleEngine;
     private final Json json;
     private final long mockDelayMs;
 
     public AiJobRunner(AiJobRepository jobs, AiJobService jobService, AiClient aiClient,
                        DetectedObjectRepository detections, ChecklistItemRepository items,
                        ItemRuleCheckRepository ruleChecks, PhotoAutoRegistrar autoRegistrar, Json json,
-                       RuleCheckContract ruleCheckContract,
+                       RuleCheckContract ruleCheckContract, RuleEngine ruleEngine,
                        @Value("${app.ai.mock-delay-ms:0}") long mockDelayMs) {
         this.jobs = jobs;
         this.jobService = jobService;
@@ -71,6 +73,7 @@ public class AiJobRunner {
         this.ruleChecks = ruleChecks;
         this.autoRegistrar = autoRegistrar;
         this.ruleCheckContract = ruleCheckContract;
+        this.ruleEngine = ruleEngine;
         this.json = json;
         this.mockDelayMs = mockDelayMs;
     }
@@ -89,6 +92,9 @@ public class AiJobRunner {
             JsonNode input = json.read(job.getInputPayload());
             JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
+                // 07 「누가 채우나」 — 판정은 모델 몫이 아니다. 모델·Mock 이 낸 verdict·ruleId 는
+                // 버리고 transport_rules 로 다시 매긴다. 검증은 그다음이라 계약이 최종값을 본다.
+                ruleEngine.applyTo(input, output);
                 ruleCheckContract.validateOutput(input, output);
             }
 
