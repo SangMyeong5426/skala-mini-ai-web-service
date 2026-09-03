@@ -14,8 +14,8 @@ export interface ApiError {
 
 // ── 여행 (S-01 · S-02) ────────────────────────────────────
 export type TripStatus = 'DRAFT' | 'CONFIRMED' | 'DONE'
-export type Transport = 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAR' | 'SHIP'
-export type Purpose = 'TOUR' | 'BUSINESS' | 'STUDY' | 'ETC'
+export type Transport = 'FLIGHT' | 'TRAIN' | 'BUS' | 'CAR'
+export type Purpose = 'TOUR' | 'BUSINESS' | 'REST' | 'STUDY'
 export type BagType = 'CARRY_ON' | 'MEDIUM' | 'LARGE'
 
 export interface TripSummary {
@@ -50,14 +50,44 @@ export type ItemSource = 'RULE' | 'PHOTO' | 'AI' | 'USER'
 /** `MISSING` 은 없다. 사진에서 못 찾은 것을 누락으로 단정하지 않는다. */
 export type CheckStatus = 'UNCHECKED' | 'PREPARED' | 'NEEDS_CHECK' | 'NOT_IN_PHOTO'
 
+/**
+ * 사진 확인 상태. **`checkStatus` 와 별개다.**
+ * 실제로 챙겼는지(`checkStatus`)와 사진에서 확인됐는지(`photoStatus`)는 다른 축이다.
+ */
+export type PhotoStatus = 'CONFIRMED' | 'NEEDS_CHECK' | 'NOT_IN_PHOTO'
+
 export interface ChecklistItem {
   itemId: number
   name: string
   category: Category
   qty: number
   priority: Priority
+  /** 최초 등록 경로. PHOTO=사진 승인, AI·RULE=후보 채택, USER=직접 추가 */
   source: ItemSource
+  /** `PREPARED` 만 실제 완료다. 나머지는 미완료. */
   checkStatus: CheckStatus
+  photoStatus: PhotoStatus
+}
+
+/** `GET /api/trips/{tripId}/items` 응답. */
+export interface ItemsResponse {
+  items: ChecklistItem[]
+  /** 내 목록의 준비율. 화면에는 백분율로 반올림해 보여준다(0.857 → 86%). */
+  completionRate: number
+  /** 이 여행의 최신 완료된 PACKING_LIST 작업. 추천 후보를 여기서 읽는다. */
+  recommendationJobId: number | null
+  /** 아직 채택하지 않은 필수 후보 수. `null` 이면 "필수 추천 확인 전". */
+  unacceptedRequiredCount: number | null
+}
+
+/** `POST /api/trips/{tripId}/items` 요청. 추천 채택이면 `recommendation` 을 붙인다. */
+export interface ItemCreate {
+  name: string
+  category: Category
+  qty: number
+  priority: Priority
+  /** `candidateIndex` 는 완료된 추천 `output.items` 의 0부터 시작하는 위치다. */
+  recommendation?: { jobId: number; candidateIndex: number }
 }
 
 // ── 사진 · 인식 (S-03 · S-04) ─────────────────────────────
@@ -77,17 +107,19 @@ export interface Detection {
   qty: number
   confidence: number
   confidenceLevel: ConfidenceLevel
-  approved: boolean
   /** 보이지 않는 속성. `null` 이 아니면 S-04 「확인 필요」 묶음에 넣는다. */
   missingInfo?: string | null
   labelText?: string | null
   /** `PATCH /detections/{id}` 응답에만 온다. `GET /detections` 목록에는 없다. */
-  linkedItems?: { itemId: number; name: string; confirmedByUser: boolean }[]
+  /**
+   * 06:667 — GET 이 돌려주는 것은 <b>itemId 와 confirmedByUser 뿐</b>이다.
+   * name 은 없다. 화면에 이름을 보이려면 내 목록에서 itemId 로 찾아야 한다.
+   */
+  linkedItems?: { itemId: number; confirmedByUser: boolean }[]
 }
 
 /** 06 PATCH /detections — `matchedItemIds` 는 **전체 교체**다. 증분이 아니다. */
 export interface DetectionPatch {
-  approved?: boolean
   name?: string
   qty?: number
   /** `[]` 는 연결 해제. 필드를 빼면 연결을 건드리지 않는다. */
@@ -101,30 +133,21 @@ export type RuleVerdict =
   | 'CABIN_OK' | 'CHECKED_OK' | 'CHECKED_FORBIDDEN'
   | 'RESTRICTED' | 'NEED_MORE_INFO' | 'ASK_AIRLINE'
 
+/**
+ * 검수 결과의 내 목록 항목.
+ *
+ * <b>06:1018 — `prepared` 와 `unprepared` 는 내 목록을 완료 여부로 나눈다.</b>
+ * 예전에는 needsCheck·notInPhoto·extra 로 넷이었는데, 승인 게이트가 폐기되면서
+ * 두 묶음으로 정리됐다. 백엔드(InspectionDtos.Readiness)도 이 모양이다.
+ *
+ * `photoStatus` 는 준비 완료와 <b>독립된 축</b>이다 — 신뢰도가 낮아
+ * `NEEDS_CHECK` 여도 자동 등록된 PREPARED 면 완료로 센다(06:1019).
+ */
 export interface ReadyItem {
   itemId: number
   name: string
   qty: number
-}
-
-export interface NeedsCheckItem extends ReadyItem {
-  /** 유사 후보. 사용자가 어느 것인지 고른다. */
-  candidates: { detectionId: number; name: string; matchConfidence: number }[]
-}
-
-export interface NotInPhotoItem {
-  itemId: number
-  name: string
-  priority: Priority
-}
-
-/** 사진에는 있는데 체크리스트에 없던 승인 물품. */
-export interface ExtraItem {
-  detectionId: number
-  name: string
-  confidence: number
-  verdict?: RuleVerdict
-  missingInfo?: string | null
+  photoStatus: PhotoStatus
 }
 
 export interface Inspection {
@@ -132,11 +155,11 @@ export interface Inspection {
   /** 아직 계산 전이면 `null`. 프런트는 그 영역만 로딩으로 그린다. */
   readiness: {
     prepared: ReadyItem[]
-    needsCheck: NeedsCheckItem[]
-    /** **`missing` 이 아니다.** 사진에서 못 찾았을 뿐 없다는 뜻이 아니다. */
-    notInPhoto: NotInPhotoItem[]
-    extra: ExtraItem[]
+    /** **`missing` 이 아니다.** 아직 안 챙겼을 뿐이고 사진 상태는 따로 있다. */
+    unprepared: ReadyItem[]
     completionRate: number
+    /** 아직 채택하지 않은 필수 추천 수. 추천 전이면 `null` — "확인 전" 으로 쓴다. */
+    unacceptedRequiredCount: number | null
   } | null
   weight: {
     /** 단일 값이 아니라 **범위**다. 실측값처럼 표현하지 않는다. */
@@ -201,10 +224,22 @@ export interface AiJob<T = unknown> {
 
 /** AI-02 `PACKING_LIST` — 부족한 준비물만 돌려준다. */
 export interface PackingListOutput {
-  items: { name: string; category: Category; qty: number; priority: Priority }[]
+  /** **후보다.** 사용자가 채택해야 내 목록에 들어간다. 생성만으로 목록이 바뀌지 않는다. */
+  items: {
+    name: string
+    category: Category
+    qty: number
+    priority: Priority
+    reason?: string
+    source?: 'AI' | 'RULE'
+    /** 채택되면 서버가 여기에 항목 id 를 넣는다. `null` 이면 아직 후보다. */
+    acceptedItemId?: number | null
+  }[]
   tips: string[]
   /** 예보 범위(16일) 안이면 FORECAST, 넘으면 계절 평균. */
   weatherSource: 'FORECAST' | 'SEASONAL'
+  /** 날씨 데이터 시점. 대체 기준을 썼을 때 사용자에게 밝힌다. */
+  weatherAsOf: string | null
 }
 
 /** AI-01 `BAG_CHECK` — 사진 속 물품 인식. */
@@ -228,8 +263,12 @@ export interface WeightEstimateOutput {
   minG: number
   typicalG: number
   maxG: number
-  limitG: number
-  bagEmptyG: number
+  /**
+   * 07 은 둘 다 <b>nullable</b> 이다 — 서버가 input 값을 그대로 옮기는데
+   * 가방 정보를 모르는 여행이 있다. `limitG` 가 null 이면 verdict 는 UNKNOWN 이다.
+   */
+  limitG: number | null
+  bagEmptyG: number | null
   verdict: WeightVerdict
   confidence: ConfidenceLevel
   confidenceReason: string
@@ -283,3 +322,55 @@ export interface TransportRule {
   source: string
   checkedAt: string
 }
+
+// ── 인증 ──────────────────────────────────────────────────
+//
+// 06-api-spec.md "회원가입·로그인 계약 (UC-01)" 을 그대로 옮긴 것이다.
+//
+// <b>토큰을 저장하지 않는다.</b> 인증은 서버 세션 + HttpOnly 쿠키다. JS 가
+// 쿠키를 읽을 수 없으므로 localStorage 에 보관할 것도 없고, 요청마다
+// `credentials: 'include'` 로 브라우저가 알아서 붙인다.
+//
+// <b>쿠키가 있다고 로그인한 것이 아니다.</b> CSRF 토큰을 주려고 로그인 전에도
+// 익명 세션 쿠키가 생긴다. 반드시 `authenticated` 를 본다.
+
+export interface User {
+  userId: number
+  loginId: string
+  nickname: string
+  email: string
+}
+
+/** 가입 입력. <b>이 넷만 받는다</b> — 비밀번호 확인 칸을 두지 않는다. */
+export interface SignupRequest {
+  nickname: string
+  loginId: string
+  password: string
+  email: string
+}
+
+export interface LoginRequest {
+  loginId: string
+  password: string
+}
+
+/** 가입·로그인 응답. 가입은 `201`, 로그인은 `200` + 세션 쿠키다. */
+export interface AuthUserResponse {
+  user: User
+}
+
+/**
+ * `GET /api/auth/session` — 앱 진입과 로그인·로그아웃 성공 후 부른다.
+ * 미인증도 `200` 이고 상태만 돌려준다. `csrfToken` 은 항상 문자열이다.
+ */
+export interface SessionResponse {
+  authenticated: boolean
+  user: User | null
+  csrfToken: string
+}
+
+/** 06 의 입력 규칙. 서버가 최종 판정하지만 화면에서 먼저 걸러 왕복을 줄인다. */
+export const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
+export const PASSWORD_MIN = 8
+/** BCrypt 가 잘리는 지점. 06:190 */
+export const PASSWORD_MAX_BYTES = 72

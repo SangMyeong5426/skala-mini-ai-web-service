@@ -24,7 +24,8 @@ export interface UseAiJob<T> {
   output: T | null
   error: string | null
   jobId: number | null
-  start: (jobType: JobType, input: unknown, tripId?: number) => Promise<void>
+  /** 완료(COMPLETED)면 true. 실패·시간초과는 false — 후속 작업을 걸기 전에 확인한다 */
+  start: (jobType: JobType, input: unknown, tripId?: number) => Promise<boolean>
   reset: () => void
 }
 
@@ -53,7 +54,7 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
   }, [])
 
   const start = useCallback(
-    async (jobType: JobType, input: unknown, tripId?: number) => {
+    async (jobType: JobType, input: unknown, tripId?: number): Promise<boolean> => {
       setPhase('running')
       setPolls(0)
       setOutput(null)
@@ -66,7 +67,7 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
         let wait = created.pollAfterMs ?? FALLBACK_DELAY_MS
         for (let n = 1; n <= MAX_POLLS; n++) {
           await new Promise((r) => setTimeout(r, wait))
-          if (!alive.current) return
+          if (!alive.current) return false
 
           const job = await api.get<AiJob<T>>(`/ai-jobs/${created.jobId}`)
           setPolls(n)
@@ -74,22 +75,24 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
           if (job.status === 'COMPLETED') {
             setOutput(job.output)
             setPhase('done')
-            return
+            return true
           }
           if (job.status === 'FAILED') {
             // 06: FAILED 도 200 이다. 조회 자체는 성공했기 때문이다.
             // 네트워크 오류와 AI 실패를 구분해야 기본 체크리스트로 넘어갈 수 있다.
             setError(job.errorMessage ?? 'AI 작업이 실패했습니다.')
             setPhase('failed')
-            return
+            return false
           }
           wait = job.pollAfterMs ?? wait
         }
         if (alive.current) setPhase('timeout')
+        return false
       } catch (e) {
-        if (!alive.current) return
+        if (!alive.current) return false
         setError(e instanceof Error ? e.message : '알 수 없는 오류입니다.')
         setPhase('failed')
+        return false
       }
     },
     [],

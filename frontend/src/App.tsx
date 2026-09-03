@@ -1,65 +1,66 @@
-import { NavLink, Route, Routes } from 'react-router-dom'
-import { LOGIN_PATH, SCREENS, screenElement } from './routes'
+import { Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './auth/AuthContext'
+import { RequireAuth } from './components/RequireAuth'
+import { Shell, TopBar } from './components/Shell'
 import { Placeholder } from './pages/Placeholder'
 import { MockCheck } from './pages/MockCheck'
+import Landing from './pages/Landing'
+import MyTrips from './pages/MyTrips'
+import Photos from './pages/Photos'
+import DetectionsPage from './pages/Detections'
+import ItemsPage from './pages/Items'
+import InspectionPage from './pages/Inspection'
+import NewTrip from './pages/NewTrip'
+import Login from './pages/Login'
 
-/**
- * 공통 셸. 헤더 + 본문.
- *
- * 지금은 화면 이동을 눈으로 확인하려고 전체 링크를 노출한다.
- * 실제 화면이 붙으면 이 목록은 개발용으로만 남기거나 지운다.
- */
+/** 아직 안 만든 화면. */
+function Todo({ name }: { name: string }) {
+  return (
+    <Shell>
+      <TopBar title={name} />
+      <div className="content"><Placeholder name={name} /></div>
+    </Shell>
+  )
+}
+
+/** 로그인해야 볼 수 있는 화면. 감싸는 것을 빠뜨리면 그 화면만 무방비가 된다. */
+function Private({ children }: { children: React.ReactNode }) {
+  return <RequireAuth>{children}</RequireAuth>
+}
+
 export default function App() {
   return (
-    <div className="app">
-      <header className="app-header">
-        <NavLink to="/" className="brand">
-          짐싸조
-        </NavLink>
-        <nav className="dev-nav" aria-label="개발용 화면 이동">
-          {SCREENS.map((s) => (
-            <NavLink
-              key={s.id}
-              to={s.path.replace(':tripId', '1')}
-              // end 를 모두에 건다. 없으면 접두사 매칭이라 S-10(/trips/1) 이
-              // S-05(/trips/1/items) 에서도 활성으로 표시된다.
-              end
-              className={({ isActive }) => `dev-link tier-${s.tier}${isActive ? ' is-active' : ''}`}
-              title={s.name}
-            >
-              {s.id}
-              {s.ai && <span className="ai-dot" aria-label="AI 확장 지점" />}
-            </NavLink>
-          ))}
-          <NavLink to={LOGIN_PATH} className="dev-link tier-1">
-            로그인
-          </NavLink>
-        </nav>
-      </header>
+    <AuthProvider>
+      <Routes>
+        {/* 로그인 없이 볼 수 있는 곳 — 소개와 인증뿐이다 */}
+        <Route path="/" element={<Landing />} />
+        {/* S-00 은 한 화면이다. /signup 은 두지 않는다 — 03-wireframe */}
+        <Route path="/login" element={<Login />} />
 
-      <main className="app-main">
-        <Routes>
-          {SCREENS.map((s) => (
-            <Route key={s.id} path={s.path} element={screenElement(s)} />
-          ))}
-          <Route
-            path={LOGIN_PATH}
-            element={
-              <Placeholder
-                id="진입"
-                name="로그인"
-                note="S-01~S-10 앞의 공통 진입 단계. 화면 ID·인증 방식은 TBD"
-              />
-            }
-          />
-          {/* Mock 점검. 화면이 다 붙으면 이 라우트와 pages/MockCheck.tsx 를 지운다. */}
-          <Route path="/__mock" element={<MockCheck />} />
-          <Route
-            path="*"
-            element={<Placeholder id="404" name="없는 화면" note="주소를 확인해 주세요" />}
-          />
-        </Routes>
-      </main>
-    </div>
+        {/* 2 여행 준비 3단계 */}
+        <Route path="/trips/new" element={<Private><NewTrip /></Private>} />
+        <Route path="/trips/:tripId/photos" element={<Private><Photos /></Private>} />
+        <Route path="/trips/:tripId/detections" element={<Private><DetectionsPage /></Private>} />
+        <Route path="/trips/:tripId/items" element={<Private><ItemsPage /></Private>} />
+        {/* 예전 경로. 북마크·링크가 깨지지 않게 남긴다 */}
+        <Route path="/trips/:tripId/review" element={<Private><ItemsPage /></Private>} />
+        {/* Items 의 "검수하기" 가 여기로 보낸다. 화면은 아직 없어 자리만 잡아 둔다 */}
+        <Route path="/trips/:tripId/inspection" element={<Private><InspectionPage /></Private>} />
+
+        {/* 2차 — 1차의 요약을 눌러서 들어간다. 화면은 아직 없다 */}
+        <Route path="/trips/:tripId/weight" element={<Private><Todo name="무게 상세" /></Private>} />
+        <Route path="/trips/:tripId/rules" element={<Private><Todo name="반입 규정 상세" /></Private>} />
+        {/* #42 가 백엔드를 넣은 화면들. 여행 하위로 들어간다 */}
+        <Route path="/trips/:tripId/itinerary" element={<Private><Todo name="여행 일정" /></Private>} />
+        <Route path="/trips/:tripId/layout" element={<Private><Todo name="3D 가방 정리" /></Private>} />
+
+        {/* 3 내 여행 */}
+        <Route path="/trips" element={<Private><MyTrips /></Private>} />
+        <Route path="/trips/:tripId" element={<Private><Todo name="여행 기록" /></Private>} />
+
+        <Route path="/__mock" element={<MockCheck />} />
+        <Route path="*" element={<Todo name="없는 화면" />} />
+      </Routes>
+    </AuthProvider>
   )
 }
