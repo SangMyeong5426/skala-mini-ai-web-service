@@ -214,9 +214,20 @@ DATABASE_PASSWORD=devpass
 테이블을 **더하기만** 하는 변경은 `database/migrations/` 에 그 부분만 담은 SQL 을 두고,
 받는 사람은 그것만 실행한다. 기존 테이블은 건드리지 않는다.
 
-| 파일 | 무엇을 더하나 |
-| --- | --- |
-| `2026-09-03-add-itineraries-and-placements.sql` | `trip_itineraries` · `item_placements` |
+**순서가 있다.** 위에서부터 차례로 실행한다.
+
+| 순서 | 파일 | 무엇을 더하나 |
+| --- | --- | --- |
+| 1 | `2026-09-03-add-users-password-hash.sql` | `users.password_hash` (+ 데모 계정의 `login_id`) |
+| 2 | `2026-09-03-add-users-login-id.sql` | `users.login_id` 의 나머지 행·`NOT NULL`·`UNIQUE` |
+| 3 | `2026-09-03-add-itineraries-and-placements.sql` | `trip_itineraries` · `item_placements` |
+
+1번이 2번보다 먼저다. 2번은 `login_id` 를 이메일에서 만들어 내는데 데모 계정
+`kim@skala.dev` 는 앞부분이 `kim` 이라 4자 미만이어서 `user_1` 이 된다. 문서와
+`seed.sql` 이 말하는 데모 아이디는 `jiwoo28` 이므로, 1번이 그 값을 먼저 넣는다.
+순서를 바꾸면 데모 로그인이 안 된다.
+
+셋 다 여러 번 실행해도 안전하다 (`IF NOT EXISTS` · `WHERE ... IS NULL`).
 
 `ddl-auto=validate` 라 **DB 를 갱신하지 않으면 백엔드가 아예 뜨지 않는다.**
 오류는 `BeanCreationException` 안쪽에 묻혀 있어 원인을 찾는 데 시간이 걸린다.
