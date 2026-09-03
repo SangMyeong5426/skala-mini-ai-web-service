@@ -12,13 +12,22 @@
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
 - **로그인 포함 목표 ERD:** 아래 DSL·`.puml`·PNG·SVG에 `users.login_id`를 추가 설계한다.
-  기존 SQL과의 차이는 이 컬럼이며 테이블 10개와 관계는 유지한다. 현재 `schema.sql`·DB에
-  적용된 것으로 보지 않는다. 인증 구현 시 SQL·시드·엔티티를 함께 반영해야 한다
+  현재 `schema.sql`·DB에 적용된 것으로 보지 않는다. 인증 구현 시 SQL·시드·엔티티를 함께 반영해야 한다
+- **테이블은 12개다.** `trip_itineraries`(여행 일정·캘린더)와 `item_placements`(3D 가방 정리)는
+  `login_id`와 달리 **`schema.sql`에 실제로 적용돼 있다.** 무엇이 적용됐고 무엇이 목표인지
+  섞이지 않게 둘을 나눠 적는다
+- **PNG·SVG 는 2026-09-03 에 아래 DSL 기준으로 재렌더했다.** DSL·`.puml`·`schema.sql` 이
+  `users.login_id` 하나만 빼고 일치한다. 정본은 아래 DSL 이다
 - dbdiagram.io 링크: TBD — 아래 DSL을 붙여 넣으면 즉시 생성된다
 
 > **2026-09-03 로그인 개정:** 체크리스트 저장 규약은 유지하며 회원의 로그인 아이디를 추가한다.
 > 원본·PNG·SVG에도 후보 JSON·채택 책임·사진 자동 등록 트랜잭션과 조회 계산값을 반영했다.
 > SQL의 기존 시드는 개정 전 상태이므로 새 자동 등록 흐름을 검증한 데이터로 보지 않는다.
+>
+> **2026-09-03 일정·정리 추가:** `trip_itineraries`·`item_placements` 두 표를 더했다.
+> 기존 10개 테이블과 관계는 그대로다. **팀 DB 에는 `schema.sql` 전체 재실행이 아니라
+> [`database/migrations/`](../database/migrations/) 의 파일로 두 표만 더한다** —
+> 전체 재실행은 맨 앞에서 모든 테이블을 DROP 해 실데이터를 지운다.
 
 > 다이어그램은 **PlantUML로 그렸다.** Use-Case·User Flow·아키텍처와 같은 도구라
 > `.puml` 원본이 저장소에 남고 버전 관리가 된다. dbdiagram.io는 DSL을 붙여 넣어
@@ -85,6 +94,38 @@ Table checklist_items {
   created_at    timestamptz [not null, default: `now()`]
 
   indexes { (trip_id, category) }
+}
+
+// ── 여행 일정 (S-11 캘린더) ────────────────────────────────
+// 항공편·숙소·관광을 한 표에 두고 kind 로 구분한다. 화면이 시간순 한 줄로
+// 섞어 보여주기 때문이다 — 나누면 조회마다 UNION 이 필요하다.
+// 목적지는 trips 에만 있다. 일정마다 다시 적으면 이행 종속이 생긴다.
+Table trip_itineraries {
+  id         bigserial   [pk]
+  trip_id    bigint      [not null, ref: > trips.id]   // 1:N
+  kind       varchar(20) [not null]  // FLIGHT | LODGING | ACTIVITY | TRANSPORT | OTHER
+  title      varchar(100)[not null]
+  place      varchar(100)            // 공항·호텔·장소. 지도 좌표는 두지 않는다
+  code       varchar(50)             // 항공편명(KE703) 등
+  start_at   timestamptz [not null]
+  end_at     timestamptz             // 끝나는 시각을 모르는 일정이 많다(체크인)
+  note       text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+// ── 3D 가방 정리 배치 (S-12) ───────────────────────────────
+// 항목 하나가 가방 안 한 자리를 차지한다. 1:1 이라 별도 id 없이
+// checklist_item_id 가 그대로 pk 다.
+// trip_id 를 두지 않는다 — checklist_items 를 거치면 알 수 있고,
+// 넣으면 이행 종속이 생긴다 (아래 정규화 검토 3NF).
+Table item_placements {
+  checklist_item_id bigint      [pk, ref: - checklist_items.id]  // 1:1
+  compartment       varchar(20) [not null]  // MAIN_LEFT | MAIN_RIGHT | FRONT_POCKET | MESH | TOP
+  pos_x             numeric(4,3)[not null]  // 0~1 상대값. 픽셀이 아니라 화면 크기가 달라도 같은 자리
+  pos_y             numeric(4,3)[not null]
+  pos_z             numeric(4,3)[not null, default: 0]  // 깊이이자 쌓임 순서
+  rotated           boolean     [not null, default: false]
+  updated_at        timestamptz [not null, default: `now()`]
 }
 
 // ── 짐 사진 (UC-03 / F-03) ────────────────────────────────
@@ -263,6 +304,8 @@ Table ai_jobs {
 | `users` → `ai_jobs` | 1:N | 사용자 한 명이 여러 AI 작업을 만든다 |
 | `trips` → `checklist_items` | 1:N | 여행 하나에 준비물 여러 개 |
 | `trips` → `trip_photos` | 1:N | 여행 하나에 짐 사진 여러 장 |
+| `trips` → `trip_itineraries` | 1:N | 여행 하나에 일정 여러 개 (항공편·숙소·관광). 캘린더는 이 둘을 날짜로 묶어 만든다 |
+| `checklist_items` → `item_placements` | **1:1** | 물품 하나가 가방 안 <b>한 자리</b>를 차지한다. 자리를 안 잡은 물품은 행이 없다 |
 | `trips` → `ai_jobs` | 1:N | 여행 하나에 AI 작업 여러 개 (**nullable** — 챗봇(UC-08)은 여행을 등록하지 않아도 쓸 수 있다) |
 | `trip_photos` → `detected_objects` | 1:N | 사진 한 장에서 물품 여러 개 인식 |
 | `item_weights` → `checklist_items` | 1:N | 무게 마스터 하나가 여러 항목에 쓰인다 |
@@ -313,8 +356,24 @@ FK 두 개만으로 끝났을 것이다.
 | --- | --- | --- |
 | **1NF** — 모든 컬럼이 원자값인가 | ✅ | 반복 그룹 없음. `jsonb` 두 컬럼은 **의도적 예외**로 아래 근거 참조 |
 | **2NF** — 부분 함수 종속이 없는가 | ✅ | 복합 PK를 쓰는 두 조인 테이블(`item_detections`·`item_rule_checks`)의 비키 속성이 PK **전체**에 종속된다. `match_confidence`는 (항목, 인식결과) 쌍에 대해서만 정해지고, 어느 한쪽만으로는 정해지지 않는다 |
-| **3NF** — 이행 함수 종속이 없는가 | ✅ | 무게 정보를 `checklist_items`에 직접 넣지 않고 `item_weights`로 분리했다. 넣었다면 `id → keyword → typical_g` 이행 종속이 생긴다 |
+| **3NF** — 이행 함수 종속이 없는가 | ✅ | 무게 정보를 `checklist_items`에 직접 넣지 않고 `item_weights`로 분리했다. 넣었다면 `id → keyword → typical_g` 이행 종속이 생긴다.<br>같은 이유로 `item_placements`에 `trip_id`를, `trip_itineraries`에 `destination`을 **넣지 않았다** — 아래 참조 |
 | **의도적 비정규화** | 2건 | `ai_jobs`의 `jsonb` 2개 · `detected_objects.confidence_level` |
+
+### 일정·배치에서 편의 컬럼을 뺀 근거
+
+두 새 테이블에서 **넣고 싶었지만 넣지 않은 컬럼**이 하나씩 있다. 조회가 한 번 더
+조인해야 하지만, 넣었다면 3NF가 깨진다.
+
+| 안 넣은 것 | 넣었다면 생기는 종속 | 실제로 무엇이 깨지나 |
+| --- | --- | --- |
+| `item_placements.trip_id` | `checklist_item_id → trip_id` | 항목을 다른 여행으로 옮기는 기능이 생기면 배치의 `trip_id`가 옛 여행을 가리킨다 |
+| `trip_itineraries.destination` | `trip_id → destination` | 여행 목적지를 고쳤을 때 일정이 옛 목적지를 그대로 보여준다. 달력과 상세가 어긋난다 |
+
+`item_placements`는 **1:1이라 별도 id도 두지 않았다.** `checklist_item_id`가 그대로
+기본키다. 물품 하나가 가방 안 두 자리를 차지할 수 없으므로 대리키가 할 일이 없다.
+
+좌표를 `numeric(4,3)` **0~1 상대값**으로 둔 것도 같은 맥락이다. 픽셀을 저장하면
+화면 크기·가방 모델이 바뀔 때마다 값이 무의미해진다.
 
 ### `jsonb` 컬럼을 쓰는 근거
 

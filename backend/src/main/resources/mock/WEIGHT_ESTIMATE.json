@@ -1,0 +1,75 @@
+{
+  "minG": 4610,
+  "typicalG": 5480,
+  "maxG": 7010,
+  "limitG": 10000,
+  "bagEmptyG": 3200,
+  "verdict": "ROOM",
+  "confidence": "MEDIUM",
+  "confidenceReason": "자동 등록 8개 중 6개의 무게를 계산했습니다. 미완료 1개와 무게 정보가 없는 2개는 제외했습니다.",
+  "excludedCount": 3,
+  "excluded": [
+    {
+      "name": "변환 플러그",
+      "reason": "UNCHECKED"
+    },
+    {
+      "name": "화장품 용기",
+      "reason": "NO_WEIGHT_INFO"
+    },
+    {
+      "name": "검정 파우치",
+      "reason": "NO_WEIGHT_INFO"
+    }
+  ],
+  "contributions": [
+    {
+      "name": "상의",
+      "minG": 120,
+      "typicalG": 200,
+      "maxG": 350,
+      "qty": 4,
+      "subtotalG": 800
+    },
+    {
+      "name": "하의",
+      "minG": 250,
+      "typicalG": 400,
+      "maxG": 650,
+      "qty": 2,
+      "subtotalG": 800
+    },
+    {
+      "name": "보조배터리",
+      "minG": 180,
+      "typicalG": 280,
+      "maxG": 450,
+      "qty": 1,
+      "subtotalG": 280
+    },
+    {
+      "name": "속옷",
+      "minG": 40,
+      "typicalG": 60,
+      "maxG": 90,
+      "qty": 4,
+      "subtotalG": 240
+    },
+    {
+      "name": "충전기",
+      "minG": 50,
+      "typicalG": 90,
+      "maxG": 180,
+      "qty": 1,
+      "subtotalG": 90
+    },
+    {
+      "name": "가위",
+      "minG": 40,
+      "typicalG": 70,
+      "maxG": 120,
+      "qty": 1,
+      "subtotalG": 70
+    }
+  ]
+}
