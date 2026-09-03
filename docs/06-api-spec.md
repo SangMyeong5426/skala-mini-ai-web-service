@@ -15,9 +15,9 @@
 | --- | --- |
 | Base URL (로컬) | `http://localhost:8080/api` — Spring Boot 기본 포트. [ADR 0001](adr/0001-backend-stack.md)에서 확정 |
 | 요청·응답 형식 | `application/json; charset=utf-8` |
-| 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X) |
+| 경로 | 소문자 복수형 명사. 동사를 쓰지 않는다 (`/api/summaries` O, `/api/getSummary` X). 예외: `/inspection` 은 자원 목록이 아니라 여행 하나의 **집계 결과**라 단수다 |
 | 시각 형식 | ISO 8601 UTC (`2026-09-02T05:30:00Z`) |
-| 인증 | **구현하지 않는다.** 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
+| 인증 | **이번 데모에서 구현하지 않는다.** 스키마에는 `users.password_hash` 자리를 두었지만 토큰·세션을 발급하지 않고, 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
 
 브라우저 연동 시 `CORS_ALLOWED_ORIGINS`에 지정한 origin만 허용한다.
 생성 응답의 `Location`을 React의 `response.headers.get('Location')`으로 읽을 수
@@ -34,8 +34,7 @@
 | `202 Accepted` | **비동기 작업을 접수했고 아직 끝나지 않았다.** AI 호출이 여기 해당 |
 | `204 No Content` | 삭제 성공. 본문 없음 |
 | `400 Bad Request` | 요청 형식·값이 잘못됨 |
-| `401 Unauthorized` | 인증 안 됨 |
-| `403 Forbidden` | 인증됐지만 권한 없음 |
+| `413 Payload Too Large` | 요청 전체 크기 초과 — 사진 여러 장 (`spring.servlet.multipart.max-request-size`) |
 | `404 Not Found` | 리소스 없음 |
 | `409 Conflict` | 중복 등 상태 충돌 |
 | `500 Internal Server Error` | 서버 오류 |
@@ -128,7 +127,7 @@
 | 상황 | 코드 | 왜 |
 | --- | --- | --- |
 | `POST /api/ai-jobs` 로 작업 접수 | **`202`** | 접수만 했고 **아직 안 끝났다**. `200` 이 아니다 |
-| `GET /api/ai-jobs/{id}` 인데 아직 `PENDING` | **`200`** | **조회 자체는 성공했다.** `202` 가 아니다. 본문의 `status` 로 구분한다 |
+| `GET /api/ai-jobs/{jobId}` 인데 아직 `PENDING` | **`200`** | **조회 자체는 성공했다.** `202` 가 아니다. 본문의 `status` 로 구분한다 |
 
 ## AI 확장 지점 엔드포인트 (Mock)
 
@@ -148,10 +147,9 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
 **`input`·`output`의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema로
 고정한다.** 이 문서는 봉투(HTTP 계약)만 정한다.
 
-> ⚠️ **아래 `output` 예시는 잠정이다.** `07-ai-ready.md`의 출력 Schema가 아직
-> 확정되지 않았다. 확정되면 이 예시를 그쪽에 맞춘다. **그 전까지 프런트엔드는
-> `output` 내부 필드를 확정된 계약으로 취급하지 않는다** — 봉투(`jobId`·`status`·
-> `pollAfterMs`)만 믿고 쓴다.
+> **`input`·`output` 의 내부 구조는 [`07-ai-ready.md`](07-ai-ready.md)의 JSON Schema 가 정본이다.**
+> 아래 예시는 그 스키마로 검증했다 — 요청 예시의 `input` 과 완료 예시의 `output` 이
+> 그대로 통과한다 (07 "기계 검증"). 이 예시를 고치면 07 의 스키마도 같이 고친다.
 
 ### `POST /api/ai-jobs` — AI 작업 생성
 
@@ -171,8 +169,8 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
     "purpose": "TOUR",
     "note": "친구 2명, 디즈니랜드, 사진 많이 찍을 예정",
     "alreadyPacked": [
-      { "name": "여권", "category": "DOCUMENT", "qty": 1 },
-      { "name": "충전기", "category": "ELECTRONIC", "qty": 2 },
+      { "name": "충전기", "category": "ELECTRONIC", "qty": 1 },
+      { "name": "보조배터리", "category": "ELECTRONIC", "qty": 1 },
       { "name": "상의", "category": "CLOTHING", "qty": 4 }
     ]
   }
@@ -241,11 +239,11 @@ Location: /api/ai-jobs/1041
   "status": "COMPLETED",
   "output": {
     "items": [
-      { "name": "여권", "category": "DOCUMENT", "qty": 1, "priority": "REQUIRED" },
-      { "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1, "priority": "REQUIRED" }
+      { "name": "변환 플러그", "category": "ELECTRONIC", "qty": 1, "priority": "REQUIRED" },
+      { "name": "상비약", "category": "MEDICINE", "qty": 1, "priority": "RECOMMENDED" }
     ],
-    "tips": ["일본 콘센트는 A타입입니다.", "10월 초 도쿄는 낮 24도, 얇은 겉옷을 권합니다."],
-    "weatherSource": "FORECAST"
+    "tips": ["일본 콘센트는 A타입, 100V입니다.", "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다."],
+    "weatherSource": "SEASONAL"
   },
   "modelName": "mock",
   "createdAt": "2026-09-02T05:30:00Z",
@@ -311,7 +309,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
   },
   "weight": {
     "minG": 4570, "typicalG": 5410, "maxG": 6890,
-    "limitG": 23000,
+    "limitG": 10000,
     "verdict": "ROOM",
     "confidence": "MEDIUM",
     "confidenceReason": "사진에서 미확인 4개, 승인 전 1개",
@@ -323,8 +321,9 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
     ]
   },
   "customs": [
-    { "itemId": 6, "name": "보조배터리", "verdict": "CABIN_OK",
-      "reason": "보조배터리는 기내 반입만 가능합니다. 위탁수하물로 부칠 수 없습니다.",
+    { "itemId": 6, "name": "보조배터리", "verdict": "NEED_MORE_INFO",
+      "missingInfo": "배터리 정격(Wh)",
+      "reason": "보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.",
       "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
       "checkedAt": "2026-09-02" },
     { "itemId": 8, "name": "화장품", "verdict": "NEED_MORE_INFO",
@@ -348,6 +347,27 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 | `customs[].sourceUrl` `checkedAt` | 명세 9절 *"규정 최신성"* — 출처와 확인 날짜를 항상 함께 |
 
 `weight.verdict`: `ROOM`(여유) · `NEAR`(근접) · `OVER_RISK`(초과 가능성) · `UNKNOWN`(정보 부족)
+
+### `GET /api/trips/{tripId}/detections` — 인식 결과 (화면 `S-04`)
+
+```json
+{
+  "detections": [
+    { "detectionId": 2, "photoId": 1, "name": "보조배터리", "qty": 1,
+      "confidence": 0.880, "confidenceLevel": "HIGH", "approved": true,
+      "missingInfo": "배터리 정격(Wh)", "labelText": null },
+    { "detectionId": 6, "photoId": 2, "name": "화장품 용기", "qty": 1,
+      "confidence": 0.640, "confidenceLevel": "MEDIUM", "approved": false,
+      "missingInfo": "용량(ml)", "labelText": null },
+    { "detectionId": 8, "photoId": 2, "name": "검정 파우치", "qty": 1,
+      "confidence": 0.430, "confidenceLevel": "LOW", "approved": false,
+      "missingInfo": null, "labelText": null }
+  ]
+}
+```
+
+> `missingInfo` · `labelText` 는 `BAG_CHECK` 출력([`07-ai-ready.md`](07-ai-ready.md))에서 그대로 온다.
+> `S-04` 「확인 필요」 묶음 = `missingInfo ≠ null` 또는 `confidenceLevel = LOW`.
 
 ### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 승인
 
@@ -406,7 +426,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
   "arrivalAirport": "NRT",
   "bagType": "CARRY_ON",
   "bagEmptyG": 3200,
-  "weightLimitG": 23000,
+  "weightLimitG": 10000,
   "note": "친구 2명, 디즈니랜드"
 }
 ```
@@ -436,9 +456,15 @@ Location: /api/trips/12
 ```json
 {
   "trips": [
-    { "tripId": 12, "origin": "서울", "destination": "도쿄",
+    { "tripId": 1, "origin": "서울", "destination": "도쿄",
       "startDate": "2026-10-01", "endDate": "2026-10-04",
-      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 }
+      "transport": "FLIGHT", "status": "CONFIRMED", "completionRate": 0.5 },
+    { "tripId": 2, "origin": "서울", "destination": "오사카",
+      "startDate": "2026-05-02", "endDate": "2026-05-04",
+      "transport": "FLIGHT", "status": "DONE", "completionRate": 1.0 },
+    { "tripId": 3, "origin": "서울", "destination": "부산",
+      "startDate": "2026-03-14", "endDate": "2026-03-15",
+      "transport": "TRAIN", "status": "DONE", "completionRate": 1.0 }
   ]
 }
 ```
@@ -451,7 +477,7 @@ Location: /api/trips/12
     { "itemId": 1, "name": "여권", "category": "DOCUMENT", "qty": 1,
       "priority": "REQUIRED", "source": "RULE", "checkStatus": "NOT_IN_PHOTO" },
     { "itemId": 5, "name": "충전기", "category": "ELECTRONIC", "qty": 1,
-      "priority": "REQUIRED", "source": "AI", "checkStatus": "PREPARED" }
+      "priority": "REQUIRED", "source": "PHOTO", "checkStatus": "PREPARED" }
   ],
   "completionRate": 0.5
 }
@@ -461,7 +487,7 @@ Location: /api/trips/12
 | --- | --- |
 | `category` | `DOCUMENT` `CLOTHING` `ELECTRONIC` `TOILETRY` `MEDICINE` `ETC` |
 | `priority` | `REQUIRED` `RECOMMENDED` |
-| `source` | `RULE` `AI` `USER` — 누가 넣었는지 |
+| `source` | `RULE` `PHOTO` `AI` `USER` — 누가 넣었는지. `PHOTO` 는 사진에서 승인된 것, `AI` 는 AI 가 덧붙인 부족분이다 |
 | `checkStatus` | `UNCHECKED` `PREPARED` `NEEDS_CHECK` **`NOT_IN_PHOTO`** |
 
 ### `POST /api/trips/{tripId}/items` — 항목 추가

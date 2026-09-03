@@ -60,8 +60,8 @@ Java 클래스를 직접 실행하거나 JAR를 실행할 때는 실행 구성�
 | `MiniAiWebServiceApplicationTests` | Swagger 문서·UI, CORS 허용·차단·`Location` 노출 검증 |
 | `../.github/workflows/backend.yml` | PR·main 반영 시 Java 21로 빌드와 테스트 |
 
-**엔터티·Repository·Controller는 아직 없다.** 데이터 모델과 API 명세
-([`docs/05`](../docs/05-erd.md) · [`06`](../docs/06-api-spec.md))가 확정된 뒤에 만든다.
+**엔터티·Repository·Controller는 아직 없다.** 후속 기능 작업에서 확정된 데이터 모델과
+API 명세([`docs/05`](../docs/05-erd.md) · [`06`](../docs/06-api-spec.md))를 따라 구현한다.
 
 ## 이 스택에서 밟기 쉬운 함정
 
@@ -76,6 +76,15 @@ Java 클래스를 직접 실행하거나 JAR를 실행할 때는 실행 구성�
 | 다른 Boot 버전으로 재생성 | 생성기를 다시 돌리지 않고 저장소의 **4.1.1** 설정을 사용한다. 최초 생성 경위는 ADR 0001 참조 |
 
 ## 구현 시 지킬 것
+
+### 엔티티 매핑 — 틀리면 앱이 안 뜬다
+
+`ddl-auto=validate` 라 매핑이 하나만 어긋나도 기동이 실패한다.
+**규약은 [`CLAUDE.md` 의 "JPA 엔티티를 쓸 때"](../CLAUDE.md#jpa-엔티티를-쓸-때)에
+있다.** 실제 Supabase 에 붙여 재현하고 고쳐 본 것이라 그대로 따르면 된다.
+여기 옮겨 적지 않는 이유는 두 곳이 갈라지기 때문이다.
+
+`IDENTITY` · `JSONB` · `NUMERIC` · `CHAR` · 복합 PK 다섯 가지가 걸린다.
 
 ### 계층을 지킨다
 

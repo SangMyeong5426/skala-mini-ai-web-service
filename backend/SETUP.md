@@ -17,7 +17,7 @@
 | [아키텍처](../docs/04-architecture.md) · [ADR 0001](../docs/adr/0001-backend-stack.md) | Java·Spring 선택 이유, 계층별 책임 |
 | [ERD](../docs/05-erd.md) · [DDL](../database/schema.sql) | 10개 테이블, 속성을 가진 N:M 연결 테이블 2개 |
 | [API 명세](../docs/06-api-spec.md) | 18개 설계 엔드포인트, camelCase JSON, 상태 코드·오류 규격 |
-| [AI-Ready](../docs/07-ai-ready.md) · [ADR 0003](../docs/adr/0003-ai-job-endpoint.md) | AI 4종을 하나의 작업 접수·조회 경로로 처리. 입출력 Schema는 아직 TBD |
+| [AI-Ready](../docs/07-ai-ready.md) · [ADR 0003](../docs/adr/0003-ai-job-endpoint.md) | AI 4종의 확정된 입출력 Schema·Mock 예시·작업 완료 후 저장 규칙 |
 | [협업 규칙](../CONTRIBUTING.md) · [일정](../docs/checklist.md) | 브랜치·PR 규칙, 3일 범위와 개발 순서 |
 
 **현재 구현된 것은 실행 환경이다.** Entity·Repository·도메인 Controller·AI 인터페이스와
@@ -138,7 +138,7 @@ DB 비밀번호와 API 키는 커밋하지 않는다. `.env.example`의 DB 정�
 | `WEATHER_PROVIDER` | `openmeteo` | 설정만 존재. 날씨 클라이언트는 미구현 |
 | `AI_PROVIDER` · `AI_MODEL` | `mock` | 향후 Mock 구현에서 사용할 설정 |
 | `AI_API_KEY` | 비워 둠 | 실제 AI 미사용. 현재 읽거나 호출하는 클라이언트 없음 |
-| `AI_TEMPERATURE` · `AI_MAX_TOKENS` | `0.2` · `2048` | 향후 AI 구현의 파라미터 |
+| `AI_TEMPERATURE` · `AI_MAX_TOKENS` | [환경 변수 양식](.env.example)과 [AI 명세](../docs/07-ai-ready.md)의 값 사용 | 향후 AI 구현의 파라미터 |
 | `AI_MOCK_DELAY_MS` | `0` | 향후 Mock 구현의 지연 설정. 현재는 지연 처리가 없음 |
 
 ### `.env`가 적용되는 방식
@@ -247,20 +247,22 @@ Controller → Service → Repository로 역할을 나눈다. 빈 패키지나 �
 미리 만들지 않는다. HTTP 입력 검증은 DTO와 `jakarta.validation`, DB 변경 단위는
 Service의 트랜잭션에서 처리한다. Entity를 응답으로 직접 내보내지 않는다.
 
-API 필드명은 camelCase, DB는 snake_case다. 여행 날짜는 `LocalDate`, 기록 시각은
-UTC `Instant` 등을 사용해 API의 ISO 8601 UTC 계약을 지킨다.
+API 필드명은 camelCase, DB는 snake_case다. 여행 날짜는 `LocalDate`, `TIMESTAMPTZ`
+매핑은 `OffsetDateTime`을 사용하고 UTC로 반환해 API의 ISO 8601 UTC 계약을 지킨다.
+타입별 매핑은 [AGENTS.md의 JPA 규약](../AGENTS.md#jpa-엔티티를-쓸-때)을 따른다.
 JDBC 시간대는 UTC로 설정되어 있으며 API 직렬화도 DTO에서 따로 확인한다.
 DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spec.md`를 함께 수정한다.
 
 현재 `/uploads/**`는 인증 없이 제공되는 데모용 경로다. 로그인 제외 결정에 따른
 기존 제약이며, 개인정보가 포함된 사진 대신 시연용 사진을 사용한다.
 
-### AI 작업의 시작 조건
+### AI 작업 구현 기준
 
-`docs/07-ai-ready.md`의 입력·출력 Schema가 **TBD**이므로 임의의 필드를 만들어
-`AiClient`·`MockAiClient`를 확정하지 않는다. API Architect와 스키마 확정 후 구현한다.
+`docs/07-ai-ready.md`에 AI 4종의 입력·출력 Schema와 Mock 예시가 확정되어 있다.
+후속 기능 작업에서 이 명세대로 `AiClient`·`MockAiClient`와 작업 저장·조회를 구현한다.
+이번 PR은 환경 설정 범위이므로 AI 구현이나 실제 API 호출을 추가하지 않는다.
 
-확정 후에도 다음 경계는 유지한다.
+구현할 때 다음 경계를 유지한다.
 
 - `POST /api/ai-jobs` → **202 + jobId**, `GET /api/ai-jobs/{jobId}` → 상태·결과 조회.
 - Mock도 DB에 작업을 기록하고 FE는 폴링한다. 가상 스레드 설정만으로 비동기 작업이 구현되지는 않는다.
@@ -273,7 +275,7 @@ DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spe
 
 | 항목 | 상태·담당 |
 | --- | --- |
-| AI 4종 입출력 Schema·Mock fixture | **TBD** — API Architect, `docs/07-ai-ready.md` |
+| AI 4종 입출력 Schema·Mock 예시 | **확정** — `docs/07-ai-ready.md`. 리소스 파일과 Mock 구현은 후속 작업 |
 | 승인 물품의 체크리스트 자동 등록·출처 표시 규칙 | **TBD** — FE·BE·Data Architect. 화면은 사진 출처를 구분하지만 API·DB `source`는 `RULE/AI/USER`만 정의 |
 | Supabase 접속 정보·스키마 적용 현황 | **확인 완료** — 사용자가 지정한 별도 로컬 체크아웃의 `.env`로 연결, 설계된 테이블 10개 존재 확인 |
 | 도메인별 구현 담당 | **TBD** — BE 담당자끼리 엔드포인트·파일 단위로 분담 |
