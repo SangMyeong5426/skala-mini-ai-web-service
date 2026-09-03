@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -313,5 +315,69 @@ class ChatbotPhotoAttachmentTest {
         assertThat(input.path("items").size())
                 .as("계약이 요구하는 items↔results 개수 일치가 기록에서도 성립해야 한다")
                 .isEqualTo(output.path("results").size());
+    }
+
+    /**
+     * 직전 결과를 되보내며 같은 사진을 다시 붙이면, 서버가 문맥을 새 id 로 옮긴 뒤 같은 것을
+     * <b>또 붙여</b> 판정 대상이 두 배가 됐다. 그러면 모델이 정확히 답해도 중복 식별값 방어에
+     * 걸려 전부 {@code ASK_AIRLINE} 이 된다 — 서버가 스스로 만든 중복이다.
+     */
+    @Test
+    void 사진을_다시_붙여도_판정_대상이_중복되지_않는다() {
+        AiJob first = run(tripId, ask("이거 기내 되나요?", photoId));
+        int firstCount = json.read(first.getInputPayload()).path("items").size();
+        assertThat(firstCount).isPositive();
+
+        AiJob second = runJson("""
+                {"transport":"FLIGHT","airline":null,"question":"다시 봐주세요","items":%s,"photoIds":[%d]}
+                """.formatted(asFollowUpItems(json.read(first.getOutputPayload()).path("results")), photoId));
+
+        JsonNode items = json.read(second.getInputPayload()).path("items");
+        assertThat(items.size())
+                .as("문맥에 이미 있는 인식 물품을 또 붙이면 안 된다")
+                .isEqualTo(firstCount);
+
+        Set<Long> detectionIds = new LinkedHashSet<>();
+        for (JsonNode item : items) {
+            if (item.path("detectionId").isIntegralNumber()) {
+                assertThat(detectionIds.add(item.path("detectionId").asLong()))
+                        .as("같은 인식 물품이 두 번 들어 있다").isTrue();
+            }
+        }
+        // 중복이 없으니 규정 연결도 살아 있어야 한다.
+        boolean anyKeyword = false;
+        for (JsonNode r : json.read(second.getOutputPayload()).path("results")) {
+            anyKeyword |= r.path("ruleKeyword").isTextual();
+        }
+        assertThat(anyKeyword).as("중복 때문에 규정이 전부 사라지면 안 된다").isTrue();
+    }
+
+    /**
+     * 한 물품에만 답했다고 <b>아직 답하지 않은</b> 물품의 규정과 되묻기가 사라지면,
+     * 사용자는 답하지 않은 것을 다시 물어볼 기회를 잃는다.
+     */
+    @Test
+    void 후속_턴에서_아직_답하지_않은_물품의_규정이_남는다() {
+        AiJob first = run(tripId, ask("이거 기내 되나요?", photoId));
+        JsonNode firstResults = json.read(first.getOutputPayload()).path("results");
+
+        // 사진은 다시 붙이지 않고, 배터리에만 답한다.
+        AiJob second = runJson("""
+                {"transport":"FLIGHT","airline":null,"question":"100Wh예요","items":%s}
+                """.formatted(asFollowUpItems(firstResults)));
+        assertThat(second.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+
+        JsonNode output = json.read(second.getOutputPayload());
+        JsonNode scissors = null;
+        for (JsonNode r : output.path("results")) {
+            if ("가위".equals(r.path("name").asText(""))) scissors = r;
+        }
+        assertThat(scissors).as("사진에서 인식된 가위").isNotNull();
+        assertThat(scissors.path("ruleKeyword").asText())
+                .as("배터리에 답했다고 가위의 규정 연결이 사라지면 안 된다")
+                .isEqualTo("가위");
+        assertThat(output.path("followUpQuestion").asText())
+                .as("날 길이를 아직 안 물었으므로 되묻기가 남아야 한다")
+                .isNotBlank();
     }
 }

@@ -84,7 +84,11 @@ class MockAiClientTest {
         contract.validateOutput(input, output);
         JsonNode result = output.path("results").get(0);
 
-        assertThat(result.path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        // #49 재리뷰 반영으로 바뀐 기대값이다. 사진에서 온 물품(detectionId 가 있다)은
+        // 질문이 그 물품을 말하지 않아도 규정 연결을 유지한다. 45Wh 는 Mock 이 모르는 값이라
+        // Wh 는 여전히 미상이고, 그래서 ASK_AIRLINE(규정 없음)이 아니라 NEED_MORE_INFO 다 —
+        // 보조배터리라는 것은 아는데 정격만 모르는 상태다.
+        assertThat(result.path("verdict").asText()).isEqualTo("NEED_MORE_INFO");
         assertThat(result.path("itemId").asLong()).isEqualTo(7);
         assertThat(result.path("detectionId").asLong()).isEqualTo(9);
         assertThat(result.path("name").asText()).isEqualTo("보조배터리");
@@ -100,10 +104,14 @@ class MockAiClientTest {
                 Codes.JobType.RULE_CHECK, contract.validateInput(topicChangeInput));
         contract.validateOutput(topicChangeInput, topicChangeOutput);
 
+        // 같은 이유로 가위도 규정 연결을 유지한다. 날 길이를 아직 안 물었으므로
+        // 되묻기가 남아 있어야 한다 — 화제가 화장품으로 바뀌었다고 가위 질문이 사라지면
+        // 사용자는 답하지 않은 것을 다시 물어볼 기회를 잃는다.
         assertThat(topicChangeOutput.path("results").get(0).path("verdict").asText())
-                .isEqualTo("ASK_AIRLINE");
-        assertThat(topicChangeOutput.path("answer").asText()).contains("규정을 찾지 못했습니다");
-        assertThat(topicChangeOutput.path("followUpQuestion").isNull()).isTrue();
+                .isEqualTo("NEED_MORE_INFO");
+        assertThat(topicChangeOutput.path("results").get(0).path("ruleKeyword").asText())
+                .isEqualTo("가위");
+        assertThat(topicChangeOutput.path("followUpQuestion").asText()).isNotBlank();
     }
 
     @Test

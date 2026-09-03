@@ -256,6 +256,11 @@ public class AiJobRunner {
      * 사진에는 용량도 정격도 보이지 않는다. 규칙 엔진이 그 자리에서 {@code NEED_MORE_INFO} 와
      * 되물을 것을 만들어 낸다 — 챗봇이 대화형인 이유가 여기다.
      *
+     * <p><b>같은 인식 물품을 두 번 넣지 않는다.</b> 직전 결과를 {@code items} 로 되보내면서 같은
+     * 사진을 다시 붙이면, 문맥을 새 id 로 옮긴 뒤 같은 것을 또 붙여 <b>서버가 스스로 중복 입력을
+     * 만들었다.</b> 그러면 모델이 정확히 답해도 중복 식별값 방어에 걸려 전부 {@code ASK_AIRLINE} 이
+     * 된다 — 사용자가 이미 확인해 준 속성까지 함께 사라진다.
+     *
      * <p><b>사진을 읽지 못해도 질문에는 답한다.</b> 07 이 {@code BAG_CHECK} 에 대해 "실패 사진만
      * 재시도하고 성공한 것은 보여준다" 고 정했는데, 챗봇에서 사진 때문에 질문까지 실패하면
      * 사용자는 자기가 물은 것에 답을 못 받는다.
@@ -284,17 +289,28 @@ public class AiJobRunner {
         ObjectNode merged = (ObjectNode) input.deepCopy();
         ArrayNode items = (ArrayNode) merged.get("items");
 
+        // 먼저 문맥을 새 인식 id 에 맞춘 뒤, **아직 없는 것만** 새로 붙인다.
+        remapStaleDetectionIds(items, saved);
+
+        Set<Long> already = new LinkedHashSet<>();
+        for (JsonNode item : items) {
+            JsonNode detectionId = item.path("detectionId");
+            if (detectionId.isIntegralNumber()) already.add(detectionId.asLong());
+        }
+        List<DetectedObject> toAppend = saved.stream()
+                .filter(detection -> !already.contains(detection.getId()))
+                .toList();
+
         // 07 입력 스키마의 items 한도. 넘으면 조용히 버리지 않고 실패시킨다 —
         // 자동 등록은 이미 끝난 상태라, 목록에는 있는데 판정에서만 빠지는 물품이 생긴다.
-        if (items.size() + saved.size() > MAX_RULE_CHECK_ITEMS) {
+        // 실제로 판정할 최종 개수로 센다.
+        if (items.size() + toAppend.size() > MAX_RULE_CHECK_ITEMS) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "TOO_MANY_ITEMS",
                     "한 번에 판정할 수 있는 물품은 " + MAX_RULE_CHECK_ITEMS + "개까지입니다. "
                             + "물품 목록을 줄이거나 사진을 나눠서 물어봐 주세요.", "input.items");
         }
 
-        remapStaleDetectionIds(items, saved);
-
-        for (DetectedObject detection : saved) {
+        for (DetectedObject detection : toAppend) {
             ObjectNode item = items.addObject();
             Long itemId = linkedItemIds.get(detection.getId());
             if (itemId == null) item.putNull("itemId");
@@ -312,7 +328,8 @@ public class AiJobRunner {
         // 실제로 판정한 입력을 기록으로 남긴다. 같은 트랜잭션이라 추가 비용이 없다.
         job.replaceInputPayload(json.write(merged));
 
-        log.info("챗봇 사진 {}장에서 물품 {}개를 인식해 내 목록에 등록했습니다", photoIds.size(), saved.size());
+        log.info("챗봇 사진 {}장에서 물품 {}개를 인식했고 {}개를 판정에 새로 넣었습니다",
+                photoIds.size(), saved.size(), toAppend.size());
         return merged;
     }
 

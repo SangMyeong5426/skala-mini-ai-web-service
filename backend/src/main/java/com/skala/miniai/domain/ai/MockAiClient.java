@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -150,21 +151,25 @@ public class MockAiClient implements AiClient {
         Map<String, JsonNode> resultByName = new HashMap<>();
         output.path("results").forEach(result -> resultByName.put(
                 RecommendationStore.normalize(result.path("name").asText("")), result));
-        boolean fromPhotos = !RuleCheckContract.attachedPhotoIds(input).isEmpty();
         JsonNode unknownOutput = load("RULE_CHECK_UNKNOWN");
         JsonNode unknown = unknownOutput.path("results").get(0);
         boolean allUnknown = true;
         boolean needsMoreInfo = false;
 
+        Map<String, String> fallbackFollowUp = new HashMap<>();
         ArrayNode results = root.putArray("results");
         for (JsonNode item : items) {
             String itemName = RecommendationStore.normalize(item.path("name").asText(""));
             JsonNode template = resultByName.get(itemName);
-            // 이번 턴에 사진을 붙였으면, 인식된 물품은 질문이 그 물품을 말하지 않아도
-            // 규정 키워드가 붙어야 한다. detectionId 만으로는 구분되지 않는다 —
-            // 사용자가 보내는 후속 항목도 직전 사진의 detectionId 를 들고 온다.
-            if (template == null && fromPhotos && item.path("detectionId").isIntegralNumber()) {
+
+            // 사진에서 온 물품({@code detectionId} 가 있다)은 질문이 그 물품을 말하지 않아도
+            // 규정 키워드를 유지한다. 처음 붙인 턴뿐 아니라 **후속 문맥에서도** 그렇다 —
+            // "100Wh예요" 로 배터리에만 답했다고 아직 안 답한 가위의 규정이 사라지면 안 된다.
+            boolean fromFallback = false;
+            if (template == null && item.path("detectionId").isIntegralNumber()) {
                 template = structuredByName().get(itemName);
+                fromFallback = template != null;
+                if (fromFallback) fallbackFollowUp.putIfAbsent(itemName, followUpByName().get(itemName));
             }
             if (template == null) template = unknown;
             ObjectNode result = (ObjectNode) template.deepCopy();
@@ -172,13 +177,21 @@ public class MockAiClient implements AiClient {
             result.set("detectionId", item.get("detectionId"));
             result.set("name", item.get("name"));
             result.set("qty", item.get("qty"));
-            if (template == unknown) result.set("attributes", item.get("attributes"));
-            else allUnknown = false;
+            // 대비표 픽스처는 속성이 전부 null 이다. 사용자가 이미 확인해 준 값을 그것으로
+            // 덮으면 확보한 정보가 사라져 같은 것을 또 묻게 된다.
+            if (template == unknown || fromFallback) result.set("attributes", item.get("attributes"));
+            if (template != unknown) allUnknown = false;
             needsMoreInfo |= "NEED_MORE_INFO".equals(result.path("verdict").asText());
             results.add(result);
         }
         if (input.path("question").isTextual()) {
-            if (!needsMoreInfo) root.putNull("followUpQuestion");
+            if (!needsMoreInfo) {
+                root.putNull("followUpQuestion");
+            } else if (!root.path("followUpQuestion").isTextual()) {
+                // 대비표로 고른 물품이 되묻는데 질문 픽스처에는 그 문구가 없다.
+                fallbackFollowUp.values().stream().filter(Objects::nonNull).findFirst()
+                        .ifPresent(question -> root.put("followUpQuestion", question));
+            }
             if (allUnknown) root.set("answer", unknownOutput.get("answer"));
         }
         return output;
@@ -196,16 +209,34 @@ public class MockAiClient implements AiClient {
      * <p>쓰는 것은 <b>속성 미상</b> 픽스처들이다. 사진에는 용량도 정격도 보이지 않으므로
      * 그 모양이 맞다 — 규칙 엔진이 그 자리에서 {@code NEED_MORE_INFO} 와 되물을 것을 만든다.
      *
-     * <p>임의 자연어를 늘리는 것이 아니다. <b>이번 턴에 사진을 붙였을 때</b>({@code photoIds} 가
-     * 있고 그 물품이 {@code detectionId} 를 가질 때) 만 쓴다 — 사용자가 직접 보낸 후속 항목의
-     * 대응은 예전 그대로다.
+     * <p>임의 자연어를 늘리는 것이 아니다. <b>사진에서 온 물품</b>({@code detectionId} 가 있는 항목)
+     * 에만 쓴다. 처음 붙인 턴뿐 아니라 후속 문맥에서도 쓴다 — 이미 확보한 규정 연결을 잃지 않기 위해서다.
+     * 속성은 픽스처가 아니라 <b>입력에 확인된 값</b>을 그대로 쓴다.
      */
+    private static final List<String> FALLBACK_FIXTURES = List.of(
+            "RULE_CHECK_BATTERY_UNKNOWN", "RULE_CHECK_LIQUID_UNKNOWN",
+            "RULE_CHECK_SCISSORS_UNKNOWN", "RULE_CHECK_LAPTOP");
+
     private Map<String, JsonNode> structuredByName() {
         Map<String, JsonNode> byName = new HashMap<>();
-        for (String fixture : List.of("RULE_CHECK_BATTERY_UNKNOWN", "RULE_CHECK_LIQUID_UNKNOWN",
-                "RULE_CHECK_SCISSORS_UNKNOWN", "RULE_CHECK_LAPTOP")) {
+        for (String fixture : FALLBACK_FIXTURES) {
             for (JsonNode result : load(fixture).path("results")) {
                 byName.putIfAbsent(RecommendationStore.normalize(result.path("name").asText("")), result);
+            }
+        }
+        return byName;
+    }
+
+    /** 대비표로 고른 물품이 되물어야 하면, 그 픽스처가 쓰던 질문을 함께 가져온다. */
+    private Map<String, String> followUpByName() {
+        Map<String, String> byName = new HashMap<>();
+        for (String fixture : FALLBACK_FIXTURES) {
+            JsonNode output = load(fixture);
+            JsonNode followUp = output.path("followUpQuestion");
+            if (!followUp.isTextual()) continue;
+            for (JsonNode result : output.path("results")) {
+                byName.putIfAbsent(RecommendationStore.normalize(result.path("name").asText("")),
+                        followUp.asText());
             }
         }
         return byName;
