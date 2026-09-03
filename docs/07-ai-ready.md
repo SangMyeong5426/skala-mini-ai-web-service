@@ -1471,7 +1471,8 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
 `items[]`에 보내고 사용자 답을 `question`에 넣는다. `verdict`·`reason` 등 출력 전용 필드는
 입력의 `additionalProperties: false`에 걸리므로 보내지 않는다. 대화 이력을 저장하지 않고
 현재 질의의 구조화 문맥만 이어간다. `items[]`가 있으면 출력 `results[]`는 같은 개수·순서이며
-각 위치의 `itemId`·`detectionId`·`name`·`qty`를 그대로 돌려준다.
+각 위치의 `itemId`·`detectionId`·`name`·`qty`를 그대로 돌려준다. 지원하지 않는 질문이나
+물품은 판정을 지어내지 않고 입력 `attributes`도 그대로 유지해 다음 턴의 문맥 손실을 막는다.
 
 ### 출력 Schema
 

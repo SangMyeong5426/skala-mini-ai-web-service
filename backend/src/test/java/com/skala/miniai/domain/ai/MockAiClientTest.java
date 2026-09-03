@@ -67,6 +67,7 @@ class MockAiClientTest {
         assertThat(result.path("itemId").asLong()).isEqualTo(7);
         assertThat(result.path("detectionId").asLong()).isEqualTo(9);
         assertThat(result.path("name").asText()).isEqualTo("보조배터리");
+        assertThat(result.path("attributes").path("batteryMah").asInt()).isEqualTo(20000);
     }
 
     @Test

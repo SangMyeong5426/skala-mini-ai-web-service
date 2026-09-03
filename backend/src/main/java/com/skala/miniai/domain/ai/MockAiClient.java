@@ -135,6 +135,7 @@ public class MockAiClient implements AiClient {
             result.set("detectionId", item.get("detectionId"));
             result.set("name", item.get("name"));
             result.set("qty", item.get("qty"));
+            if (template == unknown) result.set("attributes", item.get("attributes"));
             results.add(result);
         }
         return output;
