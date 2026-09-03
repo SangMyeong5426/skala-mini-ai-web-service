@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -44,6 +45,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
         return ResponseEntity.badRequest().body(ErrorResponse.of(
                 "VALIDATION_FAILED", e.getParameterName() + " 은(는) 필수입니다.", e.getParameterName()));
+    }
+
+    /** 날짜·enum·경로 ID를 변환하지 못한 요청은 서버 오류가 아니라 입력 오류다. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(
+                "VALIDATION_FAILED", e.getName() + " 값 형식을 확인해 주세요.", e.getName()));
     }
 
     /** 본문이 JSON 이 아니거나 enum 값이 틀렸을 때. 원문 메시지는 내부 구조를 드러내므로 감춘다. */

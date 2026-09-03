@@ -3,6 +3,15 @@ import { api, setCsrfLoader, setCsrfToken, setUnauthorizedHandler } from '../api
 import type { AuthUserResponse, SessionResponse, SignupRequest, User } from '../types/api'
 import { AuthCtx } from './context'
 
+// StrictMode가 초기 effect를 두 번 확인해도 익명 세션·CSRF 쿠키는 한 요청으로 만든다.
+let initialSession: Promise<SessionResponse> | null = null
+const loadInitialSession = () => {
+  if (!initialSession) {
+    initialSession = api.get<SessionResponse>('/auth/session').finally(() => { initialSession = null })
+  }
+  return initialSession
+}
+
 /**
  * 로그인 상태.
  *
@@ -42,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    api.get<SessionResponse>('/auth/session')
+    loadInitialSession()
       .then((s) => {
         if (!alive) return
         setCsrfToken(s.csrfToken)

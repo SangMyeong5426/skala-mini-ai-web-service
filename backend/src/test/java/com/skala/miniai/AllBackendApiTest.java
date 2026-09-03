@@ -64,6 +64,13 @@ class AllBackendApiTest {
         read(auth, get("/api/auth/session"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.authenticated").value(true));
+        read(auth, get("/api/calendar").queryParam("from", "not-a-date").queryParam("to", "2026-10-31"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.field").value("from"));
+        read(auth, get("/api/rules").queryParam("transport", "PLANE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("transport"));
 
         MvcResult createdTrip = write(auth, post("/api/trips"), """
                 {"origin":"서울","destination":"도쿄","countryCode":"JP",
@@ -80,6 +87,8 @@ class AllBackendApiTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.trips[0].tripId").value(tripId));
         read(auth, get("/api/trips/{tripId}", tripId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.destination").value("도쿄"));
+        write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"   \"}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.field").value("origin"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"status\":\"CONFIRMED\"}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONFIRMED"));
 
@@ -90,6 +99,9 @@ class AllBackendApiTest {
         long itineraryId = body(createdItinerary).path("itineraryId").asLong();
         read(auth, get("/api/trips/{tripId}/itineraries", tripId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.itineraries[0].code").value("KE001"));
+        write(auth, patch("/api/trips/{tripId}/itineraries/{id}", tripId, itineraryId),
+                "{\"title\":\"   \"}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.field").value("title"));
         write(auth, patch("/api/trips/{tripId}/itineraries/{id}", tripId, itineraryId),
                 "{\"title\":\"도쿄 출국\"}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("도쿄 출국"));
@@ -108,6 +120,9 @@ class AllBackendApiTest {
 
         read(auth, get("/api/trips/{tripId}/packing-layout", tripId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.unplaced[0].itemId").value(itemId));
+        write(auth, put("/api/trips/{tripId}/packing-layout", tripId), "{\"placements\":[null]}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
         write(auth, put("/api/trips/{tripId}/packing-layout", tripId), """
                 {"placements":[{"itemId":%d,"compartment":"MAIN_LEFT",
                   "posX":0.1,"posY":0.2,"posZ":0.3,"rotated":false}]}
@@ -189,9 +204,17 @@ class AllBackendApiTest {
 
         mvc.perform(post("/api/auth/signup").cookie(cookies).header("X-CSRF-TOKEN", csrf)
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"nickname":"API검증","loginId":"%s","password":"testpass123",
+                                {"nickname":" x ","loginId":"bad_%s","password":"testpass123",
+                                 "email":"bad-%s@test.local"}
+                                """.formatted(RUN_ID, RUN_ID)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("nickname"));
+
+        mvc.perform(post("/api/auth/signup").cookie(cookies).header("X-CSRF-TOKEN", csrf)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"nickname":"API검증","loginId":"  %s  ","password":"testpass123",
                                  "email":"all-api-%s@test.local"}
-                                """.formatted(loginId, RUN_ID)))
+                                """.formatted(loginId.toUpperCase(), RUN_ID)))
                 .andExpect(status().isCreated())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.user.loginId").value(loginId));
 

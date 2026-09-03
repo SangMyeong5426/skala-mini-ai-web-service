@@ -23,7 +23,7 @@ public final class AuthDtos {
             @Size(min = 2, max = 50, message = "닉네임은 2~50자입니다.") String nickname,
 
             @NotBlank(message = "아이디는 필수입니다.")
-            @Pattern(regexp = "[A-Za-z0-9_]{4,30}",
+            @Pattern(regexp = "\\s*[A-Za-z0-9_]{4,30}\\s*",
                      message = "아이디는 영문·숫자·밑줄 4~30자입니다.") String loginId,
 
             // 최소 길이만 검증한다. 최대는 BCrypt 의 72바이트 한계라 서비스에서 바이트로 센다.
