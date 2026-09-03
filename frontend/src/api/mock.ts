@@ -25,7 +25,8 @@
  */
 import * as fx from './fixtures'
 import type {
-  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto,
+  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, PackingListOutput,
+  TripDetail, TripPhoto,
 } from '../types/api'
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
@@ -71,6 +72,7 @@ for (const t of fx.TRIPS.slice(1)) trips.set(t.tripId, emptyTrip({ ...t }))
 
 let nextTripId = 100
 let nextDetectionId = 100
+let nextItemId = 100
 let nextJobId = 1041
 
 /** 작업 상태. tripId·input 을 들고 있어야 완료 시 어디에 쓸지 안다. */
@@ -78,6 +80,8 @@ const jobs = new Map<number, {
   left: number
   jobType: JobType
   tripId?: number
+  /** BAG_CHECK 이 어느 사진을 분석했는지. 저장 범위를 여기에 맞춘다. */
+  photoIds?: number[]
   /** 완료 결과를 도메인에 한 번만 반영한다. 반복 GET 으로 중복 삽입하지 않는다. */
   applied: boolean
 }>()
@@ -99,32 +103,43 @@ function idsIn(path: string): number[] {
 }
 
 /**
- * 항목의 실제 체크 상태.
+ * 연결·승인이 바뀐 항목의 체크 상태를 <b>그 자리에서</b> 갱신한다.
  *
- * 연결된 인식 결과가 있으면 <b>승인 여부가 상태를 정한다</b> —
- * 승인됐으면 사진에서 확인된 것(PREPARED), 아직이면 확인 필요(NEEDS_CHECK).
- * 연결이 없으면 사용자가 직접 정한 값을 그대로 쓴다.
+ * 조회할 때마다 계산하면 사용자가 직접 바꾼 값을 덮어쓴다 —
+ * S-05 에서 완료 처리하거나 체크를 해제해도 되돌아간다.
+ * 06 의 항목 PATCH 는 보낸 체크 상태를 그대로 바꾸는 계약이다.
  *
- * 이렇게 두면 S-04 승인 → S-05 체크리스트 → S-06 검수가 같은 값을 보게 된다.
+ * 그래서 상태는 <b>사건이 일어날 때만</b> 쓴다.
+ *   승인된 인식이 연결됨 → PREPARED (사진에서 확인)
+ *   연결은 있는데 승인 전 → NEEDS_CHECK
+ *   연결이 하나도 없음    → NOT_IN_PHOTO
+ * 그 뒤 사용자가 PATCH 로 바꾸면 그 값이 남는다.
  */
-function statusOf(t: TripState, item: ChecklistItem): ChecklistItem['checkStatus'] {
-  const linked = [...t.links.entries()]
-    .filter(([, itemIds]) => itemIds.includes(item.itemId))
-    .map(([detectionId]) => detectionId)
-  if (linked.length === 0) return item.checkStatus
-  const approved = linked.some(
-    (id) => t.detections.find((d) => d.detectionId === id)?.approved,
-  )
-  return approved ? 'PREPARED' : 'NEEDS_CHECK'
+function syncStatus(t: TripState, itemIds: number[]) {
+  for (const itemId of itemIds) {
+    const item = t.items.find((i) => i.itemId === itemId)
+    if (!item) continue
+    const linked = [...t.links.entries()]
+      .filter(([, ids]) => ids.includes(itemId))
+      .map(([detectionId]) => detectionId)
+    if (linked.length === 0) {
+      item.checkStatus = 'NOT_IN_PHOTO'
+      continue
+    }
+    const approved = linked.some(
+      (id) => t.detections.find((d) => d.detectionId === id)?.approved,
+    )
+    item.checkStatus = approved ? 'PREPARED' : 'NEEDS_CHECK'
+  }
 }
 
 function itemsOf(t: TripState): ChecklistItem[] {
-  return t.items.map((i) => ({ ...i, checkStatus: statusOf(t, i) }))
+  return t.items.map((i) => ({ ...i }))
 }
 
 function completionRate(t: TripState): number {
   if (t.items.length === 0) return 0
-  const done = itemsOf(t).filter((i) => i.checkStatus === 'PREPARED').length
+  const done = t.items.filter((i) => i.checkStatus === 'PREPARED').length
   return Math.round((done / t.items.length) * 100) / 100
 }
 
@@ -137,11 +152,32 @@ function linkedItems(t: TripState, detectionId: number) {
   }))
 }
 
-/** BAG_CHECK 완료 결과를 인식 목록에 넣는다. 승인된 기존 결과는 건드리지 않는다. */
-function applyBagCheck(t: TripState, out: BagCheckOutput) {
-  for (const d of out.detections) {
-    const dup = t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)
-    if (dup) continue
+/**
+ * BAG_CHECK 완료 결과를 인식 목록에 반영한다.
+ *
+ * <b>요청한 사진만</b> 다룬다. `input.photoIds` 에 없는 사진의 결과를 넣으면
+ * 사용자가 고르지 않은 사진의 물품이 목록에 생긴다.
+ *
+ * 재분석이면 그 사진의 <b>미승인 행을 교체</b>한다. 승인 행은 보존한다 —
+ * 사용자가 확인한 것을 AI 재실행이 지우면 안 된다.
+ */
+function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds?: number[]) {
+  const target = photoIds?.length ? out.detections.filter((d) => photoIds.includes(d.photoId))
+                                  : out.detections
+  const scope = new Set(target.map((d) => d.photoId))
+
+  // 대상 사진의 미승인 행과 그 연결을 먼저 걷어낸다.
+  const dropped = t.detections.filter((d) => scope.has(d.photoId) && !d.approved)
+  const touched = new Set<number>()
+  for (const d of dropped) {
+    for (const itemId of t.links.get(d.detectionId) ?? []) touched.add(itemId)
+    t.links.delete(d.detectionId)
+  }
+  t.detections = t.detections.filter((d) => !(scope.has(d.photoId) && !d.approved))
+
+  for (const d of target) {
+    // 같은 사진에 이미 승인된 같은 이름이 있으면 건드리지 않는다.
+    if (t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)) continue
     t.detections.push({
       detectionId: nextDetectionId++,
       photoId: d.photoId,
@@ -152,6 +188,28 @@ function applyBagCheck(t: TripState, out: BagCheckOutput) {
       missingInfo: d.missingInfo,
       labelText: d.labelText,
       approved: false,      // 승인 전이다. 명세 9.2.
+    })
+  }
+  syncStatus(t, [...touched])
+}
+
+/**
+ * PACKING_LIST 완료 결과를 체크리스트에 넣는다.
+ *
+ * 07 "작업이 끝나면 서버가 쓰는 곳" — 추천은 `source: AI` · `UNCHECKED` 로
+ * 들어가고 S-05 가 GET 으로 다시 읽는다. 같은 이름은 넣지 않는다.
+ */
+function applyPackingList(t: TripState, out: PackingListOutput) {
+  for (const rec of out.items) {
+    if (t.items.some((i) => i.name === rec.name)) continue
+    t.items.push({
+      itemId: nextItemId++,
+      name: rec.name,
+      category: rec.category,
+      qty: rec.qty,
+      priority: rec.priority,
+      source: 'AI',
+      checkStatus: 'UNCHECKED',
     })
   }
 }
@@ -173,8 +231,13 @@ export function mockRequest(
   if (method === 'POST' && p === '/ai-jobs') {
     const jobType = b.jobType as JobType
     const jobId = nextJobId++
+    const input = (b.input ?? {}) as Record<string, unknown>
     jobs.set(jobId, {
-      left: 2, jobType, tripId: b.tripId as number | undefined, applied: false,
+      left: 2,
+      jobType,
+      tripId: b.tripId as number | undefined,
+      photoIds: Array.isArray(input.photoIds) ? (input.photoIds as number[]) : undefined,
+      applied: false,
     })
     return delay(fx.AI_JOB_CREATED(jobType, jobId))
   }
@@ -190,7 +253,12 @@ export function mockRequest(
     if (!job.applied) {
       job.applied = true
       const t = job.tripId ? trips.get(job.tripId) : undefined
-      if (t && job.jobType === 'BAG_CHECK') applyBagCheck(t, fx.AI_OUTPUT.BAG_CHECK)
+      if (t && job.jobType === 'BAG_CHECK') {
+        applyBagCheck(t, fx.AI_OUTPUT.BAG_CHECK, job.photoIds)
+      }
+      if (t && job.jobType === 'PACKING_LIST') {
+        applyPackingList(t, fx.AI_OUTPUT.PACKING_LIST)
+      }
     }
     return delay(fx.AI_JOB(jobId, job.jobType, true))
   }
@@ -249,8 +317,9 @@ export function mockRequest(
     const itemId = idsIn(p)[1]
     const item = t.items.find((i) => i.itemId === itemId)   // 이 여행의 항목만
     if (!item) return NOT_FOUND
+    // 06: 보낸 체크 상태를 그대로 바꾼다. 조회할 때 다시 덮어쓰지 않는다.
     Object.assign(item, b)
-    return delay({ ...item, checkStatus: statusOf(t, item) })
+    return delay({ ...item })
   }
 
   // ── 사진 ───────────────────────────────────────────────
@@ -279,10 +348,12 @@ export function mockRequest(
     //   [8]    → 연결을 [8] 하나로 교체
     //   []     → 연결을 모두 해제
     //   미전송 → 연결을 건드리지 않는다
+    const before = t.links.get(detectionId) ?? []
     if (Array.isArray(b.matchedItemIds)) {
       t.links.set(detectionId, (b.matchedItemIds as number[]).slice())
     }
-    // 연결된 항목의 체크 상태는 statusOf 가 계산한다. 여기서 따로 쓰지 않는다.
+    // 연결이 끊긴 항목과 새로 붙은 항목 양쪽을 갱신한다.
+    syncStatus(t, [...new Set([...before, ...(t.links.get(detectionId) ?? [])])])
     return delay({ ...d, linkedItems: linkedItems(t, detectionId) })
   }
 
