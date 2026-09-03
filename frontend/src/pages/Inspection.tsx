@@ -108,8 +108,14 @@ export default function InspectionPage() {
        * <b>이동수단은 이 여행의 것</b>이다. FLIGHT 로 박아 두면 기차·버스
        * 여행도 항공 규정으로 판정한다 — 그건 여행 없는 챗봇의 기본값이다.
        */
+      /*
+       * <b>`!r.customs` 로 보면 안 된다.</b> 서버는 판정이 하나도 없을 때 null 이
+       * 아니라 <b>빈 배열</b>을 준다(InspectionService.customs 의 `return List.of()`).
+       * JS 에서 `![]` 는 false 라, 새로 만든 여행은 판정을 영영 걸지 않았다.
+       * 데모에서 여행을 새로 만들어 여기까지 오면 반입 판정 칸이 계속 비어 있었다.
+       */
       const all = [...prepared, ...unprepared]
-      if (!r.customs && all.length > 0) {
+      if (!r.customs?.length && all.length > 0) {
         void ruleJob.start('RULE_CHECK', {
           transport: trip.transport,
           airline: trip.airline ?? null,
@@ -302,10 +308,10 @@ export default function InspectionPage() {
                 onRetry={() => { void load() }}
               />
             )}
-            {data && !c && ruleJob.phase === 'idle' && (
+            {/* 빈 배열도 "없음" 이다. 작업이 도는 중에는 말하지 않는다 */}
+            {data && !c?.length && ruleJob.phase === 'idle' && (
               <p className="card-sub">판정할 물품이 없습니다.</p>
             )}
-            {c?.length === 0 && <p className="card-sub">확인할 물품이 없습니다.</p>}
             {c?.map((x) => (
               <div key={x.itemId} className="verdict">
                 <div className="verdict-head">
