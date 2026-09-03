@@ -105,7 +105,7 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 | 다른 점 | 결과 |
 | --- | --- |
 | `spring-boot-starter-web` → **`-webmvc`** 로 개명 | 의존성 이름을 바꿔 반영 |
-| `META-INF/spring.factories` 지원 제거 | `spring-dotenv`가 조용히 무효가 된다. Gradle이 `.env`를 직접 읽게 바꿈 |
+| 초기 `spring-dotenv` 자동 적용 실패 | Gradle이 `.env`를 직접 읽게 바꿈. **`spring.factories` 지원 제거가 원인이라는 초기 설명은 정정한다** — 아래 개발환경 보완 참조 |
 | — | springdoc 2.8.6은 Boot 3용이지만 **실제 요청으로 동작을 확인했다.** `/v3/api-docs`와 Swagger UI 모두 정상 |
 
 > 이 절은 결정을 뒤집는 것이 아니라 **같은 결정(Java + Spring Boot)의 버전이
@@ -118,6 +118,11 @@ Invalid Spring Boot version '3.5.9', Spring Boot compatibility range is >=4.0.0
 환경은 [공식 Boot 4 지원 계열](https://springdoc.org/)로 맞춘다.
 Swagger JSON·설정·UI와 CORS를 기존 테스트에서 검증한다.
 설치·실행·검증 절차는 [`backend/SETUP.md`](../../backend/SETUP.md)에 정리한다.
+
+Boot 4도 [EnvironmentPostProcessor를 `META-INF/spring.factories`로 등록한다](https://docs.spring.io/spring-boot/4.0/api/java/org/springframework/boot/EnvironmentPostProcessor.html).
+따라서 위 실패를 등록 파일 지원 제거로 단정할 수 없다. 초기 실패 현상과 Gradle 선택은
+기록으로 남기되, 실패한 의존성 버전·등록 조건은 이번 검토에서 재현하지 못해 **TBD**다.
+현재 실행 방식과 의존성을 추가하지 않는 근거는 [`SETUP.md` 4절](../../backend/SETUP.md#4-환경-변수)을 정본으로 둔다.
 
 ### 21이 지불하는 비용
 

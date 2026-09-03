@@ -38,15 +38,8 @@ cp .env.example .env
 
 DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한다.**
 
-**`.env`는 `build.gradle`의 `bootRun` 태스크가 읽어서 넘긴다.** 따로 할 일은 없다.
-IDE에서도 Gradle `bootRun`을 실행하면 같은 방식으로 동작한다.
-Java 클래스를 직접 실행하거나 JAR를 실행할 때는 실행 구성에 환경 변수를 넣는다.
-`.env`를 셸에서 `source`하지 않는다. 특수문자가 셸 문법으로 해석될 수 있다.
-파일 형식과 우선순위는 [SETUP.md](SETUP.md#4-환경-변수)를 따른다.
-
-> JDBC URL 접두사는 `jdbc:postgresql://` 다. Supabase·Neon 대시보드가 주는
-> `postgresql://USER:PASSWORD@HOST/DB` 를 그대로 붙여넣으면 뜨지 않는다.
-> 계정 정보는 `DATABASE_USERNAME` · `DATABASE_PASSWORD`로 분리한다.
+**`.env` 자동 주입은 Gradle `bootRun`에만 적용된다.** 파일 형식·우선순위·다른 실행
+방법은 [SETUP.md 4절](SETUP.md#4-환경-변수), DB 연결은 [5절](SETUP.md#5-supabase-postgresql-연결)을 따른다.
 
 ## 지금 들어 있는 것
 
@@ -70,7 +63,7 @@ API 명세([`docs/05`](../docs/05-erd.md) · [`06`](../docs/06-api-spec.md))를 
 | 함정 | 내용 |
 | --- | --- |
 | Boot 3 예제를 그대로 복사 | 이 프로젝트는 **`spring-boot-starter-webmvc`**, springdoc **3.1.0**을 사용한다 |
-| `.env`가 자동으로 적용될 것이라고 가정 | 여기서는 Gradle **`bootRun`만** `.env`를 읽는다. IDE 직접 실행·JAR 실행은 환경 변수를 직접 전달한다 |
+| `.env`가 자동으로 적용될 것이라고 가정 | 실행 방식과 dotenv 의존성을 추가하지 않은 근거는 [SETUP.md 4절](SETUP.md#4-환경-변수) 참조 |
 | `src/test/resources/application.properties` | 이름이 같으면 main의 설정을 **통째로 가린다.** main에 넣은 `app.*` 값이 테스트에서 사라져 컨텍스트가 안 뜬다. 그래서 `application-test.properties` + `@ActiveProfiles("test")`를 쓴다 |
 | DB 없이 테스트가 깨진다 | JPA가 DataSource를 요구한다. 테스트 프로필의 H2로 해결해 뒀다 |
 | 다른 Boot 버전으로 재생성 | 생성기를 다시 돌리지 않고 저장소의 **4.1.1** 설정을 사용한다. 최초 생성 경위는 ADR 0001 참조 |

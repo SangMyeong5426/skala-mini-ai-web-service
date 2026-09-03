@@ -12,7 +12,7 @@
 
 | 읽을 문서 | 백엔드에서 확인할 내용 |
 | --- | --- |
-| [서비스 기획](../docs/01-service-plan.md) | 페르소나, 로그인 제외, 실제 AI 호출 제외 |
+| [서비스 기획](../docs/01-service-plan.md) | 페르소나, 인증 흐름 미구현(`users.password_hash` 자리는 유지), 실제 AI 호출 제외 |
 | [Use-Case](../docs/02-use-case.md) · [화면 흐름](../docs/03-wireframe.md) | 사용자 승인과 사진 우선 흐름. 구현은 1차 S-01~S-06부터 |
 | [아키텍처](../docs/04-architecture.md) · [ADR 0001](../docs/adr/0001-backend-stack.md) | Java·Spring 선택 이유, 계층별 책임 |
 | [ERD](../docs/05-erd.md) · [DDL](../database/schema.sql) | 10개 테이블, 속성을 가진 N:M 연결 테이블 2개 |
@@ -124,6 +124,8 @@ cp .env.example .env
 
 DB 비밀번호와 API 키는 커밋하지 않는다. `.env.example`의 DB 정보·API 키는 비워 둔다.
 실제 비밀값을 이 문서·Issue·PR 본문에 붙여 넣지 않는다.
+복사만 한 상태에서는 DB 항목이 비어 있으므로 일반 `bootRun`은 실패한다.
+세 항목을 채운 뒤 실행하거나, DB 연결 전에는 3절의 `bootTestRun`을 사용한다.
 
 | 변수 | 기본값·작성 방법 | 실제 적용 범위 |
 | --- | --- | --- |
@@ -154,6 +156,19 @@ DB 비밀번호와 API 키는 커밋하지 않는다. `.env.example`의 DB 정�
 따옴표·`export`·여러 줄 값·`${변수}` 치환·값 뒤 주석은 지원하지 않는다.
 주석은 별도의 `#` 줄에 작성한다. 값 안의 `=`·`#`·`$`는 문자 그대로 전달된다.
 이 파일을 셸에서 `source`하면 값이 명령이나 변수로 해석될 수 있으므로 사용하지 않는다.
+
+### dotenv 라이브러리를 추가하지 않은 이유
+
+초기 스캐폴딩에서는 `spring-dotenv`를 추가해도 `.env`가 자동 적용되지 않아
+Gradle 주입 방식을 선택했다([ADR 0001](../docs/adr/0001-backend-stack.md)).
+현재 필요한 단일 행 `KEY=value`는 기존 코드로 처리되므로 별도 의존성을 추가하지 않는다.
+이는 AI-Ready의 **Security & Config Isolation**을 유지하면서 3일 일정의 환경 설정을 줄이는 선택이다.
+
+다만 초기 기록의 **“Boot 4가 `spring.factories` 지원을 제거했다”는 원인 설명은 잘못됐다.**
+Boot 4도 [EnvironmentPostProcessor 등록](https://docs.spring.io/spring-boot/4.0/api/java/org/springframework/boot/EnvironmentPostProcessor.html)에
+이 파일을 사용한다. [spring-dotenv 공식 안내](https://github.com/paulschwarz/spring-dotenv)는
+현재 Boot 4용 `springboot4-dotenv` 모듈을 구분한다. 당시 실패한 의존성 버전·등록 조건은
+이번 검토에서 재현하지 못해 **TBD**이며, 모든 Boot 4 조합에서 dotenv가 실패한다고 일반화하지 않는다.
 
 ## 5. Supabase PostgreSQL 연결
 
@@ -253,7 +268,12 @@ API 필드명은 camelCase, DB는 snake_case다. 여행 날짜는 `LocalDate`, `
 JDBC 시간대는 UTC로 설정되어 있으며 API 직렬화도 DTO에서 따로 확인한다.
 DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spec.md`를 함께 수정한다.
 
-현재 `/uploads/**`는 인증 없이 제공되는 데모용 경로다. 로그인 제외 결정에 따른
+**Entity를 만든 직후 실제 PostgreSQL 환경으로 `./gradlew bootRun`을 실행해
+`Initialized JPA EntityManagerFactory`와 `Started MiniAiWebServiceApplication`
+두 줄을 확인하고 커밋한다.** CI의 `Backend Build`는 H2 + `create-drop`으로 실행하므로
+이 검증을 대신하지 못한다. 실행 위치와 규약은 [AGENTS.md](../AGENTS.md#엔티티를-만든-직후)를 따른다.
+
+현재 `/uploads/**`는 인증 없이 제공되는 데모용 경로다. 인증 흐름 미구현 결정에 따른
 기존 제약이며, 개인정보가 포함된 사진 대신 시연용 사진을 사용한다.
 
 ### AI 작업 구현 기준
@@ -276,7 +296,8 @@ DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spe
 | 항목 | 상태·담당 |
 | --- | --- |
 | AI 4종 입출력 Schema·Mock 예시 | **확정** — `docs/07-ai-ready.md`. 리소스 파일과 Mock 구현은 후속 작업 |
-| 승인 물품의 체크리스트 자동 등록·출처 표시 규칙 | **TBD** — FE·BE·Data Architect. 화면은 사진 출처를 구분하지만 API·DB `source`는 `RULE/AI/USER`만 정의 |
+| 체크리스트 출처 표시 | **확정** — API·DB `source`는 `RULE/PHOTO/AI/USER`. `PHOTO`는 사진에서 승인된 물품, `AI`는 AI가 추천한 부족분 ([API 명세](../docs/06-api-spec.md)) |
+| 대응 체크리스트 항목이 없는 승인 물품의 자동 등록 | **TBD** — 현재 S-04는 기존 항목과 연결하고, 대응 항목이 없으면 S-06의 `추가 물품`으로 표시한다. 이를 체크리스트로 자동 등록하는 흐름은 `docs/07-ai-ready.md`의 알려진 한계에 남아 있다 |
 | Supabase 접속 정보·스키마 적용 현황 | **확인 완료** — 사용자가 지정한 별도 로컬 체크아웃의 `.env`로 연결, 설계된 테이블 10개 존재 확인 |
 | 도메인별 구현 담당 | **TBD** — BE 담당자끼리 엔드포인트·파일 단위로 분담 |
 
@@ -299,8 +320,10 @@ java -jar build/libs/mini-ai-web-service-0.0.1-SNAPSHOT.jar
 
 GitHub Actions의 **Backend Build**는 `backend/**` 변경 PR와 main 반영 시
 Java 21로 `./gradlew build --no-daemon`을 실행한다. Supabase 비밀값은 필요 없다.
-이번 작업에서는 워크플로 파일을 추가했으며 GitHub 원격 실행 결과는 아직 확인하지 않았다.
-브랜치 보호의 필수 검사 설정은 변경하지 않았다.
+같은 PR·브랜치에 연속 push하면 이전 빌드를 취소하고 최신 빌드를 실행한다.
+초기 PR의 [Backend Build 원격 실행](https://github.com/SangMyeong5426/skala-mini-ai-web-service/actions/runs/33704082986)은 통과했다.
+**이 검사는 H2 기반이며 실제 PostgreSQL의 JPA 매핑 검증을 대신하지 않는다.**
+이 PR에서 브랜치 보호의 필수 검사 설정은 변경하지 않았다.
 
 `main`에 직접 커밋·push하지 않는다. 예: `chore/backend-development-setup`,
 PR 제목 예: `chore(be): 백엔드 개발환경 설정 보완`.
