@@ -10,8 +10,9 @@
  * `tripId: 12` 를 쓰므로 그 값도 함께 받아 준다.
  */
 import type {
-  AiJob, AiJobCreated, ChecklistItem, Detection, Inspection,
-  JobType, TripDetail, TripPhoto, TripSummary,
+  AiJob, AiJobCreated, BagCheckOutput, ChecklistItem, Detection, Inspection,
+  JobType, PackingListOutput, RuleCheckOutput, TripDetail, TripPhoto, TripSummary,
+  WeightEstimateOutput,
 } from '../types/api'
 
 // ── 여행 (S-01) ───────────────────────────────────────────
@@ -118,23 +119,278 @@ export const INSPECTION: Inspection = {
 }
 
 // ── AI 작업 (S-04 · S-05 · S-06 · S-09) ───────────────────
-/** 07-ai-ready.md 의 예시 output. jobType 별로 다르다. */
-export const AI_OUTPUT: Record<JobType, unknown> = {
+/**
+ * <b>docs/07-ai-ready.md 의 「예시」 절 output 을 그대로 옮긴 것이다.</b>
+ *
+ * 06 의 REST 응답 조각을 재사용하면 안 된다. 07 은 <b>모델이 내는 원본</b>이고
+ * 06 은 <b>서버가 저장·가공한 뒤</b>라 모양이 일부러 다르다. 예를 들어 07 의
+ * `RULE_CHECK.results[]` 는 `ruleId` · `ruleKeyword` · `attributes` 까지 담는데,
+ * 06 의 `inspection.customs[]` 에는 그 셋이 없다 — 서버가 흡수한 뒤이기 때문이다.
+ *
+ * 07 의 출력 Schema 는 `additionalProperties: false` 다. 필드를 하나라도 더하면
+ * 백엔드 Mock 이 07 대로 응답하는 날 화면이 깨진다.
+ */
+export const AI_OUTPUT: {
+  PACKING_LIST: PackingListOutput
+  BAG_CHECK: BagCheckOutput
+  WEIGHT_ESTIMATE: WeightEstimateOutput
+  RULE_CHECK: RuleCheckOutput
+} = {
   PACKING_LIST: {
     items: [
-      { name: '변환 플러그', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED',
-        reason: '일본 콘센트는 A타입입니다.' },
-      { name: '상비약', category: 'MEDICINE', qty: 1, priority: 'RECOMMENDED',
-        reason: '해열제·소화제 정도는 챙기는 편이 좋습니다.' },
-      { name: '우산', category: 'ETC', qty: 1, priority: 'RECOMMENDED',
-        reason: '10월 초 도쿄는 비 예보가 있습니다.' },
+      {
+        name: "변환 플러그",
+        category: "ELECTRONIC",
+        qty: 1,
+        priority: "REQUIRED"
+      },
+      {
+        name: "상비약",
+        category: "MEDICINE",
+        qty: 1,
+        priority: "RECOMMENDED"
+      },
+      {
+        name: "화장품",
+        category: "TOILETRY",
+        qty: 1,
+        priority: "RECOMMENDED"
+      },
+      {
+        name: "우산",
+        category: "ETC",
+        qty: 1,
+        priority: "RECOMMENDED"
+      }
     ],
-    tips: ['일본 콘센트는 A타입입니다.', '10월 초 도쿄는 낮 24도, 얇은 겉옷을 권합니다.'],
-    weatherSource: 'FORECAST',
+    tips: [
+      "일본 콘센트는 A타입, 100V입니다.",
+      "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다. 실시간 예보가 아닙니다.",
+      "디즈니랜드는 하루 2만 보 이상 걷습니다."
+    ],
+    weatherSource: "SEASONAL"
   },
-  BAG_CHECK: { detections: DETECTIONS },
-  WEIGHT_ESTIMATE: INSPECTION.weight,
-  RULE_CHECK: { customs: INSPECTION.customs },
+
+  BAG_CHECK: {
+    detections: [
+      {
+        photoId: 1,
+        name: "충전기",
+        qty: 1,
+        confidence: 0.93,
+        confidenceLevel: "HIGH",
+        missingInfo: null,
+        labelText: null
+      },
+      {
+        photoId: 1,
+        name: "보조배터리",
+        qty: 1,
+        confidence: 0.88,
+        confidenceLevel: "HIGH",
+        missingInfo: "배터리 정격(Wh)",
+        labelText: null
+      },
+      {
+        photoId: 1,
+        name: "상의",
+        qty: 4,
+        confidence: 0.81,
+        confidenceLevel: "HIGH",
+        missingInfo: null,
+        labelText: null
+      },
+      {
+        photoId: 1,
+        name: "하의",
+        qty: 2,
+        confidence: 0.79,
+        confidenceLevel: "MEDIUM",
+        missingInfo: null,
+        labelText: null
+      },
+      {
+        photoId: 1,
+        name: "속옷",
+        qty: 4,
+        confidence: 0.72,
+        confidenceLevel: "MEDIUM",
+        missingInfo: null,
+        labelText: null
+      },
+      {
+        photoId: 2,
+        name: "화장품 용기",
+        qty: 1,
+        confidence: 0.64,
+        confidenceLevel: "MEDIUM",
+        missingInfo: "용량(ml)",
+        labelText: null
+      },
+      {
+        photoId: 2,
+        name: "가위",
+        qty: 1,
+        confidence: 0.91,
+        confidenceLevel: "HIGH",
+        missingInfo: "날 길이(cm)",
+        labelText: null
+      },
+      {
+        photoId: 2,
+        name: "검정 파우치",
+        qty: 1,
+        confidence: 0.43,
+        confidenceLevel: "LOW",
+        missingInfo: null,
+        labelText: null
+      }
+    ],
+    failedPhotoIds: []
+  },
+
+  WEIGHT_ESTIMATE: {
+    minG: 4570,
+    typicalG: 5410,
+    maxG: 6890,
+    limitG: 10000,
+    bagEmptyG: 3200,
+    verdict: "ROOM",
+    confidence: "MEDIUM",
+    confidenceReason: "사진에서 미확인 4개, 승인 전 1개",
+    excludedCount: 5,
+    excluded: [
+      {
+        name: "여권",
+        reason: "NOT_IN_PHOTO"
+      },
+      {
+        name: "변환 플러그",
+        reason: "NOT_IN_PHOTO"
+      },
+      {
+        name: "상비약",
+        reason: "NOT_IN_PHOTO"
+      },
+      {
+        name: "우산",
+        reason: "NOT_IN_PHOTO"
+      },
+      {
+        name: "화장품",
+        reason: "PENDING_APPROVAL"
+      }
+    ],
+    contributions: [
+      {
+        name: "상의",
+        minG: 120,
+        typicalG: 200,
+        maxG: 350,
+        qty: 4,
+        subtotalG: 800
+      },
+      {
+        name: "하의",
+        minG: 250,
+        typicalG: 400,
+        maxG: 650,
+        qty: 2,
+        subtotalG: 800
+      },
+      {
+        name: "보조배터리",
+        minG: 180,
+        typicalG: 280,
+        maxG: 450,
+        qty: 1,
+        subtotalG: 280
+      },
+      {
+        name: "속옷",
+        minG: 40,
+        typicalG: 60,
+        maxG: 90,
+        qty: 4,
+        subtotalG: 240
+      },
+      {
+        name: "충전기",
+        minG: 50,
+        typicalG: 90,
+        maxG: 180,
+        qty: 1,
+        subtotalG: 90
+      }
+    ]
+  },
+
+  RULE_CHECK: {
+    results: [
+      {
+        itemId: 6,
+        detectionId: null,
+        name: "보조배터리",
+        qty: 1,
+        ruleKeyword: "보조배터리",
+        attributes: {
+          capacityMl: null,
+          batteryWh: null,
+          batteryMah: null,
+          bladeCm: null
+        },
+        verdict: "NEED_MORE_INFO",
+        ruleId: 1,
+        conditionNote: "100Wh 이하",
+        reason: "보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라 달라집니다. 라벨의 Wh 를 확인해 주세요.",
+        missingInfo: "배터리 정격(Wh)",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        checkedAt: "2026-09-02"
+      },
+      {
+        itemId: 8,
+        detectionId: null,
+        name: "화장품",
+        qty: 1,
+        ruleKeyword: "액체",
+        attributes: {
+          capacityMl: null,
+          batteryWh: null,
+          batteryMah: null,
+          bladeCm: null
+        },
+        verdict: "NEED_MORE_INFO",
+        ruleId: 4,
+        conditionNote: "용기당 100ml 이하, 총 1L 이하",
+        reason: "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
+        missingInfo: "용량(ml)",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        checkedAt: "2026-09-02"
+      },
+      {
+        itemId: null,
+        detectionId: 7,
+        name: "가위",
+        qty: 1,
+        ruleKeyword: "가위",
+        attributes: {
+          capacityMl: null,
+          batteryWh: null,
+          batteryMah: null,
+          bladeCm: null
+        },
+        verdict: "NEED_MORE_INFO",
+        ruleId: 6,
+        conditionNote: "날 길이 6cm 초과",
+        reason: "날 길이 6cm를 넘는 가위는 기내 반입이 제한됩니다. 위탁수하물로 부치세요.",
+        missingInfo: "날 길이(cm)",
+        sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+        checkedAt: "2026-09-02"
+      }
+    ],
+    answer: null,
+    followUpQuestion: null
+  },
 }
 
 export const AI_JOB_CREATED = (jobType: JobType, jobId: number): AiJobCreated => ({

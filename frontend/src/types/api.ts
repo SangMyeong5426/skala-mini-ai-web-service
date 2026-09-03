@@ -191,6 +191,89 @@ export interface AiJob<T = unknown> {
   pollAfterMs?: number
 }
 
+// ── AI 출력 (docs/07-ai-ready.md) ─────────────────────────
+/**
+ * **06 의 REST 응답과 모양이 다르다.** 07 은 모델이 내는 원본이고 06 은 서버가
+ * 저장·가공한 뒤다. 섞어 쓰면 백엔드 Mock 이 07 대로 응답하는 날 화면이 깨진다.
+ *
+ * 07 의 출력 Schema 는 `additionalProperties: false` 다. 필드를 더하지 않는다.
+ */
+
+/** AI-02 `PACKING_LIST` — 부족한 준비물만 돌려준다. */
+export interface PackingListOutput {
+  items: { name: string; category: Category; qty: number; priority: Priority }[]
+  tips: string[]
+  /** 예보 범위(16일) 안이면 FORECAST, 넘으면 계절 평균. */
+  weatherSource: 'FORECAST' | 'SEASONAL'
+}
+
+/** AI-01 `BAG_CHECK` — 사진 속 물품 인식. */
+export interface BagCheckOutput {
+  /** `detectionId` 는 없다. 서버가 저장하면서 붙인다. */
+  detections: {
+    photoId: number
+    name: string
+    qty: number
+    confidence: number
+    confidenceLevel: ConfidenceLevel
+    missingInfo: string | null
+    labelText: string | null
+  }[]
+  /** 분석에 실패한 사진. 성공한 것만 보여주고 이건 재시도 대상이다. */
+  failedPhotoIds: number[]
+}
+
+/** AI-03 `WEIGHT_ESTIMATE` — 무게 범위. 단일 값이 아니다. */
+export interface WeightEstimateOutput {
+  minG: number
+  typicalG: number
+  maxG: number
+  limitG: number
+  bagEmptyG: number
+  verdict: WeightVerdict
+  confidence: ConfidenceLevel
+  confidenceReason: string
+  excludedCount: number
+  /** 계산에서 뺀 항목과 이유. 숨기지 않는다. */
+  excluded: { name: string; reason: string }[]
+  contributions: {
+    name: string
+    minG: number
+    typicalG: number
+    maxG: number
+    qty: number
+    subtotalG: number
+  }[]
+}
+
+/** AI-04 `RULE_CHECK` — 물품 구조화와 판정 설명. 최종 판정은 규칙 엔진이 한다. */
+export interface RuleCheckOutput {
+  results: {
+    /** 체크리스트에서 온 것이면 값, 챗봇 질문이면 null. */
+    itemId: number | null
+    /** 사진 인식에서 온 것이면 값. */
+    detectionId: number | null
+    name: string
+    qty: number
+    ruleKeyword: string | null
+    /** 용량·Wh·날 길이 등 판정에 쓴 속성. 물품마다 다르다. */
+    attributes: Record<string, unknown>
+    verdict: RuleVerdict
+    ruleId: number | null
+    conditionNote: string | null
+    reason: string
+    /** 판정에 부족한 정보. 채우면 확정 판정이 가능해진다. */
+    missingInfo: string | null
+    /** 규정 최신성 — 출처와 확인 날짜를 항상 함께. */
+    sourceUrl: string | null
+    checkedAt: string | null
+  }[]
+  /** 챗봇(S-09)이 말풍선에 넣는 문장. S-06 검수 경로에서는 null 이다. */
+  answer: string | null
+  /** 정보가 부족할 때 되묻는 질문. 한 번에 하나씩. 없으면 null. */
+  followUpQuestion: string | null
+}
+
 // ── 반입 규정 (S-08) ──────────────────────────────────────
 export interface TransportRule {
   ruleId: number
