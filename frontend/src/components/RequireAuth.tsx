@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 
 /**
@@ -12,11 +12,15 @@ import { useAuth } from '../auth/context'
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
-  const loc = useLocation()
 
   if (loading) return <div className="auth-wait" aria-busy="true" />
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
+    /*
+     * 원래 경로를 넘기지 않는다. 03:41 이 <b>"로그인 성공 후 S-01 에서 다시
+     * 시작한다"</b> 로 정했다 — 만료됐다는 것은 그 사이 상태가 달라졌을 수
+     * 있다는 뜻이라, 옛 화면 한가운데로 되돌리지 않는다.
+     */
+    return <Navigate to="/login" replace />
   }
   return <>{children}</>
 }

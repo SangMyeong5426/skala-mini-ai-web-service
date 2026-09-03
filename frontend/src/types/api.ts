@@ -94,10 +94,28 @@ export interface ItemCreate {
 export type BagKind = 'CABIN' | 'CHECKED'
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 
+/**
+ * `POST /api/trips` 의 201 본문. <b>목록·상세와 모양이 다르다.</b>
+ * `createdAt` 이 있고 완료율·목적·가방은 없다(`TripDtos.CreateResponse`).
+ * 화면은 `tripId` 만 쓰지만, 없는 필드를 있다고 적어 두면 다음 사람이 쓴다.
+ */
+export interface TripCreated {
+  tripId: number
+  origin: string
+  destination: string
+  startDate: string
+  endDate: string
+  transport: Transport
+  status: TripStatus
+  createdAt: string
+}
+
 export interface TripPhoto {
   photoId: number
   fileUrl: string
   bagKind: BagKind
+  /** 06:1056 · 실서버 `PhotoDtos.Photo`. ISO 8601 UTC. */
+  uploadedAt: string
 }
 
 export interface Detection {
@@ -166,7 +184,12 @@ export interface Inspection {
     minG: number
     typicalG: number
     maxG: number
-    limitG: number
+    /**
+     * <b>nullable 이다.</b> 서버가 `input.weightLimitG` 를 그대로 옮기는데
+     * 가방 정보를 모르는 여행이 있다(`InspectionDtos` 의 `Integer limitG`).
+     * null 이면 07:1163 산식대로 verdict 는 UNKNOWN 이다.
+     */
+    limitG: number | null
     verdict: WeightVerdict
     confidence: ConfidenceLevel
     confidenceReason: string
@@ -206,11 +229,16 @@ export interface AiJob<T = unknown> {
   jobId: number
   jobType: JobType
   status: JobStatus
-  output: T | null
+  /**
+   * <b>키가 아예 없을 수 있다.</b> 서버의 `AiJobDtos.Status` 가
+   * `@JsonInclude(NON_NULL)` 이라 PENDING·FAILED 응답에서 이 키가 빠진다.
+   * 06 예시는 `null` 로 적혀 있지만 실제 응답은 키 자체가 없다.
+   */
+  output?: T | null
   modelName?: string
   errorMessage?: string
   createdAt: string
-  completedAt: string | null
+  completedAt?: string | null
   pollAfterMs?: number
 }
 

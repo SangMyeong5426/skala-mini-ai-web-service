@@ -282,7 +282,7 @@ AI 호출의 `202 Accepted`와 폴링은 사용자 흐름이 아니라 시스템
 | --- | --- |
 | 목적 | 준비 상태·예상 무게·반입 여부를 한 화면에서 확인하고 최종 확정한다 |
 | 주요 요소 | **① 준비 상태** — 내 목록의 완료·미완료, 별도 사진 비교 배지(`확인됨` / `확인 필요` / `사진에서 미확인`)<br>**② 예상 무게** — 실제 완료 항목의 `최소–대표–최대` 범위, 신뢰도·한도 대비 상태·계산 제외 이유<br>**③ 반입 판정** — 물품별 상태 배지 + 근거 한 줄<br>`최종 저장` 버튼 |
-| 호출 API | `GET /api/trips/{tripId}/inspection` → `200`<br>`POST /api/ai-jobs` (`WEIGHT_ESTIMATE`, `RULE_CHECK`) → `202` + 폴링<br>`PATCH /api/trips/{tripId}/items/{itemId}` → `200` |
+| 호출 API | `GET /api/trips/{tripId}/inspection` → `200`<br>`POST /api/ai-jobs` (`WEIGHT_ESTIMATE`, `RULE_CHECK`) → `202` + 폴링<br>`PATCH /api/trips/{tripId}/items/{itemId}` → `200`<br>`PATCH /api/trips/{tripId}` (`status: CONFIRMED`) → `200` — **최종 저장** |
 | **로딩 상태** | 세 영역이 **각각 따로** 로딩된다. 무게가 아직이어도 준비 상태는 먼저 보인다 |
 | 빈 상태 | 내 목록이 비면 사진 등록·직접 추가 안내. 완료 항목이 없으면 *"현재 챙김 완료된 물품이 없습니다"*. 사진이 없어도 직접 완료 확인한 물품으로 검수할 수 있다 |
 | 변경 후 상태 | 완료 체크·수량·가방 정보 변경 후 무게를 재계산한다. 이전 결과와 현재 입력이 다르면 최신 무게처럼 표시하지 않는다. 미채택 추천은 완료율·무게에서 제외한다 |

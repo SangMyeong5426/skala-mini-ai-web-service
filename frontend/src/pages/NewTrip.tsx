@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiFailure } from '../api/client'
 import { Shell, Steps, TopBar } from '../components/Shell'
-import type { BagType, Purpose, Transport, TripDetail } from '../types/api'
+import type { BagType, Purpose, Transport, TripCreated } from '../types/api'
 
 /**
  * S-02 여행 등록.
@@ -76,8 +76,8 @@ export default function NewTrip() {
 
     setBusy(true)
     try {
-      // 06: POST /api/trips → 201 + Location. Mock 은 본문의 tripId 로 받는다.
-      const created = await api.post<TripDetail>('/trips', {
+      // 06: POST /api/trips → 201 + Location. 본문의 tripId 로 이동한다.
+      const created = await api.post<TripCreated>('/trips', {
         origin: origin.trim(),
         destination: destination.trim(),
         startDate,
@@ -222,6 +222,8 @@ export default function NewTrip() {
 
           <div className="form-foot">
             <button type="submit" className="btn" disabled={busy || badRange}>
+              {/* 03:236 로딩 상태 — 저장 버튼 비활성 + 스피너 */}
+              {busy && <span className="spinner" aria-hidden="true" />}
               {busy ? '저장하는 중…' : '다음 — 짐 사진 올리기'}
             </button>
           </div>

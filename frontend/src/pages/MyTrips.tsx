@@ -79,7 +79,21 @@ export default function MyTrips() {
 }
 
 function TripCard({ trip, past }: { trip: TripSummary; past?: boolean }) {
-  const to = past ? `/trips/${trip.tripId}` : `/trips/${trip.tripId}/photos`
+  /*
+   * 03:176 — "S-01 에서 <b>마지막 저장 단계</b>로 복귀한다".
+   *
+   * 예전에는 진행 중이면 무조건 사진(S-03)으로 보냈다. 검수까지 마치고
+   * `최종 저장` 을 누른 여행을 다시 눌러도 사진 업로드 화면이 나왔다.
+   *
+   * 목록 응답에는 어느 단계까지 갔는지가 없다. 있는 것은 `status` 뿐이고,
+   * 그것이 정확히 이 뜻이다 — `DRAFT` 는 준비 중, `CONFIRMED` 는 최종 저장을
+   * 거친 것(S-06 의 `최종 저장` 이 그 값을 만든다).
+   */
+  const to = past
+    ? `/trips/${trip.tripId}`
+    : trip.status === 'CONFIRMED'
+      ? `/trips/${trip.tripId}/inspection`
+      : `/trips/${trip.tripId}/photos`
   return (
     <Link to={to} className="card" style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
       <div className="card-head" style={{ marginBottom: 10 }}>

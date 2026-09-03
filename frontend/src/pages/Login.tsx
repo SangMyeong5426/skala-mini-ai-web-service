@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ApiFailure } from '../api/client'
 import { useAuth } from '../auth/context'
 import { AuthShell, Field } from '../components/AuthShell'
@@ -26,8 +26,6 @@ type Mode = 'login' | 'signup'
 export default function Login() {
   const { user, loading, login, signup } = useAuth()
   const nav = useNavigate()
-  const loc = useLocation()
-  const from = (loc.state as { from?: string } | null)?.from ?? '/trips'
 
   const [mode, setMode] = useState<Mode>('login')
   const [loginId, setLoginId] = useState('')
@@ -56,23 +54,66 @@ export default function Login() {
     e.preventDefault()
     setError(null); setField(null); setNotice(null)
 
-    // 06 의 형식 규칙을 먼저 걸러 왕복을 줄인다. 최종 판정은 서버가 한다.
-    if (!LOGIN_ID_RE.test(loginId.trim().toLowerCase())) {
-      setField('loginId'); setError('아이디는 영문 소문자·숫자·밑줄 4~30자입니다.')
-      return
-    }
-    if (password.length < PASSWORD_MIN) {
-      setField('password'); setError(`비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`)
+    /*
+     * <b>검사한 값과 보내는 값이 같아야 한다.</b>
+     *
+     * 예전에는 `loginId.trim().toLowerCase()` 로 검사해 놓고 서버에는 입력
+     * 원문을 보냈다. 서버는 `@Pattern("[A-Za-z0-9_]{4,30}")` 을 <b>원문에</b>
+     * 걸므로(AuthDtos:26, 정규화는 그 뒤 AuthService:37), 앞뒤 공백이 섞이면
+     * 프런트 검사는 통과하고 서버가 400 으로 거절했다. 이메일도 같다.
+     *
+     * 비밀번호는 건드리지 않는다 — 공백도 비밀번호의 일부다.
+     */
+    const id = loginId.trim().toLowerCase()
+    const mail = email.trim()
+    const nick = nickname.trim()
+
+    /*
+     * <b>형식 규칙은 가입에서만 건다.</b>
+     *
+     * 로그인은 서버가 두 칸의 빈 값만 보고(AuthDtos `@NotBlank`), 형식이
+     * 어떻든 틀리면 401 <i>"아이디 또는 비밀번호를 확인해 주세요."</i> 하나로
+     * 답한다. 03:210 이 로그인 실패 문구를 그것 하나로 정했다.
+     *
+     * 그런데 프런트가 가입용 규칙을 먼저 걸어서, 예전 아이디를 쓰는 사람이나
+     * 대문자를 넣은 사람에게 <b>"아이디는 영문 소문자…"</b> 라는 다른 문구가
+     * 나왔다. 아이디가 틀렸다는 사실을 화면이 먼저 단정한 셈이다.
+     */
+    if (mode === 'signup') {
+      if (!LOGIN_ID_RE.test(id)) {
+        setField('loginId'); setError('아이디는 영문 소문자·숫자·밑줄 4~30자입니다.')
+        return
+      }
+      if (password.length < PASSWORD_MIN) {
+        setField('password'); setError(`비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`)
+        return
+      }
+    } else if (!id || !password) {
+      setField(id ? 'password' : 'loginId')
+      setError('아이디와 비밀번호를 입력해 주세요.')
       return
     }
 
     setBusy(true)
     try {
       if (mode === 'login') {
-        await login(loginId, password)
-        nav(from, { replace: true })
+        await login(id, password)
+        /*
+         * <b>언제나 S-01 이다.</b> 원래 있던 화면으로 돌려보내지 않는다.
+         *
+         * 03:41 — "비로그인·만료 시 S-00 으로 이동하고 <b>로그인 성공 후
+         * S-01 에서 다시 시작한다</b>". 03:208 도 같다.
+         *
+         * 세션이 만료됐다는 것은 그 사이 상태가 달라졌을 수 있다는 뜻이다.
+         * S-06 검수 화면 한가운데로 되돌려 놓으면 옛 화면을 새 세션으로 보게
+         * 된다. 여행 목록에서 다시 고르는 편이 안전하다.
+         *
+         * 이 파일 46행의 "이미 로그인한 사람" 리다이렉트도 `/trips` 고정이라
+         * 두 경로가 이제 같은 곳으로 간다.
+         */
+        nav('/trips', { replace: true })
       } else {
-        await signup({ nickname, loginId, password, email })
+        await signup({ nickname: nick, loginId: id, password, email: mail })
         // 06: 가입만으로 세션을 만들지 않는다. 아이디만 남기고 로그인 모드로.
         setMode('login')
         setPassword('')

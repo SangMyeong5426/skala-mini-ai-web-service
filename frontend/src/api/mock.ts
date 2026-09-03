@@ -622,6 +622,21 @@ export function mockRequest(
     // `tripId: null` 을 명시하는 클라이언트도 있다(챗봇). != null 이어야 둘 다 통과한다.
     if (b.tripId != null && (!target || target.ownerId !== me)) return NOT_FOUND
 
+    /*
+     * 07 은 BAG_CHECK 의 `photoIds` 를 <b>minItems 1</b> 로 정했고, 실서버는
+     * 사진이 없으면 작업을 만들지 않고 400 을 낸다.
+     *
+     * Mock 은 조용히 접수하고 조용히 성공시켰다. 그래서 사진 없이 분석을
+     * 걸면 <b>Mock 에서만</b> 성공 화면이 나오고 뒤이어 추천까지 돌았다.
+     * Mock 이 서버보다 후하면 Mock 에서만 되는 화면이 생긴다.
+     */
+    if (jobType === 'BAG_CHECK' && !(Array.isArray(input.photoIds) && input.photoIds.length)) {
+      return delay(new MockError(
+        400, 'VALIDATION_FAILED',
+        '분석할 사진이 없습니다. 사진을 먼저 올려 주세요.', 'input.photoIds',
+      ))
+    }
+
     jobs.set(jobId, {
       ownerId: me,
       left: 2,
@@ -786,6 +801,18 @@ export function mockRequest(
     return delay({ ...created })
   }
 
+  /*
+   * 06 — `PATCH /trips/{tripId}`. S-06 의 <b>최종 저장</b>이 이걸 부른다.
+   * 새 여행은 DRAFT 로 만들어지고(TripService:95), 준비가 끝나면 CONFIRMED 가
+   * 되어 내 여행 목록에서 "진행 중" 으로 선다.
+   */
+  if (method === 'PATCH' && /^\/trips\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    Object.assign(t.detail, b)
+    return delay({ ...t.detail })
+  }
+
   if (method === 'PATCH' && /^\/trips\/\d+\/items\/\d+$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND
@@ -825,6 +852,8 @@ export function mockRequest(
       photoId: nextPhotoId++,
       fileUrl: String(f.fileUrl ?? ''),
       bagKind: (f.bagKind ?? 'CABIN') as TripPhoto['bagKind'],
+      // 06:1056 — 실서버는 ISO 8601 UTC 로 준다
+      uploadedAt: new Date().toISOString(),
     }))
     t.photos.push(...photos)
     return delay({ photos })

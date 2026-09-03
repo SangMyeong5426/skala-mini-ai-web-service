@@ -42,9 +42,26 @@ export const PHOTO_STATUS_LABEL: Record<string, string> = {
 }
 
 /** 반입 판정 6종. 색으로만 구분하지 않으려고 라벨을 함께 둔다. */
+/**
+ * 반입 판정 라벨. <b>화면마다 다르게 부르지 않는다.</b>
+ *
+ * S-06 검수와 S-09 챗봇이 각자 표를 들고 있어서 같은 판정이 다른 말로 나왔다.
+ * 그냥 어색한 정도가 아니라 <b>뜻이 뒤집히는 것</b>이 있었다 —
+ * `CHECKED_FORBIDDEN` 을 챗봇이 "위탁 금지" 로 불렀는데, 그러면 기내는 되는
+ * 것처럼 읽힌다. 200Wh 보조배터리처럼 <b>기내·위탁 모두 금지</b>인 물건에
+ * 그렇게 말하면 위험하다(06:416).
+ *
+ * 배지 색도 여기서 함께 정한다. 라벨만 합치고 색을 각자 두면 같은 판정이
+ * 화면마다 다른 색으로 보인다.
+ */
 export const VERDICT_LABEL: Record<string, string> = {
-  CABIN_OK: '기내 가능', CHECKED_OK: '위탁 가능', CHECKED_FORBIDDEN: '위탁 금지',
-  RESTRICTED: '반입 제한', NEED_MORE_INFO: '추가정보 필요', ASK_AIRLINE: '항공사 확인',
+  CABIN_OK: '기내 가능', CHECKED_OK: '위탁 가능', CHECKED_FORBIDDEN: '반입 불가',
+  RESTRICTED: '조건부', NEED_MORE_INFO: '정보 부족', ASK_AIRLINE: '항공사 확인',
+}
+
+export const VERDICT_CLASS: Record<string, string> = {
+  CABIN_OK: 'badge-ok', CHECKED_OK: 'badge-ok', CHECKED_FORBIDDEN: 'badge-danger',
+  RESTRICTED: 'badge-warn', NEED_MORE_INFO: 'badge-warn', ASK_AIRLINE: 'badge-warn',
 }
 
 export const WEIGHT_VERDICT_LABEL: Record<string, string> = {

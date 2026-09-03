@@ -1,0 +1,46 @@
+name: Frontend Build
+
+# 백엔드만 CI 가 있고 프런트는 없었다. 산출물의 절반인데 타입 검사도 lint 도
+# 사람 손에 맡겨져 있었다 — 실제로 `useRef` 를 import 하지 않은 코드가
+# 로컬에서 통과한 적이 있다(`tsc --noEmit` 은 이 저장소에서 아무것도 검사하지
+# 않는다. solution-style tsconfig 라 `tsc -b` 여야 한다).
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --ignore-scripts
+      # `npm run build` 가 `tsc -b && vite build` 다. 타입 검사가 여기 들어 있다.
+      - name: Build
+        run: npm run build
+      # 경고는 통과시킨다. 오류만 막는다 — 현재 경고 9건은 기존 코드의 것이다.
+      - name: Lint
+        run: npm run lint

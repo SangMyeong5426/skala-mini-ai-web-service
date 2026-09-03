@@ -1018,6 +1018,8 @@ select:focus-visible, textarea:focus-visible {
   border: 1px solid var(--line-strong); background: var(--surface);
   color: var(--text-2); cursor: pointer; font-size: 13px;
 }
+/* 준비 중이라는 것이 눈에도 보여야 한다 — 툴팁만으로는 부족하다 */
+.attach:disabled { opacity: .45; cursor: not-allowed; }
 
 .chat-foot {
   padding: 0 16px 14px; font-size: 11px; color: var(--text-3);
