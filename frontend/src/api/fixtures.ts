@@ -178,6 +178,14 @@ export const INSPECTION: Inspection = {
     completionRate: 0.889,
     unacceptedRequiredCount: 1,
   },
+  /*
+   * S-06 검수 응답의 <b>모양</b>을 보여주는 예시다. Mock 의 실제 응답은 접수한
+   * 입력으로 `weightFor` 가 만든다 — 다른 여행의 값을 현재 결과로 쓰지 않는다.
+   *
+   * `contributions` 는 <b>6개다.</b> 07:1081 이 "S-06 은 위 3개만, S-07 은 전부"
+   * 로 정했고 서버도 3개에서 자른다. 자르는 일은 응답을 만드는 쪽(`weightFor`)이
+   * 하고, 여기에는 S-07 이 쓸 전체를 둔다.
+   */
   weight: {
     // 06:603-610 예시 그대로. 랜딩(4.6—5.5—7.0)과 같은 값이어야 한다.
     minG: 4610, typicalG: 5480, maxG: 7010,

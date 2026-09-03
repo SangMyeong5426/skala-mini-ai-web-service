@@ -113,13 +113,19 @@ interface TripState {
   recommendationJobId: number | null
   /** 채택된 후보 위치. 같은 후보를 두 번 채택해도 항목이 하나만 생긴다. */
   accepted: Map<number, number>
-  /** 사람이 손댄 연결. 06 의 confirmedByUser 가 이것이다 */
-  confirmed: Set<number>
+  /**
+   * 사람이 손댄 인식. 06 의 `confirmedByUser` 가 이것이다.
+   *
+   * <b>Set 이 아니라 Map 이다.</b> 값은 <b>사후 수정하기 전의 이름</b>이다.
+   * detectionId 만 들고 있으면 "이 인식이 원래 무엇이었나" 를 잃어버려서,
+   * 재분석 때 모델이 내놓은 후보와 같은 물건인지 판단할 수 없다.
+   */
+  confirmed: Map<number, string>
 }
 
 function emptyTrip(detail: TripDetail, ownerId = 1): TripState {
   return {
-    ownerId, detail, items: [], detections: [], photos: [], confirmed: new Set(),
+    ownerId, detail, items: [], detections: [], photos: [], confirmed: new Map(),
     links: new Map(), recommendationJobId: null, accepted: new Map(),
   }
 }
@@ -151,7 +157,7 @@ trips.set(1, {
   // 비워 두면 같은 물건이 체크리스트와 추천에 <b>두 번</b> 보이고,
   // 미채택 필수 수도 2 가 되어 fx.ITEMS_META 의 1 과 어긋난다.
   accepted: new Map([[0, 7]]),
-  confirmed: new Set(),
+  confirmed: new Map(),
 })
 for (const t of fx.TRIPS.slice(1)) trips.set(t.tripId, emptyTrip({ ...t }))
 
@@ -186,6 +192,11 @@ const jobs = new Map<number, {
    * 없으면 체크리스트를 바꿔도 옛 무게가 계속 유효한 것처럼 남는다.
    */
   stamp?: string
+  /**
+   * 접수한 입력 그대로. <b>결과를 이 입력으로 만들어야</b> 다른 여행의 예시가
+   * 현재 계산 결과처럼 보이지 않는다.
+   */
+  input?: Record<string, unknown>
   /** 완료 결과를 도메인에 한 번만 반영한다. 반복 GET 으로 중복 삽입하지 않는다. */
   applied: boolean
 }>()
@@ -237,11 +248,109 @@ function syncStatus(t: TripState, itemIds: number[]) {
     const linked = [...t.links.entries()]
       .filter(([, ids]) => ids.includes(itemId))
       .map(([detectionId]) => detectionId)
+
+    /*
+     * <b>사람이 손댄 항목의 준비 상태는 건드리지 않는다.</b>
+     *
+     * 연결 정리(재분석)와 사용자가 정한 준비 여부는 다른 축이다. 06:726 이
+     * "이름·수량 수정 시 기존 준비 상태·출처 유지" 로 정한 것과 같은 원칙이다.
+     *
+     * 예전에는 연결만 보고 무조건 PREPARED 로 덮었다. 그래서 체크를 직접 푼
+     * 물품이 <b>재분석 한 번에 완료로 되돌아갔다.</b> 사진을 다시 분석했다는
+     * 이유로 "이거 챙겼다" 를 사용자 대신 결정한 셈이다.
+     */
+    const touchedByUser = linked.some((detectionId) => t.confirmed.has(detectionId))
+    if (touchedByUser) continue
+
     if (linked.length === 0) {
       item.checkStatus = 'NOT_IN_PHOTO'
       continue
     }
     item.checkStatus = 'PREPARED'
+  }
+}
+
+/**
+ * 접수한 <b>입력으로</b> 무게 결과를 만든다.
+ *
+ * 예전에는 시드 여행의 고정값(`fx.INSPECTION.weight`)을 그대로 돌려줬다.
+ * 빈 가방 5.2kg·한도 23kg 여행에 여권 하나만 넣어도 <b>5.48kg·한도 10kg·
+ * 상의/하의/보조배터리</b> 가 나왔다. 다른 여행의 예시가 현재 계산 결과처럼
+ * 보인 것이다.
+ *
+ * 새 계산기를 만드는 것이 아니다. `AI_OUTPUT.WEIGHT_ESTIMATE.contributions` 가
+ * 이미 물품마다 최소·대표·최대와 수량을 들고 있고, 시드의 총합도 그것과
+ * `bagEmptyG` 를 더한 값이다(3200 + 1410 = 4610 · 2280 = 5480 · 3810 = 7010).
+ * <b>그 산식을 입력의 물품에만 다시 적용한다.</b>
+ *
+ * 무게를 모르는 물품은 07 대로 `NO_WEIGHT_INFO` 로 빼고, 판정·신뢰도는
+ * 07:1163 과 출력 Schema 의 산식을 그대로 쓴다.
+ */
+function weightFor(input: Record<string, unknown>) {
+  const known = fx.AI_OUTPUT.WEIGHT_ESTIMATE.contributions
+  const items = (Array.isArray(input.items) ? input.items : []) as { name?: unknown; qty?: unknown }[]
+  const bagEmptyG = typeof input.bagEmptyG === 'number' ? input.bagEmptyG : null
+  const limitG = typeof input.weightLimitG === 'number' ? input.weightLimitG : null
+
+  const contributions: typeof known = []
+  const noWeight: string[] = []
+  for (const it of items) {
+    const name = String(it?.name ?? '')
+    const qty = Number(it?.qty ?? 1)
+    const base = known.find((k) => k.name === name)
+    if (!base) { noWeight.push(name); continue }
+    contributions.push({ ...base, qty, subtotalG: base.typicalG * qty })
+  }
+  // 07:1081 — 서버가 subtotalG 내림차순으로 정렬한다
+  contributions.sort((a, b) => b.subtotalG - a.subtotalG)
+
+  const sum = (pick: 'minG' | 'typicalG' | 'maxG') =>
+    (bagEmptyG ?? 0) + contributions.reduce((n, c) => n + c[pick] * c.qty, 0)
+  const minG = sum('minG')
+  const typicalG = sum('typicalG')
+  const maxG = sum('maxG')
+
+  // 입력의 excluded(미완료)에 무게를 모르는 것을 덧붙인다
+  const inExcluded = (Array.isArray(input.excluded) ? input.excluded : []) as { name?: unknown }[]
+  const excluded = [
+    ...inExcluded.map((e) => ({ name: String(e?.name ?? ''), reason: 'UNCHECKED' as const })),
+    ...noWeight.map((name) => ({ name, reason: 'NO_WEIGHT_INFO' as const })),
+  ]
+
+  /*
+   * 07 출력 Schema — "불확실한 제외(reason != UNCHECKED) 수로 채운다.
+   * contributions 가 비었거나 불확실한 제외가 계산 항목보다 많으면 LOW,
+   * 하나라도 있으면 MEDIUM, 없으면 HIGH".
+   */
+  const confidence =
+    contributions.length === 0 || noWeight.length > contributions.length ? 'LOW'
+      : noWeight.length > 0 ? 'MEDIUM'
+        : 'HIGH'
+
+  /*
+   * 07:1163 verdict 순서 —
+   *   ① limitG 없음 → UNKNOWN  ② maxG > limitG → OVER_RISK
+   *   ③ bagEmptyG 없음이거나 confidence LOW → UNKNOWN
+   *   ④ typicalG ≥ 0.8 × limitG → NEAR  ⑤ 그 외 ROOM
+   */
+  const verdict =
+    limitG === null ? 'UNKNOWN'
+      : maxG > limitG ? 'OVER_RISK'
+        : bagEmptyG === null || confidence === 'LOW' ? 'UNKNOWN'
+          : typicalG >= 0.8 * limitG ? 'NEAR'
+            : 'ROOM'
+
+  const why: string[] = []
+  if (contributions.length) why.push(`준비 완료 ${contributions.length}개를 계산했습니다`)
+  if (inExcluded.length) why.push(`미완료 ${inExcluded.length}개`)
+  if (noWeight.length) why.push(`무게 정보 없음 ${noWeight.length}개`)
+
+  return {
+    minG, typicalG, maxG, limitG, verdict, confidence,
+    confidenceReason: why.join(' · ') + (why.length > 1 ? '는 제외했습니다.' : '.'),
+    excludedCount: excluded.length,
+    // 06 투영 — S-06 은 위 3개만. S-07 이 전부를 본다(07:1081)
+    contributions: contributions.slice(0, 3),
   }
 }
 
@@ -327,15 +436,22 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
   t.detections = t.detections.filter((d) => !(scope.has(d.photoId) && !keep(d)))
 
   for (const d of target) {
-    if (t.detections.some((x) => x.photoId === d.photoId && x.name === d.name)) continue
     /*
+     * 이미 있는 물건이면 또 만들지 않는다. 판단은 <b>물품 단위</b>다.
+     *
      * 06:702 — "사용자가 사후 수정한 이름·수량·준비 상태는 덮어쓰지 않는다".
-     * 이름이 같은지로만 보면, S-04 에서 이름을 고친 뒤 다시 분석할 때 원래
-     * 이름으로 하나 더 생긴다. 사후 확인된 인식이 그 사진에 이미 있으면 건너뛴다.
+     * 그래서 현재 이름뿐 아니라 <b>사후 수정하기 전 이름</b>도 함께 본다.
+     * `화장품 용기` 를 `선크림` 으로 고쳐 뒀다면, 모델이 다시 `화장품 용기` 를
+     * 내놓아도 그건 같은 물건이므로 새로 만들지 않는다.
+     *
+     * 예전에는 조건이 <b>사진 단위</b>였다 — "그 사진에 사후 확인된 인식이
+     * 하나라도 있으면 건너뛴다". `d` 를 아예 보지 않아서, 한 물품만 고쳐도
+     * 그 사진의 <b>나머지 인식이 통째로 사라졌다.</b> 앞에서 이미 지운 뒤라
+     * 되살아나지도 않았다. 사진 2장·인식 8건에서 4건으로 줄었다.
      */
-    // 사후 확인된 인식이 그 사진에 남아 있으면 같은 물건을 또 만들지 않는다.
-    // 이름은 사용자가 고쳤을 수 있으므로 이름으로 비교하지 않는다.
-    if (t.detections.some((x) => x.photoId === d.photoId && t.confirmed.has(x.detectionId))) continue
+    const same = (x: Detection) =>
+      x.photoId === d.photoId && (x.name === d.name || t.confirmed.get(x.detectionId) === d.name)
+    if (t.detections.some(same)) continue
     const detectionId = nextDetectionId++
     t.detections.push({
       detectionId,
@@ -484,6 +600,7 @@ export function mockRequest(
         : undefined,
       // 접수 시점의 여행 상태를 찍어 둔다. 나중에 현재 상태와 비교한다.
       stamp: target ? stampOf(target) : undefined,
+      input,
       applied: false,
     })
     return delay(fx.AI_JOB_CREATED(jobType, jobId))
@@ -655,6 +772,39 @@ export function mockRequest(
     return t ? delay({ photos: t.photos }) : NOT_FOUND
   }
 
+  // 06:106 #12 — 사진 삭제 → 204. 03:245 의 "미리보기 썸네일·삭제" 가 부른다.
+  if (method === 'DELETE' && /^\/trips\/\d+\/photos\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const photoId = idsIn(p)[1]
+    const before = t.photos.length
+    t.photos = t.photos.filter((x) => x.photoId !== photoId)
+    if (t.photos.length === before) return NOT_FOUND
+    return delay(undefined)
+  }
+
+  /*
+   * 06:98 · 1008-1013 — 항목 삭제 → 204.
+   *
+   * 인식 연결과 추천 채택도 함께 푼다. schema.sql 이 두 연결 테이블을
+   * `ON DELETE CASCADE` 로 걸어 뒀고, 06:1010 이 "삭제 후 내 목록·추천을 다시
+   * 읽으면 된다" 로 정했다. 채택을 안 풀면 지운 물건이 계속 "추가됨" 으로 남는다.
+   */
+  if (method === 'DELETE' && /^\/trips\/\d+\/items\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const itemId = idsIn(p)[1]
+    if (!t.items.some((i) => i.itemId === itemId)) return NOT_FOUND
+    t.items = t.items.filter((i) => i.itemId !== itemId)
+    for (const [detectionId, ids] of t.links) {
+      const left = ids.filter((x) => x !== itemId)
+      if (left.length) t.links.set(detectionId, left)
+      else t.links.delete(detectionId)
+    }
+    for (const [idx, id] of t.accepted) if (id === itemId) t.accepted.delete(idx)
+    return delay(undefined)
+  }
+
   // ── 인식 결과 ──────────────────────────────────────────
   if (method === 'GET' && /^\/trips\/\d+\/detections$/.test(p)) {
     const t = tripOf()
@@ -682,6 +832,10 @@ export function mockRequest(
         '승인 흐름은 폐기됐습니다. 인식 물품은 자동 등록됩니다.', 'approved',
       ))
     }
+    // 덮어쓰기 <b>전에</b> 원래 이름을 잡아 둔다. 재분석 때 모델이 내놓은
+    // 후보와 대조할 기준이 이것이다.
+    const before0 = d.name
+
     if (b.name !== undefined) d.name = String(b.name)
     if (b.qty !== undefined) d.qty = Number(b.qty)
 
@@ -694,7 +848,9 @@ export function mockRequest(
       if (b.name !== undefined) item.name = String(b.name)
       if (b.qty !== undefined) item.qty = Number(b.qty)
     }
-    t.confirmed.add(detectionId)
+    // <b>수정하기 전 이름</b>을 남긴다. 이미 기록이 있으면 덮어쓰지 않는다 —
+    // 두 번 고쳐도 모델이 처음 붙인 이름과 대조할 수 있어야 한다.
+    if (!t.confirmed.has(detectionId)) t.confirmed.set(detectionId, before0)
 
     // 06 연결 수정 규약 — **전체 교체**다.
     //   [8]    → 연결을 [8] 하나로 교체
@@ -740,10 +896,11 @@ export function mockRequest(
     // 06:1026 — 접수 당시의 지문이 지금과 같아야 현재 결과다.
     // "완료된 작업이 있다" 만 보면 체크리스트를 바꿔도 옛 값이 남는다.
     const now = stampOf(t)
-    const fresh = (jobType: JobType) => [...jobs.values()].some(
+    const freshJob = (jobType: JobType) => [...jobs.values()].find(
       (j) => j.jobType === jobType && j.tripId === t.detail.tripId
         && j.left === 0 && j.applied && j.stamp === now,
     )
+    const fresh = (jobType: JobType) => freshJob(jobType) !== undefined
 
     return delay({
       tripId: t.detail.tripId,
@@ -753,7 +910,15 @@ export function mockRequest(
         completionRate: completionRate(t),
         unacceptedRequiredCount: unacceptedRequired(t),
       },
-      weight: fresh('WEIGHT_ESTIMATE') ? fx.INSPECTION.weight : null,
+      /*
+       * <b>그 작업의 입력으로 만든 결과</b>를 낸다. 시드 고정값이 아니다.
+       * 06:1026 이 "현재 입력과 같은 결과만" 이라고 한 것은 신선도만이 아니라
+       * <b>무엇을 계산한 값인지</b>까지 포함한다.
+       */
+      weight: (() => {
+        const j = freshJob('WEIGHT_ESTIMATE')
+        return j?.input ? weightFor(j.input) : null
+      })(),
       customs: fresh('RULE_CHECK') ? fx.INSPECTION.customs : null,
       notice: fx.INSPECTION.notice,
     })
