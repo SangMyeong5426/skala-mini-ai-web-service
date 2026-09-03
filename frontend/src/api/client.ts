@@ -1,5 +1,5 @@
 import type { ApiError } from '../types/api'
-import { NOT_FOUND, USE_MOCK, mockRequest } from './mock'
+import { MockError, NOT_FOUND, USE_MOCK, mockRequest } from './mock'
 
 /**
  * fetch 래퍼 하나로 통일한다. 화면마다 fetch 를 직접 부르면 오류 처리가 흩어진다.
@@ -69,7 +69,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (!mocked) {
       throw new ApiFailure(404, 'MOCK_MISS', `Mock 에 없는 경로입니다: ${method} ${path}`)
     }
-    return (await mocked) as T
+    const value = await mocked
+    // Mock 이 오류 봉투를 돌려준 경우 — 로그인 실패·중복 가입 등.
+    // 실제 서버의 4xx 와 같은 예외로 바꿔서 화면이 한 가지 방식으로만 다루게 한다.
+    if (value instanceof MockError) {
+      throw new ApiFailure(value.status, value.code, value.message, value.field)
+    }
+    return value as T
   }
 
   const res = await fetch(`${BASE}${path}`, {

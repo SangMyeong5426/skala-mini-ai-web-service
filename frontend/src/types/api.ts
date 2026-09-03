@@ -50,14 +50,44 @@ export type ItemSource = 'RULE' | 'PHOTO' | 'AI' | 'USER'
 /** `MISSING` 은 없다. 사진에서 못 찾은 것을 누락으로 단정하지 않는다. */
 export type CheckStatus = 'UNCHECKED' | 'PREPARED' | 'NEEDS_CHECK' | 'NOT_IN_PHOTO'
 
+/**
+ * 사진 확인 상태. **`checkStatus` 와 별개다.**
+ * 실제로 챙겼는지(`checkStatus`)와 사진에서 확인됐는지(`photoStatus`)는 다른 축이다.
+ */
+export type PhotoStatus = 'CONFIRMED' | 'NEEDS_CHECK' | 'NOT_IN_PHOTO'
+
 export interface ChecklistItem {
   itemId: number
   name: string
   category: Category
   qty: number
   priority: Priority
+  /** 최초 등록 경로. PHOTO=사진 승인, AI·RULE=후보 채택, USER=직접 추가 */
   source: ItemSource
+  /** `PREPARED` 만 실제 완료다. 나머지는 미완료. */
   checkStatus: CheckStatus
+  photoStatus: PhotoStatus
+}
+
+/** `GET /api/trips/{tripId}/items` 응답. */
+export interface ItemsResponse {
+  items: ChecklistItem[]
+  /** 내 목록의 준비율. 화면에는 백분율로 반올림해 보여준다(0.857 → 86%). */
+  completionRate: number
+  /** 이 여행의 최신 완료된 PACKING_LIST 작업. 추천 후보를 여기서 읽는다. */
+  recommendationJobId: number | null
+  /** 아직 채택하지 않은 필수 후보 수. `null` 이면 "필수 추천 확인 전". */
+  unacceptedRequiredCount: number | null
+}
+
+/** `POST /api/trips/{tripId}/items` 요청. 추천 채택이면 `recommendation` 을 붙인다. */
+export interface ItemCreate {
+  name: string
+  category: Category
+  qty: number
+  priority: Priority
+  /** `candidateIndex` 는 완료된 추천 `output.items` 의 0부터 시작하는 위치다. */
+  recommendation?: { jobId: number; candidateIndex: number }
 }
 
 // ── 사진 · 인식 (S-03 · S-04) ─────────────────────────────
@@ -201,10 +231,22 @@ export interface AiJob<T = unknown> {
 
 /** AI-02 `PACKING_LIST` — 부족한 준비물만 돌려준다. */
 export interface PackingListOutput {
-  items: { name: string; category: Category; qty: number; priority: Priority }[]
+  /** **후보다.** 사용자가 채택해야 내 목록에 들어간다. 생성만으로 목록이 바뀌지 않는다. */
+  items: {
+    name: string
+    category: Category
+    qty: number
+    priority: Priority
+    reason?: string
+    source?: 'AI' | 'RULE'
+    /** 채택되면 서버가 여기에 항목 id 를 넣는다. `null` 이면 아직 후보다. */
+    acceptedItemId?: number | null
+  }[]
   tips: string[]
   /** 예보 범위(16일) 안이면 FORECAST, 넘으면 계절 평균. */
   weatherSource: 'FORECAST' | 'SEASONAL'
+  /** 날씨 데이터 시점. 대체 기준을 썼을 때 사용자에게 밝힌다. */
+  weatherAsOf: string | null
 }
 
 /** AI-01 `BAG_CHECK` — 사진 속 물품 인식. */
@@ -282,4 +324,44 @@ export interface TransportRule {
   reason: string
   source: string
   checkedAt: string
+}
+
+// ── 인증 ──────────────────────────────────────────────────
+//
+// 06-api-spec.md 에 아직 없는 계약이다. **문서 최신화가 끝나면 이 모양과
+// 맞는지 대조해야 한다.**
+//
+// 가입 입력은 넷이다 — <b>아이디 · 비밀번호 · 닉네임 · 이메일</b>.
+// 로그인 식별자는 이메일이 아니라 <b>아이디</b>다.
+//
+// <b>database/schema.sql 의 users 에는 아직 아이디 칸이 없다.</b>
+// (email · password_hash · nickname 셋뿐) DB 담당자가 `login_id` 를
+// 추가해야 백엔드가 이 계약을 지킬 수 있다.
+//
+// 비밀번호는 요청 본문에만 실리고 <b>어디에도 보관하지 않는다.</b>
+// 해시(bcrypt)는 서버가 만든다.
+
+export interface User {
+  userId: number
+  loginId: string
+  nickname: string
+  email: string
+}
+
+export interface SignupRequest {
+  loginId: string
+  password: string
+  nickname: string
+  email: string
+}
+
+export interface LoginRequest {
+  loginId: string
+  password: string
+}
+
+/** 로그인·회원가입 성공 응답. 토큰은 이후 요청의 Authorization 헤더에 실린다. */
+export interface AuthResponse {
+  token: string
+  user: User
 }

@@ -39,18 +39,86 @@ export const TRIP_DETAIL: TripDetail = {
 }
 
 // ── 체크리스트 (S-05) — 06 예시 + 시드로 보강 ─────────────
+/** 06 의 `GET /items` 예시 그대로. photoStatus 는 checkStatus 와 별개 축이다. */
 export const ITEMS: ChecklistItem[] = [
-  { itemId: 1, name: '여권', category: 'DOCUMENT', qty: 1, priority: 'REQUIRED', source: 'RULE', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 2, name: '상의', category: 'CLOTHING', qty: 4, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 3, name: '하의', category: 'CLOTHING', qty: 2, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 4, name: '속옷', category: 'CLOTHING', qty: 4, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 5, name: '충전기', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 6, name: '보조배터리', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'PHOTO', checkStatus: 'PREPARED' },
-  { itemId: 7, name: '변환 플러그', category: 'ELECTRONIC', qty: 1, priority: 'REQUIRED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 8, name: '화장품', category: 'TOILETRY', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NEEDS_CHECK' },
-  { itemId: 9, name: '상비약', category: 'MEDICINE', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-  { itemId: 10, name: '우산', category: 'ETC', qty: 1, priority: 'RECOMMENDED', source: 'AI', checkStatus: 'NOT_IN_PHOTO' },
-]
+    {
+      itemId: 2,
+      name: "상의",
+      category: "CLOTHING",
+      qty: 4,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 3,
+      name: "하의",
+      category: "CLOTHING",
+      qty: 2,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 4,
+      name: "속옷",
+      category: "CLOTHING",
+      qty: 4,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 5,
+      name: "충전기",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 6,
+      name: "보조배터리",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 11,
+      name: "가위",
+      category: "ETC",
+      qty: 1,
+      priority: "RECOMMENDED",
+      source: "PHOTO",
+      checkStatus: "PREPARED",
+      photoStatus: "CONFIRMED"
+    },
+    {
+      itemId: 7,
+      name: "변환 플러그",
+      category: "ELECTRONIC",
+      qty: 1,
+      priority: "REQUIRED",
+      source: "AI",
+      checkStatus: "UNCHECKED",
+      photoStatus: "NOT_IN_PHOTO"
+    }
+  ]
+
+/** 06 이 items 응답에 함께 주는 값들. */
+export const ITEMS_META = {
+  completionRate: 0.857,
+  recommendationJobId: 1041,
+  unacceptedRequiredCount: 1,
+}
 
 // ── 사진 (S-03) ───────────────────────────────────────────
 // 06 에 GET /photos 응답 예시가 아직 없다. schema.sql 과 seed.sql 로 만들었다.
@@ -142,25 +210,46 @@ export const AI_OUTPUT: {
         name: "변환 플러그",
         category: "ELECTRONIC",
         qty: 1,
-        priority: "REQUIRED"
+        priority: "REQUIRED",
+        reason: "여행지에서 충전기를 연결할 어댑터를 확인하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "상비약",
         category: "MEDICINE",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "평소 사용하는 약이 있다면 여행 기간에 맞게 준비하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "화장품",
         category: "TOILETRY",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "숙소 제공 여부에 따라 개인 세면용품을 검토하세요.",
+        source: "AI",
+        acceptedItemId: null
       },
       {
         name: "우산",
         category: "ETC",
         qty: 1,
-        priority: "RECOMMENDED"
+        priority: "RECOMMENDED",
+        reason: "여행 중 강수에 대비할 휴대용 우산을 검토하세요.",
+        source: "AI",
+        acceptedItemId: null
+      },
+      {
+        name: "여권",
+        category: "DOCUMENT",
+        qty: 1,
+        priority: "REQUIRED",
+        reason: "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
+        source: "RULE",
+        acceptedItemId: null
       }
     ],
     tips: [
@@ -168,7 +257,8 @@ export const AI_OUTPUT: {
       "10월 초 도쿄 계절 평균은 낮 24도, 아침 16도입니다. 실시간 예보가 아닙니다.",
       "디즈니랜드는 하루 2만 보 이상 걷습니다."
     ],
-    weatherSource: "SEASONAL"
+    weatherSource: "SEASONAL",
+    weatherAsOf: "2026-09-03"
   },
 
   BAG_CHECK: {
@@ -250,34 +340,26 @@ export const AI_OUTPUT: {
   },
 
   WEIGHT_ESTIMATE: {
-    minG: 4570,
-    typicalG: 5410,
-    maxG: 6890,
+    minG: 4610,
+    typicalG: 5480,
+    maxG: 7010,
     limitG: 10000,
     bagEmptyG: 3200,
     verdict: "ROOM",
     confidence: "MEDIUM",
-    confidenceReason: "사진에서 미확인 4개, 승인 전 1개",
-    excludedCount: 5,
+    confidenceReason: "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+    excludedCount: 3,
     excluded: [
       {
-        name: "여권",
-        reason: "NOT_IN_PHOTO"
-      },
-      {
         name: "변환 플러그",
-        reason: "NOT_IN_PHOTO"
+        reason: "UNCHECKED"
       },
       {
-        name: "상비약",
-        reason: "NOT_IN_PHOTO"
+        name: "화장품 용기",
+        reason: "PENDING_APPROVAL"
       },
       {
-        name: "우산",
-        reason: "NOT_IN_PHOTO"
-      },
-      {
-        name: "화장품",
+        name: "검정 파우치",
         reason: "PENDING_APPROVAL"
       }
     ],
@@ -321,6 +403,14 @@ export const AI_OUTPUT: {
         maxG: 180,
         qty: 1,
         subtotalG: 90
+      },
+      {
+        name: "가위",
+        minG: 40,
+        typicalG: 70,
+        maxG: 120,
+        qty: 1,
+        subtotalG: 70
       }
     ]
   },
@@ -348,27 +438,7 @@ export const AI_OUTPUT: {
         checkedAt: "2026-09-02"
       },
       {
-        itemId: 8,
-        detectionId: null,
-        name: "화장품",
-        qty: 1,
-        ruleKeyword: "액체",
-        attributes: {
-          capacityMl: null,
-          batteryWh: null,
-          batteryMah: null,
-          bladeCm: null
-        },
-        verdict: "NEED_MORE_INFO",
-        ruleId: 4,
-        conditionNote: "용기당 100ml 이하, 총 1L 이하",
-        reason: "액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.",
-        missingInfo: "용량(ml)",
-        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
-        checkedAt: "2026-09-02"
-      },
-      {
-        itemId: null,
+        itemId: 11,
         detectionId: 7,
         name: "가위",
         qty: 1,
@@ -382,7 +452,7 @@ export const AI_OUTPUT: {
         verdict: "NEED_MORE_INFO",
         ruleId: 6,
         conditionNote: "날 길이 6cm 초과",
-        reason: "날 길이 6cm를 넘는 가위는 기내 반입이 제한됩니다. 위탁수하물로 부치세요.",
+        reason: "날 길이를 확인해야 반입 조건을 비교할 수 있습니다. 라벨이나 실측 길이를 확인해 주세요.",
         missingInfo: "날 길이(cm)",
         sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
         checkedAt: "2026-09-02"

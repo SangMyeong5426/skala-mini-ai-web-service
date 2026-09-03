@@ -25,8 +25,7 @@
  */
 import * as fx from './fixtures'
 import type {
-  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, PackingListOutput,
-  TripDetail, TripPhoto,
+  BagCheckOutput, ChecklistItem, Detection, Inspection, JobType, TripDetail, TripPhoto,
 } from '../types/api'
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
@@ -43,6 +42,77 @@ const LATENCY_MS = 200
  */
 export const NOT_FOUND = Symbol('NOT_FOUND')
 
+/**
+ * Mock 이 돌려주는 <b>정상 오류</b>. 06 의 오류 봉투를 그대로 흉내 낸다.
+ *
+ * NOT_FOUND 하나로는 로그인 실패(401)·중복 가입(409)을 표현할 수 없다.
+ * 화면이 다뤄야 하는 상태이므로 "Mock 이 덜 됐다"(MOCK_MISS)와 구분한다.
+ */
+export class MockError {
+  status: number
+  code: string
+  message: string
+  field?: string
+
+  constructor(status: number, code: string, message: string, field?: string) {
+    this.status = status
+    this.code = code
+    this.message = message
+    this.field = field
+  }
+}
+
+// ── 인증 ─────────────────────────────────────────────────
+//
+// <b>Mock 전용이다.</b> 비밀번호를 메모리에만 들고 있고 어디에도 저장하지
+// 않는다. 실제 해시(bcrypt)는 서버가 만든다.
+//
+// 로그인 식별자는 <b>아이디</b>다. 이메일이 아니다.
+// database/schema.sql 의 users 에는 아직 login_id 칸이 없다 — DB 담당자가
+// 추가해야 한다.
+//
+// 시드 사용자는 seed.sql 과 같은 사람이다. 백엔드가 붙어도 같은 계정으로
+// 들어갈 수 있어야 시연이 끊기지 않는다.
+interface MockUser {
+  userId: number
+  loginId: string
+  nickname: string
+  email: string
+  password: string
+}
+
+const users: MockUser[] = [
+  { userId: 1, loginId: 'jiwoo', nickname: '김지우', email: 'kim@skala.dev', password: 'skala1234' },
+]
+let nextUserId = 2
+
+/** token → userId. 토큰은 데모용 문자열이고 서명하지 않는다 */
+const sessions = new Map<string, number>()
+let nextToken = 1
+
+const publicUser = (u: MockUser) => ({
+  userId: u.userId, loginId: u.loginId, nickname: u.nickname, email: u.email,
+})
+
+function issue(u: MockUser) {
+  const token = `mock-${u.userId}-${nextToken++}`
+  sessions.set(token, u.userId)
+  return { token, user: publicUser(u) }
+}
+
+/**
+ * 지금 로그인한 사용자.
+ *
+ * Mock 은 요청 헤더를 보지 못한다(client 가 본문만 넘긴다). 그래서 마지막으로
+ * 발급한 세션이 아니라 <b>브라우저가 들고 있는 토큰</b>을 본문으로 받아
+ * 확인한다. 실제 서버는 Authorization 헤더로 같은 일을 한다.
+ */
+function userOf(token: unknown): MockUser | undefined {
+  if (typeof token !== 'string') return undefined
+  const id = sessions.get(token)
+  return users.find((u) => u.userId === id)
+}
+
 // ── 여행별 상태 ───────────────────────────────────────────
 interface TripState {
   detail: TripDetail
@@ -51,10 +121,28 @@ interface TripState {
   photos: TripPhoto[]
   /** detectionId → 연결된 itemId 목록. 06 의 matchedItemIds 규약 그대로. */
   links: Map<number, number[]>
+  /** 마지막으로 완료된 PACKING_LIST 작업. 아직 없으면 null. */
+  recommendationJobId: number | null
+  /** 채택된 후보 위치. 같은 후보를 두 번 채택해도 항목이 하나만 생긴다. */
+  accepted: Map<number, number>
 }
 
 function emptyTrip(detail: TripDetail): TripState {
-  return { detail, items: [], detections: [], photos: [], links: new Map() }
+  return {
+    detail, items: [], detections: [], photos: [],
+    links: new Map(), recommendationJobId: null, accepted: new Map(),
+  }
+}
+
+/**
+ * 아직 채택하지 않은 필수 후보 수.
+ * 추천을 아직 안 돌렸으면 `null` — 화면은 "필수 추천 확인 전" 으로 쓴다.
+ */
+function unacceptedRequired(t: TripState): number | null {
+  if (t.recommendationJobId === null) return null
+  return fx.AI_OUTPUT.PACKING_LIST.items.filter(
+    (c, i) => c.priority === 'REQUIRED' && !t.accepted.has(i),
+  ).length
 }
 
 const trips = new Map<number, TripState>()
@@ -67,13 +155,22 @@ trips.set(1, {
   detections: fx.DETECTIONS.map((d) => ({ ...d })),
   photos: fx.PHOTOS.map((p) => ({ ...p })),
   links: new Map([[2, [6]], [6, [8]], [8, [8, 9]]]),
+  recommendationJobId: fx.ITEMS_META.recommendationJobId,
+  // 후보 0번(변환 플러그)은 이미 채택돼 fx.ITEMS 의 itemId 7 로 들어가 있다.
+  // 비워 두면 같은 물건이 체크리스트와 추천에 <b>두 번</b> 보이고,
+  // 미채택 필수 수도 2 가 되어 fx.ITEMS_META 의 1 과 어긋난다.
+  accepted: new Map([[0, 7]]),
 })
 for (const t of fx.TRIPS.slice(1)) trips.set(t.tripId, emptyTrip({ ...t }))
 
 let nextTripId = 100
 let nextDetectionId = 100
 let nextItemId = 100
-let nextJobId = 1041
+let nextJobId = 1042
+
+// 시드 여행에는 이미 완료된 추천이 하나 있다 (fx.ITEMS_META.recommendationJobId).
+// 작업을 함께 넣지 않으면 S-05 가 후보를 읽을 때 404 가 난다.
+
 
 /** 작업 상태. tripId·input 을 들고 있어야 완료 시 어디에 쓸지 안다. */
 const jobs = new Map<number, {
@@ -86,6 +183,10 @@ const jobs = new Map<number, {
   applied: boolean
 }>()
 
+jobs.set(fx.ITEMS_META.recommendationJobId, {
+  left: 0, jobType: 'PACKING_LIST', tripId: 1, applied: true,
+})
+
 /**
  * 실제 서버처럼 <b>복사본</b>을 돌려준다.
  *
@@ -94,7 +195,10 @@ const jobs = new Map<number, {
  * before 로 잡아 둔 배열이 BAG_CHECK 결과까지 품고 있었다).
  */
 function delay<T>(value: T): Promise<T> {
-  const copy = structuredClone(value)
+  // MockError 는 클래스다. structuredClone 은 <b>프로토타입을 버리므로</b>
+  // 복제하면 client.ts 의 instanceof 검사를 통과하지 못하고, 오류가 정상 응답인
+  // 것처럼 화면까지 흘러간다. 로그인 실패가 조용히 성공으로 보이는 사고가 났었다.
+  const copy = value instanceof MockError ? value : structuredClone(value)
   return new Promise((r) => setTimeout(() => r(copy), LATENCY_MS))
 }
 
@@ -194,27 +298,6 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds?: number[]) {
 }
 
 /**
- * PACKING_LIST 완료 결과를 체크리스트에 넣는다.
- *
- * 07 "작업이 끝나면 서버가 쓰는 곳" — 추천은 `source: AI` · `UNCHECKED` 로
- * 들어가고 S-05 가 GET 으로 다시 읽는다. 같은 이름은 넣지 않는다.
- */
-function applyPackingList(t: TripState, out: PackingListOutput) {
-  for (const rec of out.items) {
-    if (t.items.some((i) => i.name === rec.name)) continue
-    t.items.push({
-      itemId: nextItemId++,
-      name: rec.name,
-      category: rec.category,
-      qty: rec.qty,
-      priority: rec.priority,
-      source: 'AI',
-      checkStatus: 'UNCHECKED',
-    })
-  }
-}
-
-/**
  * 경로를 보고 응답을 만든다.
  * 다루지 않는 경로는 `undefined` 를 반환하고 호출한 쪽이 404 로 처리한다 —
  * <b>안 만든 것을 조용히 성공시키지 않는다.</b>
@@ -226,6 +309,49 @@ export function mockRequest(
 ): Promise<unknown> | typeof NOT_FOUND | undefined {
   const p = path.split('?')[0]
   const b = (body ?? {}) as Record<string, unknown>
+
+  // ── 인증 ───────────────────────────────────────────────
+  if (method === 'POST' && p === '/auth/signup') {
+    const loginId = String(b.loginId ?? '').trim().toLowerCase()
+    const password = String(b.password ?? '')
+    const nickname = String(b.nickname ?? '').trim()
+    const email = String(b.email ?? '').trim().toLowerCase()
+
+    if (!loginId || !password || !nickname || !email) {
+      return delay(new MockError(400, 'INVALID_REQUEST', '입력하지 않은 항목이 있습니다.'))
+    }
+    if (users.some((u) => u.loginId === loginId)) {
+      return delay(new MockError(409, 'LOGIN_ID_TAKEN', '이미 사용 중인 아이디입니다.', 'loginId'))
+    }
+    if (users.some((u) => u.email === email)) {
+      return delay(new MockError(409, 'EMAIL_TAKEN', '이미 가입된 이메일입니다.', 'email'))
+    }
+    const u: MockUser = { userId: nextUserId++, loginId, password, nickname, email }
+    users.push(u)
+    return delay(issue(u))
+  }
+
+  if (method === 'POST' && p === '/auth/login') {
+    const loginId = String(b.loginId ?? '').trim().toLowerCase()
+    const password = String(b.password ?? '')
+    const u = users.find((x) => x.loginId === loginId && x.password === password)
+    // 어느 쪽이 틀렸는지 알려주지 않는다 — 가입 여부를 캐낼 수 있다
+    if (!u) {
+      return delay(new MockError(401, 'INVALID_CREDENTIALS', '아이디 또는 비밀번호가 올바르지 않습니다.'))
+    }
+    return delay(issue(u))
+  }
+
+  if (method === 'POST' && p === '/auth/logout') {
+    if (typeof b.token === 'string') sessions.delete(b.token)
+    return delay({})
+  }
+
+  if (method === 'POST' && p === '/auth/me') {
+    const u = userOf(b.token)
+    if (!u) return delay(new MockError(401, 'UNAUTHORIZED', '로그인이 필요합니다.'))
+    return delay(publicUser(u))
+  }
 
   // ── AI 작업 ────────────────────────────────────────────
   if (method === 'POST' && p === '/ai-jobs') {
@@ -256,11 +382,22 @@ export function mockRequest(
       if (t && job.jobType === 'BAG_CHECK') {
         applyBagCheck(t, fx.AI_OUTPUT.BAG_CHECK, job.photoIds)
       }
-      if (t && job.jobType === 'PACKING_LIST') {
-        applyPackingList(t, fx.AI_OUTPUT.PACKING_LIST)
-      }
+      // PACKING_LIST 는 **후보만** 만든다. 채택(POST /items)해야 내 목록에 들어간다.
+      // 개정안 4·5단계: "생성만으로 내 체크리스트에 등록하지 않는다".
+      if (t && job.jobType === 'PACKING_LIST') t.recommendationJobId = jobId
     }
-    return delay(fx.AI_JOB(jobId, job.jobType, true))
+    const done = fx.AI_JOB(jobId, job.jobType, true)
+    // 후보가 이미 채택됐는지는 여행 상태가 안다. 06 의 acceptedItemId 가 그 자리다.
+    // 안 실어 주면 화면이 채택한 것을 계속 "담을 수 있는 것" 으로 보여준다.
+    const t2 = job.tripId ? trips.get(job.tripId) : undefined
+    if (t2 && job.jobType === 'PACKING_LIST' && done.output) {
+      const out = done.output as { items: { acceptedItemId: number | null }[] }
+      done.output = {
+        ...out,
+        items: out.items.map((c, i) => ({ ...c, acceptedItemId: t2.accepted.get(i) ?? null })),
+      } as typeof done.output
+    }
+    return delay(done)
   }
 
   // ── 여행 ───────────────────────────────────────────────
@@ -309,8 +446,51 @@ export function mockRequest(
   if (method === 'GET' && /^\/trips\/\d+\/items$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND
-    return delay({ items: itemsOf(t), completionRate: completionRate(t) })
+    return delay({
+      items: itemsOf(t),
+      completionRate: completionRate(t),
+      // 이 여행에서 마지막으로 완료된 PACKING_LIST 작업. S-05 가 후보를 여기서 읽는다.
+      recommendationJobId: t.recommendationJobId,
+      unacceptedRequiredCount: unacceptedRequired(t),
+    })
   }
+  // 06 "직접 추가·추천 채택". 추천은 여기를 거쳐야 내 목록에 들어간다.
+  if (method === 'POST' && /^\/trips\/\d+\/items$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const rec = b.recommendation as { jobId: number; candidateIndex: number } | undefined
+    const name = String(b.name ?? '').trim().replace(/\s+/g, ' ')
+
+    // 이미 채택한 후보면 같은 항목을 200 으로 돌려준다. 덮어쓰지 않는다.
+    if (rec && t.accepted.has(rec.candidateIndex)) {
+      const exist = t.items.find((i) => i.itemId === t.accepted.get(rec.candidateIndex))
+      if (exist) return delay({ ...exist })
+    }
+    // 같은 이름의 항목이 이미 있으면 그것에 연결하고 200. 상태·수량·출처를 유지한다.
+    const same = t.items.find((i) => i.name.trim().replace(/\s+/g, ' ') === name)
+    if (same) {
+      if (rec) t.accepted.set(rec.candidateIndex, same.itemId)
+      return delay({ ...same })
+    }
+
+    const created: ChecklistItem = {
+      itemId: nextItemId++,
+      name,
+      category: b.category as ChecklistItem['category'],
+      qty: Number(b.qty ?? 1),
+      priority: b.priority as ChecklistItem['priority'],
+      // 클라이언트가 source·완료 상태를 정하지 않는다. 서버가 후보에서 복사한다.
+      source: rec
+        ? ((fx.AI_OUTPUT.PACKING_LIST.items[rec.candidateIndex]?.source ?? 'AI') as ChecklistItem['source'])
+        : 'USER',
+      checkStatus: 'UNCHECKED',   // 채택은 "챙기겠다" 이지 "챙겼다" 가 아니다
+      photoStatus: 'NOT_IN_PHOTO',
+    }
+    t.items.push(created)
+    if (rec) t.accepted.set(rec.candidateIndex, created.itemId)
+    return delay({ ...created })
+  }
+
   if (method === 'PATCH' && /^\/trips\/\d+\/items\/\d+$/.test(p)) {
     const t = tripOf()
     if (!t) return NOT_FOUND

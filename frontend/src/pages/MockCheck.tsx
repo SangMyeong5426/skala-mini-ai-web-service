@@ -51,7 +51,6 @@ export function MockCheck() {
 
   return (
     <section className="page">
-      <p className="page-id">점검</p>
       <h1 className="page-title">Mock 계약 확인</h1>
       <p className="page-note">
         VITE_USE_MOCK = <strong>{String(USE_MOCK)}</strong>
