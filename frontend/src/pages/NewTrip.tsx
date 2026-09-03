@@ -103,6 +103,18 @@ export default function NewTrip() {
     }
   }
 
+  /**
+   * 서버가 알려준 그 칸의 오류. 06 의 오류 봉투는 `{ code, message, field? }` 다.
+   *
+   * <b>인라인 자리가 있는 칸의 목록을 함께 둔다.</b> 서버가 이 밖의 `field` 를
+   * 주면(계약이 늘어나거나 우리가 칸을 빼먹으면) 오류가 어디에도 보이지 않고
+   * 저장만 조용히 실패한다. 그때는 아래 일반 오류로 떨어뜨린다.
+   */
+  const INLINE = new Set([
+    'origin', 'destination', 'startDate', 'endDate', 'purpose', 'transport',
+    'airline', 'departureAirport', 'arrivalAirport', 'note',
+    'bagType', 'bagEmptyG', 'weightLimitG',
+  ])
   const err = (name: string) => (field === name ? error : null)
 
   return (
@@ -133,7 +145,7 @@ export default function NewTrip() {
             </Cell>
           </div>
 
-          <Cell label="목적" name="purpose">
+          <Cell label="목적" name="purpose" error={err('purpose')}>
             <div className="chips">
               {PURPOSES.map((p) => (
                 <button
@@ -146,7 +158,7 @@ export default function NewTrip() {
             </div>
           </Cell>
 
-          <Cell label="이동수단" name="transport">
+          <Cell label="이동수단" name="transport" error={err('transport')}>
             <div className="chips">
               {TRANSPORTS.map((t) => (
                 <button
@@ -162,14 +174,14 @@ export default function NewTrip() {
           {isFlight && (
             <>
               <div className="form-row">
-                <Cell label="항공사" name="airline" hint="선택">
+                <Cell label="항공사" name="airline" hint="선택" error={err('airline')}>
                   <input id="airline" value={airline} onChange={(e) => setAirline(e.target.value)} placeholder="대한항공" />
                 </Cell>
-                <Cell label="출발 공항" name="departureAirport" hint="선택 · 3자리 코드">
+                <Cell label="출발 공항" name="departureAirport" hint="선택 · 3자리 코드" error={err('departureAirport')}>
                   <input id="departureAirport" value={departureAirport} maxLength={3}
                     onChange={(e) => setDepartureAirport(e.target.value)} placeholder="ICN" />
                 </Cell>
-                <Cell label="도착 공항" name="arrivalAirport" hint="선택 · 3자리 코드">
+                <Cell label="도착 공항" name="arrivalAirport" hint="선택 · 3자리 코드" error={err('arrivalAirport')}>
                   <input id="arrivalAirport" value={arrivalAirport} maxLength={3}
                     onChange={(e) => setArrivalAirport(e.target.value)} placeholder="NRT" />
                 </Cell>
@@ -183,7 +195,11 @@ export default function NewTrip() {
             </>
           )}
 
-          <Cell label="가방" name="bagType" hint={`빈 무게 ${(bag.emptyG / 1000).toFixed(1)}kg · 한도 ${bag.limitG / 1000}kg 로 계산합니다`}>
+          <Cell
+            label="가방" name="bagType"
+            hint={`빈 무게 ${(bag.emptyG / 1000).toFixed(1)}kg · 한도 ${bag.limitG / 1000}kg 로 계산합니다`}
+            error={err('bagType') ?? err('bagEmptyG') ?? err('weightLimitG')}
+          >
             <div className="chips">
               {BAGS.map((b) => (
                 <button
@@ -196,11 +212,13 @@ export default function NewTrip() {
             </div>
           </Cell>
 
-          <Cell label="메모" name="note" hint="선택 · 동행인·특이사항을 적으면 추천에 반영됩니다">
+          <Cell label="메모" name="note" hint="선택 · 동행인·특이사항을 적으면 추천에 반영됩니다" error={err('note')}>
             <input id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="친구 2명, 디즈니랜드" />
           </Cell>
 
-          {error && !field && <p className="auth-error" role="alert">{error}</p>}
+          {error && (!field || !INLINE.has(field)) && (
+            <p className="auth-error" role="alert">{error}</p>
+          )}
 
           <div className="form-foot">
             <button type="submit" className="btn" disabled={busy || badRange}>
