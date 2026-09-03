@@ -8,11 +8,14 @@
 ' ─────────────────────────────────────────────────────────
 
 skinparam backgroundColor #FFFFFF
+skinparam dpi 160
 skinparam shadowing false
 skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 12
 skinparam ArrowColor #46524E
 skinparam componentStyle rectangle
+title 시스템 목표 구조 — 로그인 필수 · 사진 자동 등록과 추천 채택 분리
+caption 개정 계약의 설계도 · 코드 반영 현황은 docs/README.md 참조
 
 skinparam component {
   BackgroundColor #F5F7F6
@@ -36,20 +39,23 @@ actor "사용자" as USER
 
 node "Frontend  :5173" as FE {
   component "React 19 + TypeScript\n(Vite 8)" as FEAPP
-  component "라우팅 · 화면 컴포넌트" as FEUI
-  component "API 클라이언트\n**폴링 훅**" as FEAPI
+  component "S-00 로그인·회원가입\nS-01~S-10 세션 확인 · 화면 가드" as FEUI
+  component "API 클라이언트\n쿠키 · CSRF · **폴링 훅**" as FEAPI
 }
 
 node "Backend  :8080" as BE {
+  component "Spring Security\n세션 인증 · CSRF 검증" as SECURITY
+  component "HttpSession\n서버 메모리 · 만료/로그아웃" as SESSION
   component "REST Controller" as CTRL
-  component "Service 로직" as SVC
+  component "Auth Service\n가입 4개 필드 · 아이디 로그인\nBCrypt 해시 검증" as AUTH
+  component "Service 로직\n세션 사용자 소유권 확인\n사진 자동 등록 · 추천 채택\n완료율 · 필수 후보 경고 · 무게 합산" as SVC
   component "Repository (JPA)" as REPO
   component "**규칙 엔진**\n반입 판정" as RULE
   component "AiClient (인터페이스)" as IFACE
 }
 
 package "AI 확장 지점 — 이 상자 안만 교체된다" as AIBOX #FEFEFE {
-  component "**MockAiClient**\n고정 JSON 반환" as MOCK <<AI>>
+  component "**MockAiClient**\n입력에 맞춘 Mock 후보·중량 범위" as MOCK <<AI>>
   component "RealAiClient\nOpenAI / Claude / 비전 모델" as REAL <<future>>
 }
 
@@ -70,24 +76,46 @@ USER --> FEAPP
 FEAPP --> FEUI
 FEUI --> FEAPI
 
-FEAPI -right-> CTRL : **HTTP / JSON**\nPOST → 202 + 작업ID\nGET → 폴링
+FEAPI -right-> SECURITY : **쿠키 / JSON · 사진 요청**\n업무 API·사진 모두 로그인 필수\nAI 작업: POST → 202 · GET 폴링
+SECURITY --> CTRL : 인증·CSRF 통과
+SECURITY --> SESSION : 인증 상태
+CTRL --> AUTH : 가입 · 로그인 · 세션 · 로그아웃
+AUTH --> REPO : users 조회 · 가입
+AUTH --> SESSION : 로그인 시 교체 · 로그아웃 시 폐기
 CTRL --> SVC
 SVC --> REPO
 SVC --> RULE
 SVC --> IFACE
 REPO -right-> TABLES : SQL
-SVC --> UP : 사진 저장
+SVC --> UP : 소유권 확인 후 사진 저장·조회
 
-IFACE ..> MOCK : **지금**
+IFACE ..> MOCK : **데모 설계**
 IFACE ..> REAL : 나중\n<size:10>AI_PROVIDER 만 바꾼다</size>
 
 SVC --> WEATHER
 RULE --> RULES
 
 note bottom of AIBOX
-  **여기만 바뀐다.**
-  프런트엔드 · REST 규격 · DB 스키마는 그대로다.
-  전환은 코드가 아니라 .env 의 AI_PROVIDER 로 한다.
+  **개정 계약 구현 후 AI 구현체만 교체한다.**
+  같은 스키마를 유지해 프런트엔드 수정 없이 연동한다.
+  실제 구현체 준비 후 .env 의 AI_PROVIDER 로 선택한다.
+end note
+
+note left of SVC
+  **자동 등록·추천 채택·계산은 서버 책임**
+  BAG_CHECK 완료 → 내 목록 자동 생성·연결 + PREPARED
+  목록 저장 뒤 COMPLETED · 사용자 승인 요청 없음
+  추천 생성 → 후보 JSON만 저장
+  추천 채택 → 선택분만 UNCHECKED · 중복 방지
+  실제 PREPARED만 무게에 포함
+  미채택 필수 후보는 별도 경고
+end note
+
+note right of SECURITY
+  공개: 가입 · 로그인 · 인증 상태 조회
+  서비스 기능·챗봇·사진은 모두 인증 대상
+  쿠키 존재만으로 로그인 판단 금지
+  다른 사용자의 자료는 404
 end note
 
 note right of RULE
@@ -97,7 +125,7 @@ note right of RULE
 end note
 
 legend bottom
-  |<#D9EAE6>| 지금 동작하는 Mock |
+  |<#D9EAE6>| 데모에서 사용할 Mock · 실제 AI 호출 없음 |
   |<#FBF3E4>| 나중에 들어올 실제 AI |
   |<#F5F7F6>| 일반 구성요소 |
 endlegend

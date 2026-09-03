@@ -6,20 +6,24 @@
 
 ## 전체 구조
 
+**진입은 S-00 로그인·회원가입부터다.** FE의 화면 가드는 세션을 확인하고, BE의 Spring
+Security가 모든 업무 API·사진 요청을 인증한다. 공개 진입은 인증 화면과 가입·로그인·세션
+조회뿐이다. 인증 이후 Service가 본인 소유권을 확인한다([06 인증 계약](06-api-spec.md#회원가입로그인-계약-uc-01)).
+
 ```text
 ┌─────────────────┐         ┌──────────────────────┐         ┌───────────────┐
 │   Frontend      │  HTTP   │      Backend         │   SQL   │  PostgreSQL   │
-│   React + TS    │ ──────▶ │      Spring Boot 4   │ ──────▶ │  Supabase/Neon│
+│   React + TS    │ ──────▶ │      Spring Boot 4   │ ──────▶ │   Supabase    │
 │                 │  JSON   │                      │         │   (Cloud)     │
-│  - 라우팅        │ ◀────── │  - REST Controller   │ ◀────── │               │
-│  - 화면 컴포넌트  │         │  - 서비스 로직        │         │  - 테이블      │
-│  - API 클라이언트 │         │  - Repository        │         │  - 관계        │
+│  - 인증 화면·가드  │ ◀────── │  - Security / 세션    │ ◀────── │               │
+│  - 화면 컴포넌트  │         │  - Controller/Service │         │  - 테이블      │
+│  - 쿠키·폴링     │         │  - 소유권/Repository  │         │  - 관계        │
 └─────────────────┘         └──────────┬───────────┘         └───────────────┘
                                        │
-                                       │ ◀─── AI 확장 지점 (지금은 비어 있음)
+                                       │ ◀─── AI 확장 지점 (데모는 Mock)
                                        ▼
                             ┌──────────────────────┐
-                            │   Mock AI Service    │   지금: 고정 JSON 반환
+                            │   Mock AI Service    │   지금: 입력에 맞춘 후보·범위
                             │   ─────────────────  │
                             │   나중: OpenAI /     │   나중: 같은 스키마로
                             │        Claude API    │        LLM 응답 반환
@@ -33,14 +37,14 @@
 
 ![시스템 아키텍처](images/04-architecture.png)
 
-> PNG·PUML·SVG의 시스템 구성은 유지한다. 이번 개정의 승인·저장 책임은 아래 표로 보완하며,
-> 그림 주석 갱신은 TBD다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
+> **2026-09-03 PNG·PUML·SVG에 자동 등록·추천 채택·계산 책임을 반영했다.** 그림은 시스템 목표 구조이며
+> 구현 완료를 뜻하지 않는다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
 > 교체할 때**의 의미다. 기능 정의 자체가 달라질 때 API·화면까지 불변이라는 뜻은 아니다.
 
 - 원본: [`images/04-architecture.puml`](images/04-architecture.puml) (PlantUML)
 - 벡터: [`images/04-architecture.svg`](images/04-architecture.svg) — 발표 슬라이드용
-- **고치는 법**: `.puml`을 수정하고 <https://www.plantuml.com/plantuml/uml/> 에 붙여넣거나
-  VS Code 확장 `PlantUML`에서 `Alt+D`. **위 텍스트 다이어그램과 함께 고친다.**
+- **고치는 법**: `.puml` 수정 후 [로컬 재생성 명령](images/README.md#저장소-다이어그램-재생성)으로
+  PNG·SVG를 함께 만든다. **위 텍스트 다이어그램과 함께 고친다.**
 
 ## 기술 스택
 
@@ -55,20 +59,39 @@
 | 형상관리 | GitHub (모노레포) | FE·BE·문서를 한 저장소에서 관리, 초대·클론 1회 |
 | 설계 도구 | **PlantUML** (Use-Case · User Flow · 아키텍처)<br>Figma (와이어프레임) | `.puml` 원본이 저장소에 남아 다이어그램도 버전 관리된다 |
 
-> **상태관리 라이브러리는 넣지 않았다.** 화면 10개 규모에서는 `useState` + Context로
+> **상태관리 라이브러리는 넣지 않았다.** 인증 포함 화면 11개 규모에서는 `useState` + Context로
 > 충분하다. 필요해지면 그때 넣는다. (`Pinia`는 Vue 전용이라 React에서 동작하지 않는다)
 >
 > **HTTP 클라이언트도 넣지 않았다.** `fetch`로 충분하고, AI 폴링 훅은 직접 짜는 편이
 > 발표에서 설명하기 좋다.
 
+## 로그인·세션·소유권의 책임
+
+인증 목표 스택은 **Spring Security · HttpSession · BCrypt**다. 기존 BE에 추가 구현하며
+JWT·외부 인증·세션 DB를 추가하지 않는다.
+
+| 주체 | 처리 |
+| --- | --- |
+| FE S-00·공통 화면 가드 | 가입 4개 입력·로그인 2개 입력, 세션 조회 중 업무 화면 차단. 로그인 후 S-01, 만료·로그아웃 시 상태 정리 |
+| API 클라이언트 | 쿠키 전송·CSRF 헤더, 401·403 처리. 비밀번호·세션 식별자를 localStorage에 보관하지 않음 |
+| Spring Security·인증 처리 | 공개 인증 경로를 제외한 요청 보호, 사용자 자격 검증·세션 ID 교체·세션 폐기·CSRF 검증 |
+| Auth Service·Repository | users의 login_id로 조회하고 password_hash를 검증. 가입 아이디·이메일 고유값 확인 |
+| 업무 Service·사진 조회 처리 | 세션 userId와 여행·사진·작업 소유권 대조. 기존 `/uploads/**`도 소유권을 확인한 뒤 파일 반환 |
+| 서버 세션 | 단일 서버 메모리에 인증 상태 저장. 재시작·유휴 만료 시 재로그인. 별도 DB 테이블 없음 |
+
+AI 호출은 인증·소유권 검증 후에만 접수한다. 비밀번호·이메일·세션 토큰을 AI 입력에 넣지 않는다.
+챗봇은 여행 등록 없이도 쓸 수 있지만 로그인은 필수다. 현재 `UploadConfig`의 공개 정적 핸들러,
+FE Mock·라우트·쿠키 처리에는 후속 구현이 필요하다. 이 다이어그램은 목표 구조다.
+프레임워크 세션·CSRF 동작은 [Spring Security 공식 문서](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)를 따른다.
+
 ## AI-Ready 설계 적용 지점
 
-### 사진 승인과 추천 채택의 책임
+### 사진 자동 등록과 추천 채택의 책임
 
 | 주체 | 처리 | 저장 위치 |
 | --- | --- | --- |
-| 이미지 AI (현재 Mock) | 사진에서 후보·수량·신뢰도를 반환 | `detected_objects`, 최초 `approved=false` |
-| 서버 Service | 사진 승인 시 내 목록 생성·연결·완료 처리 | `checklist_items` + `item_detections` |
+| 이미지 AI (현재 Mock) | 사진에서 물품명·수량·신뢰도를 반환 | BAG_CHECK 출력 JSON |
+| 서버 Service | BAG_CHECK 완료 처리에서 승인 없이 내 목록 생성·연결·완료 등록. 저장 성공 후 COMPLETED | `detected_objects` + `checklist_items` + `item_detections` + `ai_jobs`, 한 트랜잭션 |
 | 추천 AI (현재 Mock) | 여행 조건과 현재 내 목록을 고려해 후보·이유 제시 | `ai_jobs.output_payload` |
 | 서버 Service | 선택·승인한 후보만 미완료로 등록, 반복 승인 방지 | `checklist_items`, 후보의 서버 필드 `acceptedItemId` |
 | 서버 Service | 내 목록 기준 완료율, 실제 완료 항목 기준 무게 합산 | 내 목록에서 집계, 무게 결과는 `ai_jobs.output_payload` |
