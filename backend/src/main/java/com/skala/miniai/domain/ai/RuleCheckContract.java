@@ -1,6 +1,9 @@
 package com.skala.miniai.domain.ai;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.time.LocalDate;
 import java.util.Set;
 
@@ -17,6 +20,17 @@ import tools.jackson.databind.JsonNode;
 public class RuleCheckContract {
 
     private static final Set<String> INPUT_FIELDS = Set.of("transport", "airline", "question", "items");
+
+    /**
+     * 챗봇 사진 첨부(S-09). <b>선택 필드다.</b>
+     *
+     * <p>07 의 다른 칸처럼 필수로 두면 기존 호출이 전부 깨진다 — 화면 Mock·테스트·06 예시가
+     * 네 칸만 보낸다. 사진을 붙이지 않는 질문이 훨씬 흔하므로 없으면 생략할 수 있게 뒀다.
+     */
+    private static final Set<String> OPTIONAL_INPUT_FIELDS = Set.of("photoIds");
+
+    /** 한 번에 붙일 수 있는 사진 수. 챗봇은 대화 중 한두 장이라 BAG_CHECK(20장)보다 훨씬 작다. */
+    public static final int MAX_ATTACHED_PHOTOS = 5;
     private static final Set<String> INPUT_ITEM_FIELDS = Set.of(
             "itemId", "detectionId", "name", "qty", "attributes");
     private static final Set<String> ATTRIBUTE_FIELDS = Set.of(
@@ -27,7 +41,8 @@ public class RuleCheckContract {
             "verdict", "ruleId", "conditionNote", "reason", "missingInfo", "sourceUrl", "checkedAt");
 
     public JsonNode validateInput(JsonNode input) {
-        requireObject(input, "input", INPUT_FIELDS, false);
+        requireObject(input, "input", INPUT_FIELDS, OPTIONAL_INPUT_FIELDS, false);
+        validatePhotoIds(input.get("photoIds"));
         requireEnum(input.get("transport"), "input.transport", Codes.Transport.class, false);
         requireNullableText(input.get("airline"), "input.airline", 50, false);
         requireNullableText(input.get("question"), "input.question", 500, false);
@@ -38,10 +53,37 @@ public class RuleCheckContract {
         }
         for (int i = 0; i < items.size(); i++) validateInputItem(items.get(i), i);
 
+        // 07 입력 스키마 그대로다. 사진만 보내는 요청은 받지 않는다 — 무엇을 묻는지 없이
+        // 사진만 오면 답할 것이 없고, 07 의 anyOf 와도 어긋난다.
         if (input.get("question").isNull() && items.isEmpty()) {
             failInput("question 또는 items 중 하나는 필요합니다.", "input");
         }
         return input;
+    }
+
+    /** 붙은 사진 id. 없으면 빈 목록이다. */
+    public static List<Long> attachedPhotoIds(JsonNode input) {
+        JsonNode photoIds = input == null ? null : input.get("photoIds");
+        if (photoIds == null || !photoIds.isArray()) return List.of();
+        List<Long> ids = new ArrayList<>();
+        photoIds.forEach(id -> ids.add(id.asLong()));
+        return ids;
+    }
+
+    private void validatePhotoIds(JsonNode photoIds) {
+        if (photoIds == null || photoIds.isNull()) return;
+        if (!photoIds.isArray() || photoIds.size() > MAX_ATTACHED_PHOTOS) {
+            failInput("photoIds는 최대 " + MAX_ATTACHED_PHOTOS + "개의 배열이어야 합니다.", "input.photoIds");
+        }
+        Set<Long> seen = new LinkedHashSet<>();
+        for (JsonNode id : photoIds) {
+            if (!id.isIntegralNumber() || id.asLong() < 1) {
+                failInput("photoIds의 값은 1 이상의 정수여야 합니다.", "input.photoIds");
+            }
+            if (!seen.add(id.asLong())) {
+                failInput("photoIds에 같은 사진이 두 번 들어 있습니다.", "input.photoIds");
+            }
+        }
     }
 
     /** RULE_CHECK 출력 전체를 저장 전에 검증한다. */
@@ -122,6 +164,13 @@ public class RuleCheckContract {
         }
     }
 
+    /**
+     * {@code results[]} 는 {@code input.items} 와 <b>개수·순서·식별값이 정확히 같아야</b> 한다.
+     *
+     * <p>사진을 붙인 요청도 마찬가지다. 서버가 인식한 물품을 {@code items} 뒤에 이어 붙이고
+     * {@code input_payload} 를 <b>다시 쓰기 때문에</b>, 판정할 때 이 배열이 이미 최종본이다.
+     * 한때 "앞부분만 일치" 로 느슨하게 뒀다가 되돌렸다 — 실제 모델이 결과를 더 붙여도 잡지 못했다.
+     */
     private void matchInputItems(JsonNode items, JsonNode results) {
         if (items.isEmpty()) return;
         if (items.size() != results.size()) failOutput("RULE_CHECK items와 results 개수가 다릅니다.");
@@ -143,11 +192,23 @@ public class RuleCheckContract {
     }
 
     private void requireObject(JsonNode node, String field, Set<String> fields, boolean output) {
+        requireObject(node, field, fields, Set.of(), output);
+    }
+
+    /** {@code optional} 은 있어도 되고 없어도 되지만, 그 밖의 필드는 여전히 거부한다. */
+    private void requireObject(JsonNode node, String field, Set<String> fields,
+                               Set<String> optional, boolean output) {
         if (node == null || !node.isObject()) fail(output, field + "은 객체여야 합니다.", field);
         for (String name : fields) {
             if (!node.has(name)) fail(output, field + "." + name + "은 필수입니다.", field + "." + name);
         }
-        if (node.size() != fields.size()) fail(output, field + "에 허용되지 않은 필드가 있습니다.", field);
+        if (node.size() > fields.size() + optional.size()) {
+            fail(output, field + "에 허용되지 않은 필드가 있습니다.", field);
+        }
+        node.propertyStream().map(java.util.Map.Entry::getKey)
+                .filter(name -> !fields.contains(name) && !optional.contains(name))
+                .findFirst()
+                .ifPresent(name -> fail(output, field + "에 허용되지 않은 필드가 있습니다: " + name, field));
     }
 
     private void requireText(JsonNode node, String field, int max, boolean output) {

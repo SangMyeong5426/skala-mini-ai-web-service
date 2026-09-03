@@ -3,11 +3,14 @@ package com.skala.miniai.domain.ai;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -17,12 +20,15 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+import com.skala.miniai.common.ApiException;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.checklist.ChecklistItem;
 import com.skala.miniai.domain.checklist.ChecklistItemRepository;
 import com.skala.miniai.domain.checklist.ItemRuleCheck;
+import com.skala.miniai.domain.checklist.ItemRuleCheckId;
 import com.skala.miniai.domain.checklist.ItemRuleCheckRepository;
 import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.DetectedObject;
@@ -48,6 +54,9 @@ import com.skala.miniai.domain.photo.DetectedObjectRepository;
 public class AiJobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AiJobRunner.class);
+
+    /** 07 RULE_CHECK 입력 스키마의 {@code items} 한도. 사진에서 나온 물품도 여기 함께 담긴다. */
+    private static final int MAX_RULE_CHECK_ITEMS = 50;
 
     private final AiJobRepository jobs;
     private final AiJobService jobService;
@@ -91,6 +100,10 @@ public class AiJobRunner {
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
             JsonNode input = json.read(job.getInputPayload());
+            if (job.getJobType() == Codes.JobType.RULE_CHECK) {
+                // 사진을 붙였으면 먼저 인식하고 내 목록에 등록한 뒤, 그 물품까지 함께 판정한다.
+                input = attachPhotos(job, input);
+            }
             JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
                 // 07 「누가 채우나」 — 판정은 모델 몫이 아니다. 모델·Mock 이 낸 verdict·ruleId 는
@@ -227,6 +240,136 @@ public class AiJobRunner {
         }
     }
 
+    /**
+     * 챗봇에 붙인 사진을 <b>먼저</b> 처리한다 (S-09 · 07 「챗봇 사진 첨부」).
+     *
+     * <p>여행 사진과 <b>같은 취급</b>이다 — 인식하고, {@code detected_objects} 에 저장하고,
+     * 승인 없이 내 목록에 {@code PREPARED} 로 등록한다. 별도 저장소를 두지 않는다.
+     * 그래서 {@code BAG_CHECK} 와 같은 코드를 그대로 지난다.
+     *
+     * <p>그다음 인식된 물품을 {@code items[]} 뒤에 이어 붙이고 <b>{@code input_payload} 를 다시 쓴다.</b>
+     * 그러지 않으면 {@code GET /api/ai-jobs/{id}} 의 기록에 사진 물품이 없어, 답이 이상할 때
+     * 무엇을 보고 판정했는지 재구성할 수 없다. 다시 쓰므로 계약의 {@code items}↔{@code results}
+     * <b>개수·순서·식별값 일치</b>도 그대로 유지된다.
+     *
+     * <p>속성({@code capacityMl}·{@code batteryWh}·{@code bladeCm})은 전부 {@code null} 로 둔다.
+     * 사진에는 용량도 정격도 보이지 않는다. 규칙 엔진이 그 자리에서 {@code NEED_MORE_INFO} 와
+     * 되물을 것을 만들어 낸다 — 챗봇이 대화형인 이유가 여기다.
+     *
+     * <p><b>같은 인식 물품을 두 번 넣지 않는다.</b> 직전 결과를 {@code items} 로 되보내면서 같은
+     * 사진을 다시 붙이면, 문맥을 새 id 로 옮긴 뒤 같은 것을 또 붙여 <b>서버가 스스로 중복 입력을
+     * 만들었다.</b> 그러면 모델이 정확히 답해도 중복 식별값 방어에 걸려 전부 {@code ASK_AIRLINE} 이
+     * 된다 — 사용자가 이미 확인해 준 속성까지 함께 사라진다.
+     *
+     * <p><b>사진을 읽지 못해도 질문에는 답한다.</b> 07 이 {@code BAG_CHECK} 에 대해 "실패 사진만
+     * 재시도하고 성공한 것은 보여준다" 고 정했는데, 챗봇에서 사진 때문에 질문까지 실패하면
+     * 사용자는 자기가 물은 것에 답을 못 받는다.
+     */
+    private JsonNode attachPhotos(AiJob job, JsonNode input) {
+        List<Long> photoIds = RuleCheckContract.attachedPhotoIds(input);
+        if (photoIds.isEmpty()) return input;
+        if (job.getTripId() == null) return input;   // 접수에서 이미 막지만, 저장 경로에서 터지지는 않게 둔다
+
+        List<DetectedObject> saved;
+        Map<Long, Long> linkedItemIds;
+        try {
+            ObjectNode bagInput = json.newObject();
+            ArrayNode ids = bagInput.putArray("photoIds");
+            photoIds.forEach(ids::add);
+
+            JsonNode recognized = aiClient.run(Codes.JobType.BAG_CHECK, job.getTripId(), bagInput);
+            saved = saveDetections(recognized);
+            linkedItemIds = autoRegistrar.register(job.getTripId(), saved);
+        } catch (RuntimeException e) {
+            // 사진이 문제였는데 질문까지 못 답하면 안 된다. 사진만 빼고 이어 간다.
+            log.warn("챗봇 사진 인식에 실패했습니다. 사진 없이 질문에만 답합니다.", e);
+            return input;
+        }
+
+        ObjectNode merged = (ObjectNode) input.deepCopy();
+        ArrayNode items = (ArrayNode) merged.get("items");
+
+        // 먼저 문맥을 새 인식 id 에 맞춘 뒤, **아직 없는 것만** 새로 붙인다.
+        remapStaleDetectionIds(items, saved);
+
+        Set<Long> already = new LinkedHashSet<>();
+        for (JsonNode item : items) {
+            JsonNode detectionId = item.path("detectionId");
+            if (detectionId.isIntegralNumber()) already.add(detectionId.asLong());
+        }
+        List<DetectedObject> toAppend = saved.stream()
+                .filter(detection -> !already.contains(detection.getId()))
+                .toList();
+
+        // 07 입력 스키마의 items 한도. 넘으면 조용히 버리지 않고 실패시킨다 —
+        // 자동 등록은 이미 끝난 상태라, 목록에는 있는데 판정에서만 빠지는 물품이 생긴다.
+        // 실제로 판정할 최종 개수로 센다.
+        if (items.size() + toAppend.size() > MAX_RULE_CHECK_ITEMS) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "TOO_MANY_ITEMS",
+                    "한 번에 판정할 수 있는 물품은 " + MAX_RULE_CHECK_ITEMS + "개까지입니다. "
+                            + "물품 목록을 줄이거나 사진을 나눠서 물어봐 주세요.", "input.items");
+        }
+
+        for (DetectedObject detection : toAppend) {
+            ObjectNode item = items.addObject();
+            Long itemId = linkedItemIds.get(detection.getId());
+            if (itemId == null) item.putNull("itemId");
+            else item.put("itemId", itemId);
+            item.put("detectionId", detection.getId());
+            item.put("name", detection.getName());
+            item.put("qty", detection.getQty());
+            ObjectNode attributes = item.putObject("attributes");
+            attributes.putNull("capacityMl");
+            attributes.putNull("batteryWh");
+            attributes.putNull("batteryMah");
+            attributes.putNull("bladeCm");
+        }
+
+        // 실제로 판정한 입력을 기록으로 남긴다. 같은 트랜잭션이라 추가 비용이 없다.
+        job.replaceInputPayload(json.write(merged));
+
+        log.info("챗봇 사진 {}장에서 물품 {}개를 인식했고 {}개를 판정에 새로 넣었습니다",
+                photoIds.size(), saved.size(), toAppend.size());
+        return merged;
+    }
+
+    /**
+     * 같은 사진을 다시 붙이면 <b>이전 인식 행이 지워지고 새 id 로 다시 생긴다</b>
+     * ({@code saveDetections} 가 미승인 행을 지우고 넣는다). 그런데 직전 턴의 결과를
+     * {@code items} 로 되보낸 사용자는 <b>사라진 {@code detectionId}</b> 를 들고 있다.
+     *
+     * <p>그대로 두면 완료 응답에 없는 id 가 남고, 다음 턴에 소유권 검사가 그 값을 {@code 404} 로
+     * 막는다 — <b>서버가 돌려준 값을 서버가 거절한다.</b> 이름으로 새 id 를 찾아 옮기고,
+     * 못 찾으면 비운다. 항목 자체는 {@code itemId} 로 계속 이어진다.
+     */
+    private void remapStaleDetectionIds(ArrayNode items, List<DetectedObject> saved) {
+        Set<Long> referenced = new LinkedHashSet<>();
+        for (JsonNode item : items) {
+            JsonNode detectionId = item.path("detectionId");
+            if (detectionId.isIntegralNumber()) referenced.add(detectionId.asLong());
+        }
+        if (referenced.isEmpty()) return;
+
+        // 이번에 안 건드린 사진의 인식 id 는 그대로 살아 있다. 실제로 사라진 것만 골라야 한다.
+        Set<Long> live = new LinkedHashSet<>();
+        detections.findAllById(referenced).forEach(detection -> live.add(detection.getId()));
+
+        Map<String, Long> idByName = new LinkedHashMap<>();
+        for (DetectedObject detection : saved) {
+            idByName.putIfAbsent(RecommendationStore.normalize(detection.getName()), detection.getId());
+        }
+
+        for (JsonNode node : items) {
+            if (!(node instanceof ObjectNode item)) continue;
+            JsonNode detectionId = item.path("detectionId");
+            if (!detectionId.isIntegralNumber() || live.contains(detectionId.asLong())) continue;
+
+            Long remapped = idByName.get(RecommendationStore.normalize(item.path("name").asText("")));
+            if (remapped == null) item.putNull("detectionId");
+            else item.put("detectionId", remapped);
+        }
+    }
+
     /** 07: {@code itemId} 와 {@code ruleId} 가 모두 있는 결과만 저장한다. {@code ASK_AIRLINE} 은 JSON 에만 남는다. */
     private void saveRuleChecks(AiJob job, JsonNode output) {
         if (job.getTripId() == null) return;   // 챗봇은 아무 테이블에도 쓰지 않는다
@@ -239,11 +382,16 @@ public class AiJobRunner {
             long itemId = r.path("itemId").asLong();
             if (!ownItemIds.contains(itemId)) continue;   // 남의 여행 항목으로 새지 않게
 
-            ruleChecks.save(new ItemRuleCheck(
-                    itemId,
-                    r.path("ruleId").asLong(),
-                    Codes.RuleVerdict.valueOf(r.path("verdict").asText()),
-                    r.path("missingInfo").isNull() ? null : r.path("missingInfo").asText(null)));
+            long ruleId = r.path("ruleId").asLong();
+            Codes.RuleVerdict verdict = Codes.RuleVerdict.valueOf(r.path("verdict").asText());
+            String missingInfo = r.path("missingInfo").isNull() ? null : r.path("missingInfo").asText(null);
+
+            // 같은 물품·같은 규정을 다시 판정할 수 있다 — 챗봇에서 "100Wh예요" 로 되묻기에
+            // 답하면 반드시 이 경로다. 새로 넣지 않고 기존 행을 갱신한다.
+            ruleChecks.findById(new ItemRuleCheckId(itemId, ruleId))
+                    .ifPresentOrElse(
+                            existing -> existing.redecide(verdict, missingInfo),
+                            () -> ruleChecks.save(new ItemRuleCheck(itemId, ruleId, verdict, missingInfo)));
         }
     }
 }
