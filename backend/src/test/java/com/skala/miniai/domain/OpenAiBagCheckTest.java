@@ -21,12 +21,14 @@ import tools.jackson.databind.json.JsonMapper;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.ai.BagCheckPrompt;
+import com.skala.miniai.domain.ai.PackingListPrompt;
 import com.skala.miniai.domain.ai.MockAiClient;
 import com.skala.miniai.domain.ai.OpenAiChatApi;
 import com.skala.miniai.domain.ai.OpenAiClient;
 import com.skala.miniai.domain.ai.OpenAiException;
 import com.skala.miniai.domain.ai.VisionImage;
 import com.skala.miniai.domain.ai.VisionImageLoader;
+import com.skala.miniai.domain.checklist.ChecklistItemRepository;
 import com.skala.miniai.domain.photo.TripPhoto;
 import com.skala.miniai.domain.photo.TripPhotoRepository;
 import com.skala.miniai.domain.trip.Trip;
@@ -65,7 +67,8 @@ class OpenAiBagCheckTest {
         given(trips.findById(7L)).willReturn(Optional.of(trip));
 
         client = new OpenAiClient(mock(MockAiClient.class), api, new BagCheckPrompt(json),
-                loader, photos, trips, json, 20);
+                new PackingListPrompt(json), loader, photos, trips,
+                mock(ChecklistItemRepository.class), Optional.empty(), json, 20);
     }
 
     /** 사진 1·2 는 읽히고 3 은 접수 뒤에 지워진 상황을 만든다. */

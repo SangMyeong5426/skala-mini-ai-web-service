@@ -14,13 +14,16 @@
 > 사진 우선·별도 추천 원칙에 최신 사용자 결정인 사진 인식 즉시 자동 등록을 적용했다. 아래 스키마는 개정 계약이며
 > 실제 Mock·화면 반영 완료 여부는 [문서 지도](README.md#개정안-반영-상태)에서 별도로 관리한다.
 
-> **2026-09-03 추가:** `BAG_CHECK`(사진 인식) 한 곳에 **실제 OpenAI 호출을 붙였다.**
-> 비워 둔 자리가 정말로 비어 있었는지 확인하는 것이 목적이다 —
+> **2026-09-03 추가:** `BAG_CHECK`(사진 인식)와 `PACKING_LIST`(준비물 추천) 두 곳에
+> **실제 모델 호출을 붙였다.** 프로토콜은 OpenAI Chat Completions 이고, 어디로 나갈지는
+> `AI_BASE_URL` 이 정한다(팀은 Gemini 무료 티어를 가리켜 두었다). 비워 둔 자리가 정말로 비어 있었는지 확인하는 것이 목적이다 —
 > `AiClient` 인터페이스·06 계약·DB 스키마·화면은 **한 줄도 고치지 않았다.**
+> `PACKING_LIST` 의 날씨는 Open-Meteo 에서 실제로 읽는다(키 불필요).
 >
 > **기본값은 그대로 `AI_PROVIDER=mock`이다.** 실제 호출은 `.env` 한 줄을 `openai`로
 > 바꿔야만 나간다. 발표 데모는 네트워크·비용·응답 시간에 묶이면 안 되므로 mock으로 돌린다.
-> 나머지 3종(`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK`)은 `openai`에서도 Mock 그대로다.
+> `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 아래 「왜 여기인가」가 **애초에 AI를 두지 않기로 한 자리**라
+> `openai` 에서도 Mock 그대로다.
 
 ## AI 확장 지점
 
@@ -30,7 +33,7 @@
 | ID | `jobType` | 하는 일 | Use-Case | 화면 | 지금 | 나중 |
 | --- | --- | --- | --- | --- | --- | --- |
 | AI-01 | `BAG_CHECK` | 사진에서 물품 후보·수량·신뢰도를 뽑는다 | UC-04 | `S-04` | Mock 고정 인식 결과 · **`AI_PROVIDER=openai`면 실제 비전 모델** | 비전 모델 |
-| AI-02 | `PACKING_LIST` | 현재 내 목록에 없는 **추가 후보와 이유만** 추천한다 | UC-05 | `S-05` | Mock 고정 목록 | LLM |
+| AI-02 | `PACKING_LIST` | 현재 내 목록에 없는 **추가 후보와 이유만** 추천한다 | UC-05 | `S-05` | Mock 고정 목록 · **`AI_PROVIDER=openai`면 실제 LLM + Open-Meteo** | LLM |
 | AI-03 | `WEIGHT_ESTIMATE` | 무게를 **범위**로 추정하고 한도와 비교한다 | UC-10 | `S-06` `S-07` | Mock 고정 범위 | 품목 중량 DB + LLM 보정 |
 | AI-04 | `RULE_CHECK` | 질문·물품에서 **속성을 구조화**하고 판정을 **설명**한다 | UC-07 · UC-08 | `S-06` `S-08` `S-09` | Mock 고정 판정 | LLM 구조화 + **규칙 엔진** |
 
@@ -73,9 +76,15 @@
 | --- | --- |
 | `domain/ai/OpenAiClient.java` | `AiClient` 구현. `BAG_CHECK` 만 실제 호출하고 나머지는 `MockAiClient` 에 넘긴다. 응답 검증·보정·재시도 1회 |
 | `domain/ai/OpenAiChatApi.java` | HTTP 한 곳. Structured Outputs(`strict`)로 부른다. **SDK를 넣지 않았다** |
-| `domain/ai/BagCheckPrompt.java` | 아래 System·User Prompt 원문과 **모델용 파생 스키마** |
+| `domain/ai/BagCheckPrompt.java` · `PackingListPrompt.java` | 아래 System·User Prompt 원문과 **모델용 파생 스키마** |
 | `domain/ai/VisionImageLoader.java` | 저장된 사진을 줄여 `data:` URL 로 바꾼다. 못 읽으면 `failedPhotoIds` |
-| `domain/ai/VisionImage.java` · `OpenAiException.java` | 위 넷이 주고받는 값·예외 |
+| `domain/ai/VisionImage.java` · `OpenAiException.java` | 위 다섯이 주고받는 값·예외 |
+| `domain/weather/*` | Open-Meteo 조회. `WEATHER_PROVIDER` 로 켜고 끈다 |
+
+`AiClient` 에 한 가지만 더했다. `run(jobType, **tripId**, input)` 오버로드다 —
+07 의 input 에는 `tripId` 가 없는데(서버가 아는 값이라 스키마에 넣지 않았다),
+`{{server:…}}` 자리를 채우려면 국가 코드와 **미완료까지 포함한 현재 내 목록**을 읽어야 한다.
+**기본 구현이 `tripId` 를 버리고 기존 메서드로 넘기므로 `MockAiClient` 는 그대로다.**
 
 **모델용 파생 스키마**는 아래 출력 Schema에서 두 가지를 뺀 것이다.
 
@@ -681,7 +690,13 @@ BAG_CHECK 완료 처리가 `detected_objects`·`item_detections`와 내 목록 �
 - 스키마 불통과(tips 120자 초과 등)면 재시도 1회, 그래도 실패면 FAILED — 06 의 FAILED 예시 문구로
 
 날씨는 FE가 모른다. 백엔드가 Open-Meteo에서 받아 프롬프트에 넣고, **어느 날씨였는지**를
-`weatherSource`와 데이터 기준일 `weatherAsOf`로 남긴다. `SEASONAL`이면 `S-05`가
+`weatherSource`와 데이터 기준일 `weatherAsOf`로 남긴다.
+
+> **구현 상태(2026-09-03):** 붙였다. 도시명 → 좌표(지오코딩) → 예보 또는 계절 앙상블 순으로 부른다.
+> API 키가 없어 팀원이 따로 발급받지 않아도 된다. `WEATHER_PROVIDER`가 `openmeteo`가 아니면
+> 조회하지 않고 **날씨 없이** 추천한다 — 그때 프롬프트가 모델에게 *"날씨 수치를 지어내지 말라"*고
+> 명시한다. Open-Meteo는 모델 실행 시각을 돌려주지 않으므로 **받은 날**이 곧 `weatherAsOf`다.
+> 조회 자체가 실패하면 `weatherAsOf`는 `null`이다(「알려진 한계」). `SEASONAL`이면 `S-05`가
 *"실시간 예보가 아닌 계절 평균 기준입니다"*와 날짜를 표시한다. 조회 실패 시에도 실제로
 사용한 계절 자료의 기준일을 표시하며, 실행일로 임의 대체하지 않는다.
 
@@ -2009,8 +2024,33 @@ B. 설명 (2차 호출)
 
 ### OpenAI 연동 검증 — 2026-09-03
 
-**실제 OpenAI 엔드포인트에는 아직 한 번도 붙여 보지 않았다.** 아래는 네트워크 없이
-확인한 것뿐이다. 키를 넣고 사진 한 장으로 돌려 보는 것은 **남은 일**이다.
+**실제 모델에 붙여 돌려 봤다.** 저장소의 데모 사진 2장(`database/demo-photos/`)과
+도쿄 3박4일 입력으로 두 작업을 모두 실행했다.
+
+> **부른 곳은 OpenAI 가 아니다.** `backend/.env` 의 `AI_BASE_URL` 이 Gemini 의 OpenAI 호환
+> 엔드포인트를 가리키고 있어 `gemini-3.5-flash-lite` 로 나갔다. 프로토콜이 같아 코드는
+> 그대로였다 — **`AI_BASE_URL` 한 줄로 제공자를 갈아 끼울 수 있다는 것까지 같이 확인된 셈이다.**
+> `api.openai.com` 으로 나가는 경로는 아직 돌려 보지 않았다. 재현은 아래 한 줄이다 —
+`-Dai.smoke=true` 가 없으면 건너뛰므로 팀원이 `./gradlew build` 를 돌릴 때 요금이 나가지 않는다.
+
+```bash
+cd backend && ./gradlew test --tests '*RealOpenAiSmokeTest*' -Dai.smoke=true
+```
+
+| 실제 호출 결과 | 확인한 것 |
+| --- | --- |
+| `BAG_CHECK` — 사진 2장에서 물품 12개 | 전부 입력 `photoId`, 이름은 한국어 일반명사, `qty` 1~99, `confidence` 0~1. `failedPhotoIds` 빈 배열 |
+| 프롬프트 규칙 1이 실제로 지켜졌다 | **태블릿에만 `배터리 정격(Wh)`, 튜브형 화장품에만 `용량(ml)`** 이 `missingInfo` 로 붙었다. 옷·신발에는 붙지 않았다 |
+| `PACKING_LIST` — 후보 10개 · `tips` 3개 | 이미 챙긴 충전기와 미완료 우산을 다시 내지 않았다. 모든 후보에 `reason` 이 있다 |
+| 날씨가 실제로 프롬프트에 들어갔다 | 도쿄 10/3~10/6 이 28일 뒤라 계절 앙상블(`SEASONAL`)이었고, 모델이 **최저 12도·최고 25도를 그대로 인용**해 경량 패딩·긴팔을 추천했다 |
+| 날씨를 붙이기 전과 후 | 후보 5개 → 10개. 날씨 없이는 "기온" 이 근거로 등장하지 않았다 |
+
+**한 번 새어 나갈 뻔한 것:** 지오코딩 URL 을 인코딩하지 않아 "도쿄" 가 그대로 나갔고,
+Open-Meteo 가 **오류가 아니라 빈 결과**를 돌려줘 날씨 없이 추천이 나갔다. 조용한 실패라
+로그를 보지 않으면 모른다. 지금은 `URI` 를 인코딩해 넘기고, 스모크 테스트가 `weatherAsOf` 가
+`null` 이면 실패하도록 막는다.
+
+아래는 네트워크 없이 확인한 것이다.
 
 | 항목 | 확인 결과 |
 | --- | --- |
@@ -2020,10 +2060,13 @@ B. 설명 (2차 호출)
 | 실패 사진 | 읽지 못한 사진은 `failedPhotoIds` 에 남고, **한 장도 못 읽었을 때만** 작업이 실패한다 |
 | 개수 제한 | 사진 한 장에 10개까지, `confidence` 높은 순으로 남긴다 |
 | 재시도 | 429·5xx 는 한 번만 다시 걸고, 401 은 바로 실패한다 |
+| 추천 중복 제거 | 이미 챙긴 것과 **미완료 항목**을 서버가 다시 거른다. 모델이 같은 이름을 두 번 내도 하나만 남는다 (`OpenAiPackingListTest`) |
+| 추천 서버 필드 | `source=AI` · `acceptedItemId=null` · 날씨 두 칸을 서버가 채운다. 모델에게 묻지도 않는다 |
 | 기동 | `./gradlew build` 통과. 기존 테스트도 그대로 통과한다 |
 
-아직 확인하지 못한 것 — **실제 모델이 이 프롬프트로 쓸 만한 인식 결과를 내는지**,
-`AI_MODEL` 에 넣을 모델 이름이 지금도 유효한지, 사진 여러 장의 실제 응답 시간과 비용.
+아직 확인하지 못한 것 — **앱을 띄운 상태의 전 구간(사진 업로드 → 폴링 → 내 목록 등록)**.
+팀 Supabase 자격 증명이 맞지 않아 `bootRun` 이 뜨지 않았다(`password authentication failed`).
+저장 경로 자체는 H2 로 도는 `AiJobAndChecklistTest` 가 확인한다. 그 밖에 응답 시간·비용도 아직이다.
 
 ### Playground·실제 모델 검증 — 미실행 TBD
 
@@ -2042,7 +2085,7 @@ B. 설명 (2차 호출)
 
 | 항목 | 환경 변수 | 지금 값 | 비고 |
 | --- | --- | --- | --- |
-| 제공자 | `AI_PROVIDER` | `mock` | `openai` 면 `BAG_CHECK` 만 실제 호출. **그 밖의 값은 구현이 없어 mock으로 떨어진다** |
+| 제공자 | `AI_PROVIDER` | `mock` | `openai` 면 `BAG_CHECK`·`PACKING_LIST` 를 실제 호출. **그 밖의 값은 구현이 없어 mock으로 떨어진다** |
 | 모델명 | `AI_MODEL` | `mock` | `openai` 면 **이미지를 읽는 모델**이어야 한다. `mock` 이면 기동을 막는다 |
 | API 키 | `AI_API_KEY` | (비움) | **절대 커밋하지 않는다.** `openai` 인데 비어 있으면 기동을 막는다 |
 | 응답 다양성 | `AI_TEMPERATURE` | `0.2` | 구조화된 JSON 출력이므로 낮게. 온도를 받지 않는 모델이면 `-1` 로 두어 보내지 않는다 |
@@ -2064,10 +2107,11 @@ B. 설명 (2차 호출)
 
 | 단계 | 할 일 | 예상 난이도 | 왜 |
 | --- | --- | --- | --- |
-| 1 | `AI_PROVIDER` 분기와 `OpenAiClient` | 낮음 | **완료.** 다만 붙인 것은 `BAG_CHECK` 뿐이다. 텍스트 3종은 아직 Mock 이다 |
-| 2 | 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | **`BAG_CHECK` 완료.** Structured Outputs 로 모양을 강제하고, 값 범위는 서버가 다시 검사한다. 429·5xx·타임아웃만 재시도하고 401·400 은 바로 실패다 |
+| 1 | `AI_PROVIDER` 분기와 `OpenAiClient` | 낮음 | **완료.** `BAG_CHECK` · `PACKING_LIST` 두 곳이다 |
+| 2 | 응답 JSON Schema 검증 + 실패 시 재시도 1회 → `FAILED` | 낮음 | **완료.** Structured Outputs 로 모양을 강제하고, 값 범위는 서버가 다시 검사한다. 429·5xx·타임아웃만 재시도하고 401·400 은 바로 실패다 |
 | 3 | `BAG_CHECK` 비전 입력 — 사진을 모델에 넘기는 파이프라인 | 중간 | **완료.** 긴 변 1024px 로 줄여 JPEG 로 보내고, 20장을 넘거나 읽지 못한 사진은 `failedPhotoIds` 로 남긴다 |
-| 3-1 | 텍스트 3종(`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK`) 실제 호출 | 낮음 | 남았다. 자리는 같고 프롬프트만 붙이면 된다 — `OpenAiClient` 가 지금은 Mock 에 넘긴다 |
+| 3-1 | `PACKING_LIST` 날씨 — Open-Meteo 연동 | 낮음 | **완료.** 출발일이 16일 이내면 예보, 넘으면 계절 앙상블. 실패해도 추천은 나간다 |
+| 3-2 | `WEIGHT_ESTIMATE`·`RULE_CHECK` 실제 호출 | — | **하지 않는다.** 「왜 여기인가」가 이 둘을 규칙으로 푸는 자리로 정했다. 무게는 산식, 반입은 규칙 엔진이 정본이다 |
 | 4 | 서버 작업 실행에 큐(메시지 브로커) 도입 | 중간 | 작업 실행 방식만 변경하고 FE의 상태 조회·폴링 계약은 유지한다 |
 | 5 | `transport_rules` 갱신 잡 — 출처 재확인 날짜 자동 갱신 | 중간 | `checkedAt` 이 오래되면 판정 근거가 약해진다 |
 | 6 | 비용·토큰 사용량 모니터링 | 낮음 | `ai_jobs` 에 토큰 수 컬럼 추가 |
@@ -2089,8 +2133,18 @@ B. 설명 (2차 호출)
 - **RULE_CHECK의 실제 모델 호출은 두 단계다.** 현재는 Mock이며 지연·비용 검증은 향후 TBD다.
 - **챗봇 사진 첨부**의 별도 저장·연결 흐름은 TBD다. 여행 사진의 BAG_CHECK 완료 시 자동 등록 정책과 구분하며, 사진 사전 승인 단계를 다시 추가하지 않는다. 대화 영구 저장은 범위 밖이다.
 - **confidenceLevel 경계값 0.80 / 0.50은 초기값이다.** 실제 모델 인식 정확도·사후 수정률을 보고 조정한다.
-- **실제 모델 검증은 하지 않았다.** 스키마·예시 검증과 모델 정확도를 혼동하지 않는다.
-  `BAG_CHECK` 의 OpenAI 연동도 마찬가지다 — 코드는 돌지만 **실제 응답을 본 적이 없다.**
+- **실제 모델을 한 번 돌려 본 것이지 정확도를 잰 것이 아니다.** 사진 2장·입력 1건이다.
+  인식률·오탐률·사후 수정률은 재지 않았다. `confidenceLevel` 경계값 조정도 그다음이다.
+- **돌려 본 모델은 Gemini(OpenAI 호환)다.** `api.openai.com` 경로와 다른 모델에서 같은 품질이
+  나오는지는 확인하지 않았다. 특히 `AI_MAX_TOKENS=2048` 은 후보 40개를 다 채우면 모자랄 수 있다 —
+  그때는 응답이 잘려 `FAILED` 가 되고 오류 문구가 그 사실을 알려 준다.
+- **`weatherAsOf` 는 날씨를 못 받으면 `null` 이다.** 07 출력 스키마는 `string`(date)만 허용하므로
+  **이 한 칸만 스키마를 벗어난다.** 쓰지 않은 자료의 기준일을 실행일로 지어내는 것보다 낫다고 보고
+  일부러 그렇게 뒀다. `weatherSource` 는 07 이 정한 대로 `SEASONAL` 이다. FE 는 두 칸을 함께 보고
+  "날씨 정보 없음" 을 띄운다 — 확정 전까지 **TBD** 다.
+- **`RULE` 후보 보강은 아직 없다.** 07 은 고정 필수 규칙 후보(여권 등)를 서버가 `source=RULE` 로
+  더하라고 정했지만, 지금은 모델 후보만 나가고 전부 `source=AI` 다. 실제 호출에서 모델이 여권을
+  냈으나 그건 우연이지 규칙이 아니다.
 - **느린 AI 호출이 DB 커넥션을 쥐고 있다.** `AiJobRunner` 는 `@Transactional` 안에서
   `AiClient` 를 부르므로, OpenAI 응답을 기다리는 동안 커넥션 하나가 묶인다. 풀 기본값이
   `DB_POOL_SIZE=5` 라 **동시에 5명이 사진을 분석하면 여섯 번째 요청이 밀린다.** Mock 은

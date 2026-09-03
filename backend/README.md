@@ -140,8 +140,8 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
 - `AI_PROVIDER=mock`이면 Mock 응답을, `openai`면 실제 API를 호출하도록
   인터페이스 하나에 구현 둘(`MockAiClient`, `OpenAiClient`)을 둔다.
   **이 인터페이스가 아키텍처 다이어그램의 "교체되는 상자"다.**
-  `BAG_CHECK`(사진 인식)에 실제로 갈아 끼워 봤고 부르는 쪽은 한 줄도 바뀌지 않았다.
-  **기본값은 `mock`이다** — 발표 데모는 네트워크에 묶이면 안 된다.
+  `BAG_CHECK`(사진 인식)와 `PACKING_LIST`(준비물 추천)에 실제로 갈아 끼워 봤고
+  부르는 쪽은 한 줄도 바뀌지 않았다. **기본값은 `mock`이다** — 발표 데모는 네트워크에 묶이면 안 된다.
 
 > 가상 스레드는 `spring.threads.virtual.enabled=true`로 이미 켜져 있다.
 > 실제 LLM을 붙였을 때 느린 요청이 스레드를 오래 잡아도 비용이 낮게 유지된다.

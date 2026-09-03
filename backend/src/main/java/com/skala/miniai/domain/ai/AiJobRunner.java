@@ -83,7 +83,7 @@ public class AiJobRunner {
             // 발표에서 로딩 화면을 보여주려면 AI_MOCK_DELAY_MS 를 1000~2000 으로 둔다.
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
-            JsonNode output = aiClient.run(job.getJobType(), json.read(job.getInputPayload()));
+            JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), json.read(job.getInputPayload()));
 
             // 순서가 중요하다. **부수 효과를 먼저 쓰고, 성공했을 때만 작업을 완료로 바꾼다.**
             //

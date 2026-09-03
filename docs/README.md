@@ -8,7 +8,7 @@ Mini-project의 산출물은 코드가 아니라 **설계 문서**다. 정량 �
 **로그인 최종 결정 반영:** [기능정의서](functional-specification.md)를 작성하고 모든 서비스 이용 전
 로그인하도록 01~07·다이어그램을 개정했다. 가입은 닉네임·아이디·비밀번호·이메일, 로그인은
 아이디·비밀번호다. S-00 인증 화면을 더해 총 11개 화면, 인증 4개를 더해 총 22개 JSON API를 설계한다.
-AI는 기본값이 Mock이다 — `AI_PROVIDER=openai` 로 바꿨을 때만 `BAG_CHECK`(사진 인식)이 실제 OpenAI 를 부르고, 나머지 3종은 그때도 Mock 이다([07](07-ai-ready.md#모델-파라미터)). 사진 자동 등록은 BAG_CHECK 완료 처리에 포함하고 S-04 PATCH는 선택적 사후 수정으로 바꾼다. 무게 제외 사유 PENDING_APPROVAL은 제거했다. 이전 DTO·Mock·시드는 후속 반영이 필요하다.
+AI는 기본값이 Mock이다 — `AI_PROVIDER=openai` 로 바꿨을 때만 `BAG_CHECK`(사진 인식)과 `PACKING_LIST`(준비물 추천)가 실제 모델을 부르고, `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 그때도 Mock 이다([07](07-ai-ready.md#모델-파라미터)). 사진 자동 등록은 BAG_CHECK 완료 처리에 포함하고 S-04 PATCH는 선택적 사후 수정으로 바꾼다. 무게 제외 사유 PENDING_APPROVAL은 제거했다. 이전 DTO·Mock·시드는 후속 반영이 필요하다.
 
 
 **2026-09-03:** 사용자 요청에 따라 [개인 Notion 기능 정의 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)의
