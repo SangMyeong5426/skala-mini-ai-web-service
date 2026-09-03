@@ -1,0 +1,19 @@
+{
+  "results": [{
+    "itemId": null,
+    "detectionId": null,
+    "name": "보조배터리",
+    "qty": 1,
+    "ruleKeyword": "보조배터리",
+    "attributes": {"capacityMl": null, "batteryWh": 200, "batteryMah": null, "bladeCm": null},
+    "verdict": "CHECKED_FORBIDDEN",
+    "ruleId": 3,
+    "conditionNote": "160Wh 초과",
+    "reason": "정격 200Wh 보조배터리는 기내·위탁수하물 모두 반입할 수 없습니다.",
+    "missingInfo": null,
+    "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+    "checkedAt": "2026-09-02"
+  }],
+  "answer": "정격 200Wh 보조배터리는 기내·위탁수하물 모두 반입할 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}

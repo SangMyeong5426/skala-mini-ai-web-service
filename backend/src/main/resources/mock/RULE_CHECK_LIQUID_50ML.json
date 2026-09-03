@@ -1,0 +1,19 @@
+{
+  "results": [{
+    "itemId": null,
+    "detectionId": null,
+    "name": "화장품",
+    "qty": 1,
+    "ruleKeyword": "액체",
+    "attributes": {"capacityMl": 50, "batteryWh": null, "batteryMah": null, "bladeCm": null},
+    "verdict": "CABIN_OK",
+    "ruleId": 4,
+    "conditionNote": "용기당 100ml 이하, 총 1L 이하",
+    "reason": "50ml 화장품은 1L 투명 지퍼백에 넣으면 기내 반입 기준에 해당합니다.",
+    "missingInfo": null,
+    "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+    "checkedAt": "2026-09-02"
+  }],
+  "answer": "50ml 화장품은 1L 투명 지퍼백에 넣으면 기내 반입 기준에 해당합니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": null
+}

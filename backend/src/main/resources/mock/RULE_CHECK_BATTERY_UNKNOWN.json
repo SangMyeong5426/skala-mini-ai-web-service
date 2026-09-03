@@ -1,0 +1,19 @@
+{
+  "results": [{
+    "itemId": null,
+    "detectionId": null,
+    "name": "보조배터리",
+    "qty": 1,
+    "ruleKeyword": "보조배터리",
+    "attributes": {"capacityMl": null, "batteryWh": null, "batteryMah": null, "bladeCm": null},
+    "verdict": "NEED_MORE_INFO",
+    "ruleId": 1,
+    "conditionNote": "100Wh 이하",
+    "reason": "보조배터리 반입 조건을 확인하려면 라벨의 정격 Wh가 필요합니다.",
+    "missingInfo": "배터리 정격(Wh)",
+    "sourceUrl": "https://www.airport.kr/ap_ko/905/subview.do",
+    "checkedAt": "2026-09-02"
+  }],
+  "answer": "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+  "followUpQuestion": "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
+}
