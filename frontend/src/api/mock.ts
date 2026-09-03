@@ -346,8 +346,6 @@ function applyBagCheck(t: TripState, out: BagCheckOutput, photoIds: number[]) {
       confidenceLevel: d.confidenceLevel,
       missingInfo: d.missingInfo,
       labelText: d.labelText,
-      // 승인 게이트는 폐기됐다. 인식 즉시 등록된 것으로 본다(06:686-737).
-      approved: true,
     })
 
     // 06: "이름 있는 인식 물품을 즉시 PHOTO/PREPARED 로 등록한다".

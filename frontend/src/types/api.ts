@@ -107,7 +107,6 @@ export interface Detection {
   qty: number
   confidence: number
   confidenceLevel: ConfidenceLevel
-  approved: boolean
   /** 보이지 않는 속성. `null` 이 아니면 S-04 「확인 필요」 묶음에 넣는다. */
   missingInfo?: string | null
   labelText?: string | null
@@ -121,7 +120,6 @@ export interface Detection {
 
 /** 06 PATCH /detections — `matchedItemIds` 는 **전체 교체**다. 증분이 아니다. */
 export interface DetectionPatch {
-  approved?: boolean
   name?: string
   qty?: number
   /** `[]` 는 연결 해제. 필드를 빼면 연결을 건드리지 않는다. */

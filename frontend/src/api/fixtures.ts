@@ -151,13 +151,13 @@ export const PHOTOS: TripPhoto[] = [
 // ── 인식 결과 (S-04) — 06 예시 그대로 ─────────────────────
 export const DETECTIONS: Detection[] = [
   { detectionId: 2, photoId: 1, name: '보조배터리', qty: 1,
-    confidence: 0.880, confidenceLevel: 'HIGH', approved: true,
+    confidence: 0.880, confidenceLevel: 'HIGH',
     missingInfo: '배터리 정격(Wh)', labelText: null },
   { detectionId: 6, photoId: 2, name: '화장품 용기', qty: 1,
-    confidence: 0.640, confidenceLevel: 'MEDIUM', approved: false,
+    confidence: 0.640, confidenceLevel: 'MEDIUM',
     missingInfo: '용량(ml)', labelText: null },
   { detectionId: 8, photoId: 2, name: '검정 파우치', qty: 1,
-    confidence: 0.430, confidenceLevel: 'LOW', approved: false,
+    confidence: 0.430, confidenceLevel: 'LOW',
     missingInfo: null, labelText: null },
 ]
 
