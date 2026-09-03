@@ -80,3 +80,10 @@ PDF가 제시한 4대 원칙을 이 구조가 각각 어디서 만족하는지 �
 > 프런트엔드와 백엔드 포트가 다르므로 **CORS 설정이 필요하다.** 백엔드
 > 스캐폴딩 때 개발용 origin(`http://localhost:5173`)을 허용해 둔다.
 > 2일차에 FE-BE 연동이 막히는 가장 흔한 원인이다.
+
+백엔드 개발환경 상세는 [`backend/SETUP.md`](../backend/SETUP.md)를 따른다.
+DB 연결 전에는 `bootTestRun` + `test` 프로필로 Swagger를 확인할 수 있다.
+이때 H2는 실행을 종료하면 사라지는 테스트 DB이며, Supabase 연동 검증은 별도로 한다.
+일반 실행은 Supabase에 연결하며 JPA는 `validate`, SQL 자동 초기화는 `never`다.
+서버별 연결 풀은 기본 최대 5개(`DB_POOL_SIZE`), 유휴 연결 최소 1개로 두고
+JDBC 시각 처리는 UTC를 사용한다.

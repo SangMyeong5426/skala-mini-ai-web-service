@@ -19,6 +19,10 @@
 | 시각 형식 | ISO 8601 UTC (`2026-09-02T05:30:00Z`) |
 | 인증 | **이번 데모에서 구현하지 않는다.** 스키마에는 `users.password_hash` 자리를 두었지만 토큰·세션을 발급하지 않고, 모든 요청은 시드 사용자(`users.id = 1`)로 처리한다. 채점 항목이 아니라 3일 일정에서 비용만 든다 ([`01-service-plan.md`](01-service-plan.md) 범위) |
 
+브라우저 연동 시 `CORS_ALLOWED_ORIGINS`에 지정한 origin만 허용한다.
+생성 응답의 `Location`을 React의 `response.headers.get('Location')`으로 읽을 수
+있도록 백엔드는 `Access-Control-Expose-Headers: Location`을 설정한다.
+
 ### Status Code 사용 규칙
 
 **루브릭이 Status Code 준수를 명시적으로 본다.** 아무 데나 200을 쓰지 않는다.
