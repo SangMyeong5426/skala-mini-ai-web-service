@@ -25,6 +25,14 @@ export default function Items() {
   const [error, setError] = useState<string | null>(null)
   const [cands, setCands] = useState<PackingListOutput | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
+  /** 조회 실패(error)와 구분한다. 수정·삭제·추가가 거절당한 것은 다른 사건이다 */
+  const [actionError, setActionError] = useState<string | null>(null)
+  /** 직접 추가 폼 (03:271) */
+  const [newName, setNewName] = useState('')
+  const [newQty, setNewQty] = useState(1)
+  const [adding, setAdding] = useState(false)
+  /** 채택 연타 방지 — 같은 후보가 두 번 들어간다 */
+  const [adopting, setAdopting] = useState(false)
   const job = useAiJob<PackingListOutput>()
 
   const load = () => {
@@ -71,24 +79,88 @@ export default function Items() {
     load()
   }
 
+  /** 06:97 — 이 PATCH 의 주요 오류는 400·404 다. 조용히 되돌리지 않는다. */
   const toggleDone = async (itemId: number, done: boolean) => {
-    await api.patch(`/trips/${tripId}/items/${itemId}`, {
-      checkStatus: done ? 'PREPARED' : 'UNCHECKED',
-    })
-    load()
+    try {
+      await api.patch(`/trips/${tripId}/items/${itemId}`, {
+        checkStatus: done ? 'PREPARED' : 'UNCHECKED',
+      })
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '변경하지 못했습니다.')
+    }
+    // 성공이든 실패든 서버 상태와 다시 맞춘다
+    void load()
   }
 
+  /** 03:272 · 06:98 — 내 목록에서 지운다. 추천 채택도 함께 풀린다(06:1010). */
+  const removeItem = async (itemId: number) => {
+    try {
+      await api.del(`/trips/${tripId}/items/${itemId}`)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
+    }
+    void load()
+  }
+
+  /**
+   * 03:271 이 S-05 주요 요소로 정한 <b>직접 추가</b>.
+   *
+   * 사진 없이 시작하거나 추천이 실패해도 목록을 만들 수 있어야 한다. 서버의
+   * 실패 안내도 "다시 시도하거나 직접 추가해 주세요" 인데 정작 그 경로가
+   * 화면에 없었다.
+   *
+   * `recommendation` 을 빼고 보내면 서버가 `source: USER` 로 넣는다.
+   * 실서버에 직접 확인했다 — 201 · source USER · checkStatus UNCHECKED.
+   */
+  const addDirect = async () => {
+    const name = newName.trim()
+    if (!name || adding) return
+    setAdding(true)
+    try {
+      await api.post(`/trips/${tripId}/items`, {
+        name, category: 'ETC', qty: newQty, priority: 'RECOMMENDED',
+      })
+      setNewName(''); setNewQty(1); setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '추가하지 못했습니다.')
+    } finally {
+      setAdding(false)
+    }
+    void load()
+  }
+
+  /**
+   * 06:991 — "여러 후보를 선택하면 기존 단건 POST 를 후보별로 호출한다.
+   * <b>일부 실패 시 성공한 항목은 유지하고 실패 후보만 재시도한다.</b>"
+   *
+   * 예전에는 try/catch 가 없어서 중간에 하나가 거절당하면 루프가 그 자리에서
+   * 끊겼다. 남은 후보는 보내지지도 않고, 이미 등록된 것도 재조회를 안 해
+   * "추가됨" 으로 바뀌지 않았다. 오류는 콘솔에만 남았다.
+   */
   const adopt = async () => {
-    if (!cands || !data?.recommendationJobId) return
+    if (!cands || !data?.recommendationJobId || adopting) return
+    setAdopting(true)
+    const failed = new Set<number>()
     for (const idx of picked) {
       const c = cands.items[idx]
-      await api.post(`/trips/${tripId}/items`, {
-        name: c.name, category: c.category, qty: c.qty, priority: c.priority,
-        recommendation: { jobId: data.recommendationJobId, candidateIndex: idx },
-      })
+      try {
+        await api.post(`/trips/${tripId}/items`, {
+          name: c.name, category: c.category, qty: c.qty, priority: c.priority,
+          recommendation: { jobId: data.recommendationJobId, candidateIndex: idx },
+        })
+      } catch {
+        failed.add(idx)
+      }
     }
-    setPicked(new Set())
-    load()
+    // 실패한 후보만 선택으로 남긴다 — 그대로 다시 누르면 재시도가 된다
+    setPicked(failed)
+    setActionError(
+      failed.size === 0 ? null : `${failed.size}개를 담지 못했습니다. 다시 눌러 주세요.`,
+    )
+    setAdopting(false)
+    void load()
   }
 
   const items = data?.items ?? []
@@ -124,6 +196,10 @@ export default function Items() {
 
       <div className="content">
         {error && <Failed title="체크리스트를 불러오지 못했습니다" detail={error} onRetry={load} />}
+        {/* 조회 실패와 구분한다 — 목록은 이미 보이고 있고, 방금 한 동작만 거절당했다 */}
+        {actionError && (
+          <Failed title="반영하지 못했습니다" detail={actionError} onRetry={load} />
+        )}
         {!error && data === null && <div className="card"><Skeleton rows={4} /></div>}
 
         {data && (
@@ -159,6 +235,8 @@ export default function Items() {
               {items.length === 0 ? (
                 <Empty
                   title="아직 담은 물품이 없습니다"
+                  /* 03:274 — "내 목록이 비면 사진 등록·직접 추가 안내". 직접 추가
+                     줄은 이 아래에 늘 열려 있으므로 여기서는 사진·추천만 권한다 */
                   action={
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/photos`)}>
@@ -191,11 +269,48 @@ export default function Items() {
                         <span className={`badge${i.photoStatus === 'CONFIRMED' ? ' badge-ok' : i.photoStatus === 'NEEDS_CHECK' ? ' badge-warn' : ''}`}>
                           {PHOTO_STATUS_LABEL[i.photoStatus]}
                         </span>
+                        {/* 03:272 가 이 화면의 호출 API 로 DELETE 를 적어 뒀다 */}
+                        <button
+                          type="button" className="btn btn-ghost btn-sm"
+                          onClick={() => removeItem(i.itemId)}
+                          aria-label={`${i.name} 삭제`}
+                        >
+                          삭제
+                        </button>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
+
+              {/*
+                * 03:271 주요 요소 — <b>직접 추가.</b> 목록이 비었을 때만 열지
+                * 않는다. 사진에 안 찍힌 물건은 언제든 생긴다.
+                *
+                * 카테고리·우선순위는 묻지 않는다. 한 줄로 끝나야 실제로 쓴다 —
+                * 서버 기본값(ETC · 권장)으로 넣고 필요하면 나중에 고친다.
+                */}
+              <form
+                className="add-row"
+                onSubmit={(e) => { e.preventDefault(); void addDirect() }}
+              >
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="직접 추가할 물품 (예: 우산)"
+                  maxLength={100}
+                  aria-label="직접 추가할 물품 이름"
+                />
+                <input
+                  type="number" min={1} max={99} value={newQty}
+                  onChange={(e) => setNewQty(Math.min(99, Math.max(1, Number(e.target.value))))}
+                  aria-label="수량"
+                  style={{ width: 72 }}
+                />
+                <button type="submit" className="btn btn-sm" disabled={!newName.trim() || adding}>
+                  {adding ? '추가하는 중…' : '추가'}
+                </button>
+              </form>
             </div>
 
             {/* ── 아래쪽: AI 추천 ── */}
@@ -205,8 +320,8 @@ export default function Items() {
                 <span className="card-sub">채택해야 내 목록에 들어갑니다</span>
                 <span className="spacer" />
                 {picked.size > 0 && (
-                  <button type="button" className="btn btn-sm" onClick={adopt}>
-                    선택한 {picked.size}개 추가
+                  <button type="button" className="btn btn-sm" onClick={adopt} disabled={adopting}>
+                    {adopting ? '담는 중…' : `선택한 ${picked.size}개 추가`}
                   </button>
                 )}
               </div>
