@@ -9,11 +9,26 @@ import type { AiJob, AiJobCreated, JobType } from '../types/api'
  * 실제 LLM 을 붙이면 `pollAfterMs` 만 늘어나고 이 코드는 그대로다 —
  * 그것이 AI-Ready 원칙 3(Asynchronous Pipeline)의 증명이다.
  *
- * 06 폴링 규약: 최대 60회. 초과하면 "시간이 오래 걸립니다" 와 재시도 버튼을
+ * 06 폴링 규약: 예산을 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼을
  * 보여주고, **작업은 서버에 남는다.**
+ *
+ * <b>예산은 횟수가 아니라 시간이다.</b> 예전에는 60회로 셌는데, 간격을 서버가
+ * `pollAfterMs` 로 정하므로 실제 예산은 서버 손에 있었다 — 500ms 를 보내면
+ * 30초다. 서버의 AI 타임아웃은 `app.ai.timeout-ms=60000` 이고 재시도가 한 번
+ * 더 있다. 즉 <b>서버가 아직 일하는 중인데 화면이 먼저 포기했다.</b>
+ * 실제로 새 백엔드에서 BAG_CHECK 이 10초가 걸리기 시작했고, 실제 모델을
+ * 붙이면 그 위로 더 간다.
+ *
+ * 90초는 서버 타임아웃 60초에 재시도·네트워크 여유를 더한 값이다.
+ * `MAX_POLLS` 는 서버가 `pollAfterMs: 0` 같은 값을 보낼 때를 대비한
+ * <b>무한 루프 방지용</b>이지 예산이 아니다.
  */
-const MAX_POLLS = 60
+const MAX_WAIT_MS = 90_000
+const MAX_POLLS = 600
 const FALLBACK_DELAY_MS = 500
+
+/** 테스트에서 시계를 갈아 끼울 수 있게 한 겹 둔다 */
+const nowMs = () => Date.now()
 
 export type AiJobPhase = 'idle' | 'running' | 'done' | 'failed' | 'timeout'
 
@@ -55,6 +70,7 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
 
   const start = useCallback(
     async (jobType: JobType, input: unknown, tripId?: number): Promise<boolean> => {
+      const startedAt = nowMs()
       setPhase('running')
       setPolls(0)
       setOutput(null)
@@ -65,6 +81,7 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
         setJobId(created.jobId)
 
         let wait = created.pollAfterMs ?? FALLBACK_DELAY_MS
+        const deadline = startedAt + MAX_WAIT_MS
         for (let n = 1; n <= MAX_POLLS; n++) {
           await new Promise((r) => setTimeout(r, wait))
           if (!alive.current) return false
@@ -85,6 +102,8 @@ export function useAiJob<T = unknown>(): UseAiJob<T> {
             return false
           }
           wait = job.pollAfterMs ?? wait
+          // 다음 한 번을 더 기다릴 여유가 없으면 여기서 접는다
+          if (nowMs() + wait > deadline) break
         }
         if (alive.current) setPhase('timeout')
         return false
