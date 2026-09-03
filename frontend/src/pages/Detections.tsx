@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Shell, Steps, TopBar } from '../components/Shell'
@@ -32,8 +32,13 @@ export default function Detections() {
   /** 자동 추천. 폴링해야 recommendationJobId 가 생긴다 */
   const rec = useAiJob()
 
-  /** 재조회. 갱신된 내 목록을 돌려준다 — 추천 요청이 그 값을 써야 한다 */
-  const load = (): Promise<ChecklistItem[]> => {
+  /**
+   * 재조회. 갱신된 목록·인식·사진을 <b>함께</b> 돌려준다.
+   *
+   * 추천 요청이 내 목록을 써야 하고, 자동 분석이 사진 ID 를 써야 한다.
+   * state 를 읽으면 방금 setState 한 값이 아직 반영되지 않아 빈 배열을 보낸다.
+   */
+  const load = (): Promise<{ items: ChecklistItem[]; dets: Detection[]; photoIds: number[] }> => {
     setError(null)
     return Promise.all([
       api.get<{ detections: Detection[] }>(`/trips/${tripId}/detections`),
@@ -41,23 +46,24 @@ export default function Detections() {
       api.get<{ photos: { photoId: number }[] }>(`/trips/${tripId}/photos`),
     ])
       .then(([d, i, ph]) => {
-        setDets(d.detections); setItems(i.items)
-        setPhotoIds(ph.photos.map((x) => x.photoId))
-        return i.items
+        const ids = ph.photos.map((x) => x.photoId)
+        setDets(d.detections); setItems(i.items); setPhotoIds(ids)
+        return { items: i.items, dets: d.detections, photoIds: ids }
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : '알 수 없는 오류')
-        return [] as ChecklistItem[]
+        return { items: [] as ChecklistItem[], dets: [] as Detection[], photoIds: [] as number[] }
       })
   }
-  useEffect(() => { void load() }, [tripId])
 
-  const analyze = async () => {
+  const analyze = () => analyzeWith(photoIds)
+
+  const analyzeWith = async (ids: number[]) => {
     // 사진 ID 를 박아 두면 다른 여행에서 남의 사진을 분석하려 든다.
     // 06 의 소유권 검증에서 거절되는 요청이다.
     // 완료를 확인하고 넘어간다. FAILED·timeout 이면 후속 추천을 걸지 않는다.
-    const ok = await job.start('BAG_CHECK', { photoIds }, Number(tripId))
-    const fresh = await load()
+    const ok = await job.start('BAG_CHECK', { photoIds: ids }, Number(tripId))
+    const fresh = (await load()).items
     if (!ok) return
 
     /*
@@ -93,6 +99,28 @@ export default function Detections() {
       /* 추천 실패는 S-05 에서 다시 시도한다 */
     }
   }
+
+  /*
+   * <b>들어오자마자 분석을 건다.</b> 03:262 — "S-04 에서 사용자 입력을 기다리지
+   * 않는다". 03:259 가 BAG_CHECK 접수를 이 화면의 호출 API 로 적어 두었다.
+   *
+   * 예전에는 S-03 의 `분석 시작` 이 이 화면으로 넘기기만 했다. 그래서 사진을
+   * 올리고 넘어오면 "인식된 물품이 없습니다" 라는 빈 상태가 먼저 보였고,
+   * 사용자가 `다시 분석` 을 눌러야 그제서야 분석이 시작됐다. 아직 한 번도
+   * 분석한 적이 없는데 "다시" 를 누르라는 화면이었다.
+   *
+   * 이미 인식 결과가 있으면 걸지 않는다 — 사후 수정하러 다시 들어온 것이다.
+   */
+  const kicked = useRef(false)
+  useEffect(() => {
+    kicked.current = false
+    void load().then((r) => {
+      if (kicked.current || r.dets.length > 0 || r.photoIds.length === 0) return
+      kicked.current = true
+      void analyzeWith(r.photoIds)
+    })
+  }, [tripId])
+
 
   /** 잘못 인식한 이름·수량을 고친다. 승인이 아니라 <b>사후 수정</b>이다 */
   const edit = async (d: Detection, patch: { name?: string; qty?: number }) => {
@@ -131,7 +159,7 @@ export default function Detections() {
 
         {job.phase === 'running' && (
           <div className="card">
-            <AiPending label="사진을 분석하는 중" polls={job.polls} />
+            <AiPending label="사진을 분석하고 목록에 등록하는 중" polls={job.polls} />
           </div>
         )}
         {job.phase === 'failed' && (
