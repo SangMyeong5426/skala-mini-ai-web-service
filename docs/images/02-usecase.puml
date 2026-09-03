@@ -1,6 +1,6 @@
 @startuml 02-usecase
 ' AI 여행가방 확인 플랫폼 — Use-Case 다이어그램
-' 출처: docs/02-use-case.md · 2026-09-03 사진 승인·추천 채택 개정
+' 출처: docs/02-use-case.md · 2026-09-03 사진 자동 등록·추천 채택 개정
 ' UC-01~UC-10은 F-01~F-10과 1:1로 대응한다.
 ' UC-01 로그인 필수 확정 — UC-02~UC-10은 인증된 여행자의 기능이다.
 
@@ -44,7 +44,7 @@ rectangle "AI 여행가방 확인 플랫폼" {
   usecase "UC-01\n회원가입 및 로그인\n<size:11>가입: 닉네임·아이디·비밀번호·이메일</size>\n<size:11>로그인: 아이디·비밀번호</size>" as UC01
   usecase "UC-02\n여행 등록" as UC02
   usecase "UC-03\n짐 사진 등록" as UC03
-  usecase "UC-04\nAI 사진 속 물품 인식\n<size:11>사용자 승인 → 내 목록 완료 등록</size>" as UC04 <<AI>>
+  usecase "UC-04\nAI 사진 속 물품 인식\n<size:11>승인 없이 내 목록 자동 완료 등록</size>" as UC04 <<AI>>
   usecase "UC-05\nAI 추가 준비물 추천\n<size:11>선택·승인분만 미완료로 추가</size>" as UC05 <<AI>>
   usecase "UC-06\n내 체크리스트 관리\n<size:11>실제 준비 상태 · 사진 상태 분리</size>" as UC06
   usecase "UC-07\n항공 반입 규정 확인" as UC07 <<규칙엔진>>

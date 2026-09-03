@@ -14,7 +14,7 @@ skinparam defaultFontName "Apple SD Gothic Neo"
 skinparam defaultFontSize 12
 skinparam ArrowColor #46524E
 skinparam componentStyle rectangle
-title 시스템 목표 구조 — 로그인 필수 · 사진 승인과 추천 채택 분리
+title 시스템 목표 구조 — 로그인 필수 · 사진 자동 등록과 추천 채택 분리
 caption 개정 계약의 설계도 · 코드 반영 현황은 docs/README.md 참조
 
 skinparam component {
@@ -48,7 +48,7 @@ node "Backend  :8080" as BE {
   component "HttpSession\n서버 메모리 · 만료/로그아웃" as SESSION
   component "REST Controller" as CTRL
   component "Auth Service\n가입 4개 필드 · 아이디 로그인\nBCrypt 해시 검증" as AUTH
-  component "Service 로직\n세션 사용자 소유권 확인\n사진 승인 · 추천 채택\n완료율 · 필수 후보 경고 · 무게 합산" as SVC
+  component "Service 로직\n세션 사용자 소유권 확인\n사진 자동 등록 · 추천 채택\n완료율 · 필수 후보 경고 · 무게 합산" as SVC
   component "Repository (JPA)" as REPO
   component "**규칙 엔진**\n반입 판정" as RULE
   component "AiClient (인터페이스)" as IFACE
@@ -102,8 +102,9 @@ note bottom of AIBOX
 end note
 
 note left of SVC
-  **사용자 승인·계산은 서버 책임**
-  사진 승인 → 내 목록 생성·연결 + PREPARED
+  **자동 등록·추천 채택·계산은 서버 책임**
+  BAG_CHECK 완료 → 내 목록 자동 생성·연결 + PREPARED
+  목록 저장 뒤 COMPLETED · 사용자 승인 요청 없음
   추천 생성 → 후보 JSON만 저장
   추천 채택 → 선택분만 UNCHECKED · 중복 방지
   실제 PREPARED만 무게에 포함

@@ -10,7 +10,7 @@
 기다리지 않고 동시에 작업할 수 있다. 바꿀 때는 반드시 양쪽에 알린다.
 
 > **2026-09-03 개정 계약:** [Notion 개정안](https://app.notion.com/p/3d0c2ab24ce881d9b06cc065c47b1eb7)에
-> 따라 사진 승인은 완료 등록, 추천 채택은 미완료 등록으로 분리했다. 이후 [로그인 최종 결정](functional-specification.md)을
+> 바탕의 사진 우선 흐름을 유지하며, 최신 사용자 결정으로 **사진은 승인 없이 자동 완료 등록**, 추천 채택은 미완료 등록으로 정했다. 이후 [로그인 최종 결정](functional-specification.md)을
 > 반영해 기존 업무 API 18개에 인증 API 4개를 더한 **총 22개**로 정의한다. 현재 코드·시드의
 > 후속 반영 상태는 [문서 지도](README.md#개정안-반영-상태)에 적는다.
 
@@ -105,17 +105,14 @@
 | 11 | `GET` | `/api/trips/{tripId}/photos` | 사진 목록 | `200` | `404` |
 | 12 | `DELETE` | `/api/trips/{tripId}/photos/{photoId}` | 사진 삭제 | **`204`** | `404` |
 
-### 인식 결과 · 승인 (UC-04)
+### 인식 결과 · 사후 수정 (UC-04)
 
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
 | --- | --- | --- | --- | --- | --- |
 | 13 | `GET` | `/api/trips/{tripId}/detections` | 인식 결과 목록 | `200` | `404` |
-| 14 | `PATCH` | `/api/trips/{tripId}/detections/{detectionId}` | **승인·이름·수량 수정·내 목록 완료 등록** | `200` | `400` `404` `409` |
+| 14 | `PATCH` | `/api/trips/{tripId}/detections/{detectionId}` | **자동 등록 결과의 이름·수량·연결 사후 수정** | `200` | `400` `404` `409` |
 
-> **14번이 이 서비스의 핵심 게이트다.** 명세 9.2 수용 기준 —
-> *"사진 분석 결과는 사용자가 승인하기 전 최종 준비 상태에 반영되지 않아야 한다."*
-> 이 엔드포인트를 거치지 않은 인식 결과는 `detected_objects.approved = false` 로 남고
-> 검수·무게·반입 계산에 들어가지 않는다.
+> **14번은 자동 등록 이후의 선택적 수정이다.** 사진 인식은 BAG_CHECK 완료 처리에서 승인 없이 내 목록에 반영된다. 사진 승인 게이트는 최신 사용자 결정으로 제거했다.
 
 ### 검수 결과 (UC-06 · UC-07 · UC-10)
 
@@ -338,13 +335,23 @@ LLM 호출은 수 초가 걸리므로 처음부터 비동기 구조로 열어 �
         "name": "가위",
         "category": "ETC",
         "qty": 1
+      },
+      {
+        "name": "화장품 용기",
+        "category": "TOILETRY",
+        "qty": 1
+      },
+      {
+        "name": "검정 파우치",
+        "category": "ETC",
+        "qty": 1
       }
     ]
   }
 }
 ```
 
-> `alreadyPacked`는 화면이 가진 실제 준비 완료(`PREPARED`) 물품 목록이며 사진 승인과
+> `alreadyPacked`는 화면이 가진 실제 준비 완료(`PREPARED`) 물품 목록이며 사진 자동 등록과
 > 직접 완료 확인을 포함한다. 기존 입력 스키마를 유지해 필수로 보내되, 화면에 없으면 `[]`도 가능하다.
 > **서버가 최종 입력을 결정한다.** 요청 형식·여행 소유권을 검증한 뒤 현재 내 목록을 읽고,
 > 그중 PREPARED 항목의 이름·분류·수량으로 `alreadyPacked`를 덮어써 작업 입력으로 저장한다.
@@ -462,7 +469,7 @@ Location: /api/ai-jobs/1041
 
 > **`FAILED` 도 `200` 이다.** 조회 자체는 성공했기 때문이다. `500` 을 쓰면
 > 프런트엔드가 네트워크 오류와 AI 실패를 구분하지 못한다.
-> 추천 실패를 알려도 이미 승인·등록한 내 목록은 유지한다. 실패를 이유로 기본 목록을
+> 추천 실패를 알려도 이미 자동 등록되거나 사용자가 채택한 내 목록은 유지한다. 실패를 이유로 기본 목록을
 > 자동으로 채택하거나 기존 항목을 삭제하지 않는다.
 
 ### 폴링 규약
@@ -491,9 +498,9 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 ### `GET /api/trips/{tripId}/inspection` — 검수 결과 (화면 `S-06`)
 
-**이 서비스의 차별점 셋이 한 응답에 있다.** 아래는 완료 항목 6개·채택 후 미완료 1개인
+**이 서비스의 차별점 셋이 한 응답에 있다.** 아래는 자동 등록 완료 항목 8개·채택 후 미완료 1개인
 상태다. 부분 집계 예시의 `customs`는 보조배터리 한 건만 보여준다. 기존 SQL 시드의
-승인 가위 미등록 상태를 그대로 재현하는 예시는 아니다.
+사진 인식 가위 미등록 상태를 그대로 재현하는 예시는 아니다.
 
 ```json
 {
@@ -535,6 +542,18 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
         "name": "가위",
         "qty": 1,
         "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 8,
+        "name": "화장품 용기",
+        "qty": 1,
+        "photoStatus": "CONFIRMED"
+      },
+      {
+        "itemId": 9,
+        "name": "검정 파우치",
+        "qty": 1,
+        "photoStatus": "NEEDS_CHECK"
       }
     ],
     "unprepared": [
@@ -545,7 +564,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
         "photoStatus": "NOT_IN_PHOTO"
       }
     ],
-    "completionRate": 0.857,
+    "completionRate": 0.889,
     "unacceptedRequiredCount": 1
   },
   "weight": {
@@ -555,7 +574,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
     "limitG": 10000,
     "verdict": "ROOM",
     "confidence": "MEDIUM",
-    "confidenceReason": "준비 완료 6개를 계산했습니다. 미완료 1개와 미승인 인식 후보 2개는 제외했습니다.",
+    "confidenceReason": "자동 등록 8개 중 6개의 무게를 계산했습니다. 미완료 1개와 무게 정보가 없는 2개는 제외했습니다.",
     "excludedCount": 3,
     "contributions": [
       {
@@ -605,64 +624,85 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 `weight.verdict`: `ROOM`(여유) · `NEAR`(근접) · `OVER_RISK`(초과 가능성) · `UNKNOWN`(정보 부족)
 
-### `GET /api/trips/{tripId}/detections` — 인식 결과 (화면 `S-04`)
+### `GET /api/trips/{tripId}/detections` — 자동 등록된 인식 결과 (S-04)
 
 ```json
 {
   "detections": [
     { "detectionId": 2, "photoId": 1, "name": "보조배터리", "qty": 1,
-      "confidence": 0.880, "confidenceLevel": "HIGH", "approved": true,
-      "missingInfo": "배터리 정격(Wh)", "labelText": null },
+      "confidence": 0.880, "confidenceLevel": "HIGH",
+      "missingInfo": "배터리 정격(Wh)", "labelText": null,
+      "linkedItems": [{ "itemId": 6, "confirmedByUser": false }] },
     { "detectionId": 6, "photoId": 2, "name": "화장품 용기", "qty": 1,
-      "confidence": 0.640, "confidenceLevel": "MEDIUM", "approved": false,
-      "missingInfo": "용량(ml)", "labelText": null },
+      "confidence": 0.640, "confidenceLevel": "MEDIUM",
+      "missingInfo": "용량(ml)", "labelText": null,
+      "linkedItems": [{ "itemId": 8, "confirmedByUser": false }] },
     { "detectionId": 8, "photoId": 2, "name": "검정 파우치", "qty": 1,
-      "confidence": 0.430, "confidenceLevel": "LOW", "approved": false,
-      "missingInfo": null, "labelText": null }
+      "confidence": 0.430, "confidenceLevel": "LOW",
+      "missingInfo": null, "labelText": null,
+      "linkedItems": [{ "itemId": 9, "confirmedByUser": false }] }
   ]
 }
 ```
 
-> `missingInfo` · `labelText` 는 `BAG_CHECK` 출력([`07-ai-ready.md`](07-ai-ready.md))에서 그대로 온다.
-> `S-04` 「확인 필요」 묶음 = `missingInfo ≠ null` 또는 `confidenceLevel = LOW`.
+세 물품은 이미 내 체크리스트에 `PREPARED`로 등록되어 있다. `confirmedByUser=false`는
+아직 사후 수정을 하지 않았다는 뜻이며 승인 대기·등록 실패가 아니다. `approved`는
+신규 요청·응답에서 사용하지 않는다. 기존 DB 컬럼은 호환 목적으로만 남긴다(05).
+`missingInfo`·`labelText`는 BAG_CHECK 출력 그대로다. S-04의 확인 필요 안내는 LOW 또는
+속성 부족에 붙지만 등록을 막지 않는다. 규정 판정의 속성 보완과 사진 인식 신뢰도는 구분한다.
 
-### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 승인·완료 등록
+### BAG_CHECK 완료 시 자동 등록 — 별도 승인 요청 없음
 
-승인과 내 목록 반영은 **같은 트랜잭션**이다. 추천 작업을 기다리지 않는다.
+1. 서버는 인식 결과를 검증한 뒤 해당 여행의 쓰기 트랜잭션 안에서 `detected_objects`,
+   `item_detections`, `checklist_items`, 작업 결과·`COMPLETED`를 함께 저장한다.
+   저장이 실패하면 전체를 롤백하고 작업 오류를 기록한다. 목록 저장 전 완료 응답을 내지 않는다.
+2. 성공한 사진의 이름 있는 인식 물품은 신뢰도·속성 부족과 무관하게 자동 등록한다.
+   신규 기본값은 `source=PHOTO`, `checkStatus=PREPARED`, `priority=RECOMMENDED`,
+   `category=ETC`다. 마스터에 명확히 대응하는 카테고리는 보강할 수 있다.
+   식별된 물품이 없는 사진·실패 사진에는 항목을 만들어내지 않는다.
+3. 기존 인식 연결을 우선 재사용하고, 없으면 앞뒤·연속 공백을 정리한 같은 이름의 내 항목에
+   연결한다. 동일 항목이 없으면 생성한다. 기존 항목의 최초 출처는 유지한다.
+   여러 사진에서 같은 물품을 인식하면 수량을 합산하지 않고 큰 관측값을 사용한다.
+   자동 연결은 `confirmed_by_user=false`여도 유효하다.
+4. 한 작업의 완료 처리는 한 번만 한다. 같은 완료 처리 재시도·GET 폴링은 항목을 다시 생성하거나
+   사용자의 수정·삭제를 되돌리지 않는다. 새로운 사진 분석 작업도 기존 연결·동일 이름 항목을
+   재사용한다. 사용자가 사후 수정한 이름·수량·준비 상태는 덮어쓰지 않는다.
+   사용자 item PATCH도 해당 사진 연결의 사후 확인을 기록해 이후 분석에서 보존한다.
+5. 현재 내 목록에 새롭게 매칭된 물품은 `PREPARED`로 처리한다. 같은 사진의 이미 반영된
+   연결을 다시 읽는 것만으로 사용자가 바꾼 `UNCHECKED`를 되돌리지 않는다.
+6. FE는 BAG_CHECK 완료를 확인한 뒤 내 목록을 다시 조회하고 PACKING_LIST를 요청한다.
+   자동 등록 물품을 포함한 현재 내 목록 전체를 제외한 후보만 아래쪽 추천 영역에 표시한다.
+   S-04의 수정 입력을 기다리지 않는다. 추천이 실패해도 이미 등록된 물품은 유지한다.
+
+### `PATCH /api/trips/{tripId}/detections/{detectionId}` — 선택적 사후 수정
+
+이 API는 자동 등록된 결과의 수정용이다. 체크리스트를 처음 만들기 위한 승인 API가 아니다.
+아래는 앞선 조회 예시 이후 사용자가 화장품 용기의 이름을 수정한 별도 시점이다.
 
 ```json
-// Request — 체크리스트가 비어 있는 여행에서 승인
-{ "approved": true, "name": "선크림", "qty": 1, "category": "TOILETRY" }
+// Request
+{ "name": "선크림", "qty": 1, "category": "TOILETRY" }
 ```
 
 ```json
-// Response 200 — 새 항목을 만들었더라도 수정한 주 자원은 인식 결과다
-{ "detectionId": 6, "approved": true, "name": "선크림", "qty": 1,
+// Response 200
+{ "detectionId": 6, "name": "선크림", "qty": 1,
   "linkedItems": [{ "itemId": 8, "name": "선크림", "confirmedByUser": true,
                     "source": "PHOTO", "checkStatus": "PREPARED" }] }
 ```
 
 | 요청 | 처리 |
 | --- | --- |
-| `approved=true`, 기존 승인 연결 있음 | 같은 항목을 갱신하고 완료 처리. 최초 등록 출처는 유지한다 |
-| `approved=true`, 연결 없음 | 이름이 일치하는 내 항목이 있으면 연결하고, 없으면 생성한다. 신규 기본값은 `source=PHOTO`, `checkStatus=PREPARED`, `priority=RECOMMENDED`, `category=ETC`이며 category는 승인 요청으로 보완 가능 |
-| `matchedItemIds: [8]` 또는 `[8, 9]` | 같은 여행의 항목인지 검증한 뒤 이 인식 결과의 연결을 배열 전체로 교체한다. 실제 동일 물품이 중복 항목으로 남으면 먼저 병합·수량 확인을 요청한다 |
-| `matchedItemIds: []` | 미승인 결과의 후보 연결 해제에 사용한다. 최종 `approved=true`와 함께 연결이 비도록 요청하면 `400` |
-| `matchedItemIds` 생략 | 기존 연결 유지. 단, 승인 시 연결이 전혀 없으면 위 생성·연결 규칙을 적용한다 |
+| 이름·수량·category 수정 | 인식 결과와 연결 항목을 한 트랜잭션에서 갱신. 기존 준비 상태·출처 유지. 이름 1~100자·qty 1~99 등 item 검증 적용 |
+| `matchedItemIds: [8]` 또는 `[8, 9]` | 같은 여행의 기존 항목인지 확인한 뒤 연결 배열 전체를 교체. 교체 전후 항목의 수량·준비 상태를 자동 합산하거나 완료 처리하지 않는다 |
+| `matchedItemIds: []` | 인식 연결만 해제. 목록 삭제는 item DELETE로 명시적으로 수행하며, 연결 해제만으로 목록·준비 상태를 삭제하지 않는다 |
+| `matchedItemIds` 생략 | 기존 연결을 유지한다. 이미 삭제된 항목을 재생성하지 않는다 |
+| `approved` 전송 | 지원하지 않는 이전 계약이므로 `400`. FE에 승인 버튼·요청을 두지 않는다 |
 
-이름·수량을 수정한 승인 결과는 연결 항목에도 반영한다. 연결 항목이 여러 개이거나 다른
-사진과 수량이 충돌하면 임의로 합산하지 않고 `409`와 재확인 안내를 반환한다.
-사진 여러 장에 같은 물품이 보이면 하나의 항목으로 연결하고 사용자가 **최종 수량**을
-정한다. 반복 승인은 기존 연결을 사용하므로 항목을 더 만들지 않는다.
-
-사용자가 명시적으로 `approved=false`로 취소하면 해당 연결의 `confirmed_by_user`도
-해제한다. 영향을 받는 항목에 다른 승인·확정 연결이 없으면 `UNCHECKED`로 돌려 실제 챙김을
-다시 확인하도록 한다. 항목은 삭제하지 않는다. 이 명시적 승인 취소는 사진 재분석에서
-물품을 못 찾는 경우와 다르다. 단순 미인식은 기존 완료 상태를 바꾸지 않는다.
-
-`linkedItems`가 배열인 이유는 기존 N:M 모델 때문이다(05). 승인된 물품이 내 목록에 없이
-`extra`로만 남는 성공 응답은 허용하지 않는다. 미승인 후보는 확정 준비 상태·무게·규정에
-넣지 않으며 S-04에서 계속 확인한다.
+연결 항목이 여러 개이고 이름·수량을 한 값으로 덮어쓰면 모호한 경우에는 `409`와 수정 안내를
+반환한다. 연결 변경만 요청하거나 각 item PATCH로 명확히 정정할 수 있다. 실패 시 부분 저장하지 않는다.
+사후 수정된 연결은 `confirmed_by_user=true`로 기록한다. 이 값은 사후 수정 보호·사진 확인
+표시의 근거이며 최초 등록의 조건은 아니다. 오인식 삭제는 기존 item DELETE를 사용한다.
 
 ## 도메인 API 요청·응답
 
@@ -724,7 +764,7 @@ Location: /api/trips/12
       "endDate": "2026-10-04",
       "transport": "FLIGHT",
       "status": "CONFIRMED",
-      "completionRate": 0.857
+      "completionRate": 0.889
     },
     {
       "tripId": 2,
@@ -816,6 +856,26 @@ Location: /api/trips/12
       "photoStatus": "CONFIRMED"
     },
     {
+      "itemId": 8,
+      "name": "화장품 용기",
+      "category": "TOILETRY",
+      "qty": 1,
+      "photoStatus": "CONFIRMED",
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED"
+    },
+    {
+      "itemId": 9,
+      "name": "검정 파우치",
+      "category": "ETC",
+      "qty": 1,
+      "photoStatus": "NEEDS_CHECK",
+      "priority": "RECOMMENDED",
+      "source": "PHOTO",
+      "checkStatus": "PREPARED"
+    },
+    {
       "itemId": 7,
       "name": "변환 플러그",
       "category": "ELECTRONIC",
@@ -826,7 +886,7 @@ Location: /api/trips/12
       "photoStatus": "NOT_IN_PHOTO"
     }
   ],
-  "completionRate": 0.857,
+  "completionRate": 0.889,
   "recommendationJobId": 1041,
   "unacceptedRequiredCount": 1
 }
@@ -836,8 +896,8 @@ Location: /api/trips/12
 | --- | --- |
 | `category` | `DOCUMENT` `CLOTHING` `ELECTRONIC` `TOILETRY` `MEDICINE` `ETC` |
 | `priority` | `REQUIRED` `RECOMMENDED` |
-| `source` | `RULE` `PHOTO` `AI` `USER` — 최초 등록 경로. `PHOTO`는 사진 승인으로 신규 생성, `AI`·`RULE`은 해당 출처의 후보를 사용자가 채택, `USER`는 직접 추가 |
-| `checkStatus` | `PREPARED`가 실제 완료, 나머지 `UNCHECKED` `NEEDS_CHECK` `NOT_IN_PHOTO`는 미완료. 신규 채택·직접 추가는 `UNCHECKED` |
+| `source` | `RULE` `PHOTO` `AI` `USER` — 최초 등록 경로. `PHOTO`는 사진 인식 완료 시 승인 없이 신규 생성, `AI`·`RULE`은 해당 출처의 후보를 사용자가 채택, `USER`는 직접 추가 |
+| `checkStatus` | `PREPARED`가 사진 자동 등록 또는 사용자 직접 완료 상태, 나머지 `UNCHECKED` `NEEDS_CHECK` `NOT_IN_PHOTO`는 미완료. 신규 채택·직접 추가는 `UNCHECKED` |
 | `photoStatus` | `CONFIRMED` `NEEDS_CHECK` `NOT_IN_PHOTO` — 인식 연결에서 계산하는 별도 사진 상태 |
 
 ### `POST /api/trips/{tripId}/items` — 직접 추가·추천 채택
@@ -875,13 +935,13 @@ Location: /api/trips/12
   `200`으로 반환한다. 상태·수량·출처를 유지하며 차이는 항목 PATCH로 사용자가 정정한다.
 - 이름 비교는 앞뒤 공백 제거·연속 공백 정리 후 일치를 기준으로 한다. 명백한 동의어는
   후보 생성 단계에서 제외하고, 자동으로 동일시하기 어려운 물품은 사용자 연결로 확인한다.
-- 같은 여행의 항목 추가·수정·삭제·사진 승인·추천 채택은 여행 단위 트랜잭션으로 직렬화한다.
+- 같은 여행의 항목 추가·수정·삭제·사진 자동 등록·추천 채택은 여행 단위 트랜잭션으로 직렬화한다.
   항목과 `acceptedItemId`를 함께 저장해 동시 클릭에도 중복 생성을 막는다(05).
 - 이름 1~100자(공백만 금지), qty 1~99 정수, category·priority는 위 enum을 검증한다.
 - 여러 후보를 선택하면 기존 단건 POST를 후보별로 호출한다. 일부 실패 시 성공한 항목은
   유지하고 실패 후보만 재시도한다. 전체를 다시 보내도 이미 채택된 후보는 `200`이다.
 - 화면에서 후보를 정렬·숨겨도 `candidateIndex`는 원래 응답 배열의 위치를 사용한다.
-  이후 사진 승인 등으로 같은 물품이 내 목록에 생겼다면 표시 시 현재 내 목록과 대조해
+  이후 사진 자동 등록 등으로 같은 물품이 내 목록에 생겼다면 표시 시 현재 내 목록과 대조해
   `추가됨`으로 처리한다. 저장된 후보 배열을 재정렬하거나 삭제하지 않는다.
 
 ### `PATCH /api/trips/{tripId}/items/{itemId}` — 수정·실제 완료 처리
@@ -899,16 +959,17 @@ Location: /api/trips/12
 
 `204 No Content`. 같은 트랜잭션에서 그 항목을 참조하는 해당 여행의 추천
 `acceptedItemId`도 `null`로 해제한다. 화면은 내 목록·추천을 다시 읽는다.
-사진에서 승인한 항목을 삭제하면 연결 인식 결과의 `approved`도 해제해 S-04에서 다시
-확인하도록 한다. 하나의 인식 결과가 다른 내 항목에도 확정 연결돼 있다면 그 승인은 유지한다.
+사진 자동 등록 항목을 삭제하면 해당 item 연결도 삭제한다. 완료 작업의 GET·새로고침·재시도는
+삭제한 물품을 다시 만들지 않는다. 사용자가 같은 사진을 **새 작업으로 명시적으로 재분석**하면
+다시 인식된 물품이 새로 등록될 수 있으므로 재분석 버튼에 이를 안내한다.
 
 ### 완료율·사진 상태·현재 무게의 공통 규약
 
 - `completionRate = PREPARED 항목 수 / 내 목록 전체 항목 수`. 빈 목록은 `0`이다.
   항목의 qty로 가중하지 않는다. 홈·내 목록·검수 결과에 같은 식을 사용한다.
-- 서버는 비율을 **소수 셋째 자리까지 HALF_UP 반올림**한 JSON 숫자로 반환한다(6/7 → `0.857`,
+- 서버는 비율을 **소수 셋째 자리까지 HALF_UP 반올림**한 JSON 숫자로 반환한다(8/9 → `0.889`,
   후행 0 강제 없음). FE는 이 값에 100을 곱해 소수 첫째 자리에서 HALF_UP 반올림한 정수 %로
-  표시한다(`0.857` → `86%`). 홈·S-05·S-06 모두 같은 표시 함수를 쓰고 비율을 다시 계산하지 않는다.
+  표시한다(`0.889` → `89%`). 홈·S-05·S-06 모두 같은 표시 함수를 쓰고 비율을 다시 계산하지 않는다.
 - `unacceptedRequiredCount`는 내 목록 조회와 `inspection.readiness`에 함께 반환하는 **조회 시 계산값**이다.
   가장 최근 완료된 PACKING_LIST 작업에서 `priority=REQUIRED`이고, 유효한 `acceptedItemId`도
   없고 현재 내 목록에 같은 이름의 항목도 없는 후보를 센다. 이름 비교는 위 채택 규약을 따른다.
@@ -919,15 +980,15 @@ Location: /api/trips/12
   가는 `확인하기`를 표시한다. 내 목록 완료율이 `1`이어도 경고를 유지한다. `null`은 0건으로
   표현하지 않고 `필수 추천 확인 전`을 표시한다. 경고는 완료율·무게·최종 저장을 변경하지 않는다.
   완료율은 선택한 목록의 준비 상태이며 모든 여행 필수품을 갖췄다는 보장이 아니다.
-- `photoStatus`: 승인된 인식 결과와 사용자 확정 연결이 있으면 `CONFIRMED`, 미승인 연결
-  후보만 있으면 `NEEDS_CHECK`, 연결이 없으면 `NOT_IN_PHOTO`. 실제 완료 상태와 독립적이다.
-- `readiness.prepared`와 `readiness.unprepared`는 내 목록을 완료 여부로 나눈다. 각 항목에
-  `photoStatus`를 표시한다. 미채택 추천·미승인 인식 후보를 내 목록 집계에 넣지 않는다.
-- S-06의 `photoStatus=NEEDS_CHECK`에서 `사진 확인`을 누르면 S-04로 이동한다. FE가 같은 여행의
-  인식 결과와 내 목록을 조회하고, 사용자가 인식 후보와 연결할 내 항목·이름·수량을 선택해
-  `matchedItemIds`·`approved=true`로 PATCH한다. S-06으로 돌아오면 검수·무게를 다시 조회한다.
-  확인 배지만 보고 자동 승인하지 않는다. S-04는 미승인 인식 결과 전체를 보여주므로
-  검수 응답에 예전 `candidates[]`나 별도 후보 점수 API를 추가하지 않는다.
+- `photoStatus`: 유효한 사진 연결 중 HIGH/MEDIUM 또는 사후 확인된 연결이 있으면 `CONFIRMED`,
+  LOW 연결만 있고 사후 확인되지 않았으면 `NEEDS_CHECK`, 연결이 없으면 `NOT_IN_PHOTO`다.
+  `approved`는 사용하지 않는다. 속성 부족은 별도 규정 안내이며, 사진 상태와 준비 완료는 독립적이다.
+- `readiness.prepared`와 `readiness.unprepared`는 내 목록을 완료 여부로 나눈다. 낮은 신뢰도로
+  `photoStatus=NEEDS_CHECK`인 사진 물품도 자동 등록된 PREPARED라면 완료 집계에 포함한다.
+  미채택 추천은 내 목록 집계에 넣지 않는다.
+- S-06의 `사진 확인`은 S-04의 **이미 등록된** 물품 사후 수정으로 연결한다. 사용자는 이름·수량·
+  연결을 필요할 때 PATCH하고 돌아온다. 수정하지 않아도 내 목록은 유지된다. 등록용 승인 버튼·
+  `approved=true` 요청을 보내지 않는다. 복귀 시 현재 준비 상태·무게를 다시 조회한다.
 - `GET items`는 내 목록과 가장 최근 완료된 추천 작업의 `recommendationJobId`(없으면 `null`)를
   반환한다. 재접속 시 이 ID로 후보를 다시 읽는다. 생성 중인 새 추천은 기존 내 목록을 가리지 않는다.
 - `inspection.weight`는 가장 최근 완료된 무게 작업 중 **현재 입력과 같은 결과**만 반환한다.

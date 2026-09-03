@@ -111,8 +111,8 @@ entity "detected_objects" as detected {
   * approved : boolean
   * created_at : timestamptz
   ..
-  승인 전: 확정 결과에서 제외
-  승인 시: 내 목록 생성·연결·완료
+  approved: 이전 호환 컬럼 · 등록 조건 아님
+  인식 완료: 내 목록 자동 생성·연결·완료
 }
 
 entity "★ item_detections" as idt <<NM>> {
@@ -193,8 +193,9 @@ rules    ||--o{ irc
 note bottom of idt
   **N:M** 체크리스트 항목 ↔ 인식 물품
   한 항목에 후보 여럿, 한 후보가 여러 항목
-  연결마다 신뢰도·승인 여부가 다르다
-  사진 승인·확정 연결·완료 등록을 한 트랜잭션으로 처리
+  연결마다 신뢰도·사후 확인 여부가 다르다
+  BAG_CHECK 결과·연결·자동 완료 등록을 한 트랜잭션으로 처리
+  confirmed_by_user=false도 등록·집계에 포함
 end note
 
 note bottom of irc

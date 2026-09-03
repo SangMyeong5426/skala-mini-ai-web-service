@@ -37,7 +37,7 @@ Security가 모든 업무 API·사진 요청을 인증한다. 공개 진입은 �
 
 ![시스템 아키텍처](images/04-architecture.png)
 
-> **2026-09-03 PNG·PUML·SVG에 승인·채택·계산 책임을 반영했다.** 그림은 시스템 목표 구조이며
+> **2026-09-03 PNG·PUML·SVG에 자동 등록·추천 채택·계산 책임을 반영했다.** 그림은 시스템 목표 구조이며
 > 구현 완료를 뜻하지 않는다. “이 상자 안만 교체”는 **개정 계약을 구현한 뒤 Mock을 실제 AI로
 > 교체할 때**의 의미다. 기능 정의 자체가 달라질 때 API·화면까지 불변이라는 뜻은 아니다.
 
@@ -86,12 +86,12 @@ FE Mock·라우트·쿠키 처리에는 후속 구현이 필요하다. 이 다�
 
 ## AI-Ready 설계 적용 지점
 
-### 사진 승인과 추천 채택의 책임
+### 사진 자동 등록과 추천 채택의 책임
 
 | 주체 | 처리 | 저장 위치 |
 | --- | --- | --- |
-| 이미지 AI (현재 Mock) | 사진에서 후보·수량·신뢰도를 반환 | `detected_objects`, 최초 `approved=false` |
-| 서버 Service | 사진 승인 시 내 목록 생성·연결·완료 처리 | `checklist_items` + `item_detections` |
+| 이미지 AI (현재 Mock) | 사진에서 물품명·수량·신뢰도를 반환 | BAG_CHECK 출력 JSON |
+| 서버 Service | BAG_CHECK 완료 처리에서 승인 없이 내 목록 생성·연결·완료 등록. 저장 성공 후 COMPLETED | `detected_objects` + `checklist_items` + `item_detections` + `ai_jobs`, 한 트랜잭션 |
 | 추천 AI (현재 Mock) | 여행 조건과 현재 내 목록을 고려해 후보·이유 제시 | `ai_jobs.output_payload` |
 | 서버 Service | 선택·승인한 후보만 미완료로 등록, 반복 승인 방지 | `checklist_items`, 후보의 서버 필드 `acceptedItemId` |
 | 서버 Service | 내 목록 기준 완료율, 실제 완료 항목 기준 무게 합산 | 내 목록에서 집계, 무게 결과는 `ai_jobs.output_payload` |
