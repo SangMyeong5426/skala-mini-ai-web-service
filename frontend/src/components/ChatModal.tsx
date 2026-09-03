@@ -85,6 +85,12 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // 챗봇은 여행이 없어도 쓸 수 있다. tripId 를 보내지 않는다.
+  // 07:1436-1441 required 4개. 여행 없는 챗봇은 transport=FLIGHT, airline=null 이다
+  // (07:1467). 빠뜨리면 명세대로 검증하는 서버가 접수 전에 거절한다.
+  const send = (question: string, items: ReturnType<typeof carryOver>) =>
+    job.start('RULE_CHECK', { transport: 'FLIGHT', airline: null, question, items })
+
   const ask = async (q: string) => {
     if (!q.trim() || job.phase === 'running') return
     // <b>보내기 전에</b> 직전 턴을 읽는다. 아래 setTurns 로 사용자 말풍선을
@@ -92,15 +98,20 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
     const items = carryOver(turns.at(-1))
     setTurns((t) => [...t, { role: 'user', text: q }])
     setText('')
-    // 챗봇은 여행이 없어도 쓸 수 있다. tripId 를 보내지 않는다.
-    // 07:1436-1441 required 4개. 여행 없는 챗봇은 transport=FLIGHT, airline=null 이다
-    // (07:1467). 빠뜨리면 명세대로 검증하는 서버가 접수 전에 거절한다.
-    await job.start('RULE_CHECK', {
-      transport: 'FLIGHT',
-      airline: null,
-      question: q,
-      items,
-    })
+    await send(q, items)
+  }
+
+  /**
+   * 실패·시간초과 뒤의 "다시 시도".
+   *
+   * `ask` 를 다시 부르면 같은 질문 말풍선이 하나 더 붙는다. 화면에 이미 있는
+   * 마지막 질문을 <b>그대로 다시 보낸다.</b> 되묻기에 답하던 중이었다면 그 앞의
+   * 봇 답이 문맥이므로 한 칸 더 앞을 본다.
+   */
+  const retry = () => {
+    const last = turns.at(-1)
+    if (last?.role !== 'user' || job.phase === 'running') return
+    void send(last.text, carryOver(turns.at(-2)))
   }
 
   // 작업이 끝나면 답을 대화에 넣는다.
@@ -176,7 +187,16 @@ export function ChatModal({ onClose }: { onClose: () => void }) {
           {job.phase === 'failed' && (
             <div className="bubble bot">
               <p>답변을 만들지 못했습니다.</p>
-              <button type="button" className="btn btn-sm" onClick={() => ask(turns.at(-1)?.text ?? '')}>
+              <button type="button" className="btn btn-sm" onClick={retry}>
+                다시 시도
+              </button>
+            </div>
+          )}
+          {/* 06:537-538 — 60회를 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼 */}
+          {job.phase === 'timeout' && (
+            <div className="bubble bot">
+              <p>시간이 오래 걸립니다. 작업은 서버에 남아 있습니다.</p>
+              <button type="button" className="btn btn-sm" onClick={retry}>
                 다시 시도
               </button>
             </div>

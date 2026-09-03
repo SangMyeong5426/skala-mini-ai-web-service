@@ -234,6 +234,18 @@ export default function InspectionPage() {
             {weightJob.phase === 'failed' && (
               <Failed title="무게를 계산하지 못했습니다" detail={weightJob.error ?? ''} />
             )}
+            {/*
+              * 06:537-538 — 60회를 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼.
+              * 여기서 다시 하는 일은 <b>작업 재시작이 아니라 조회</b>다. 작업은 서버에
+              * 남아 돌고 있고, 끝나면 결과가 검수 응답에 실려 온다.
+              */}
+            {weightJob.phase === 'timeout' && (
+              <Failed
+                title="시간이 오래 걸립니다"
+                detail="작업은 서버에 남아 있습니다"
+                onRetry={() => { void load() }}
+              />
+            )}
             {data && !w && weightJob.phase === 'idle' && (
               <p className="card-sub">계산할 물품이 없습니다.</p>
             )}
@@ -282,6 +294,13 @@ export default function InspectionPage() {
             {ruleJob.phase === 'running' && <AiPending label="반입 규정을 확인하는 중" polls={ruleJob.polls} />}
             {ruleJob.phase === 'failed' && (
               <Failed title="판정하지 못했습니다" detail={ruleJob.error ?? ''} />
+            )}
+            {ruleJob.phase === 'timeout' && (
+              <Failed
+                title="시간이 오래 걸립니다"
+                detail="작업은 서버에 남아 있습니다"
+                onRetry={() => { void load() }}
+              />
             )}
             {data && !c && ruleJob.phase === 'idle' && (
               <p className="card-sub">판정할 물품이 없습니다.</p>

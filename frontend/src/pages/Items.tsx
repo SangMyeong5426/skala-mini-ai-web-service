@@ -215,6 +215,11 @@ export default function Items() {
               {job.phase === 'failed' && (
                 <Failed title="추천을 만들지 못했습니다" detail={job.error ?? ''} onRetry={recommend} />
               )}
+              {/* 06:537-538 — 60회를 넘기면 "시간이 오래 걸립니다" 와 재시도 버튼.
+                  작업은 서버에 남으므로 사라졌다고 말하지 않는다. */}
+              {job.phase === 'timeout' && (
+                <Failed title="시간이 오래 걸립니다" detail="작업은 서버에 남아 있습니다" onRetry={recommend} />
+              )}
 
               {job.phase !== 'running' && open.length === 0 && (
                 <Empty
