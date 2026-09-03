@@ -503,168 +503,416 @@ export const AI_OUTPUT: {
  * `followUpQuestion` 이 null 이다. 07:1733 이 <i>"question 이 있으면 answer 는
  * string"</i> 이라고 못박았으므로 챗봇에 그것을 돌려주면 계약 위반이다.
  *
- * 아래 다섯은 백엔드 Mock(`backend/src/main/resources/mock/RULE_CHECK_*.json`)과
- * <b>같은 값이다.</b> 06:400-411 이 대표 질문 3개와 되묻기 답 하나, 그리고 그 밖의
- * 질문을 어떻게 처리할지 정해 두었다 — 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ * 아래 13개는 06:400-411 의 대표 질문과 그 밖의 질문(규정을 지어내지 않고
+ * ASK_AIRLINE)에 대한 <b>실서버 응답 그대로다.</b>
  *
  * 질문에서 뽑은 물품이라 `itemId`·`detectionId` 가 null 이다(07:1888).
  */
+
+/** 20000mAh 보조배터리 기내 되나요? */
 const CHAT_BATTERY: RuleCheckOutput = {
-  results: [
-    {
-      itemId: null,
-      detectionId: null,
-      name: "보조배터리",
-      qty: 1,
-      ruleKeyword: "보조배터리",
-      attributes: {
-        capacityMl: null,
-        batteryWh: null,
-        batteryMah: 20000,
-        bladeCm: null
-      },
-      verdict: "NEED_MORE_INFO",
-      ruleId: 1,
-      conditionNote: "100Wh 이하",
-      reason: "mAh만으로 정격 Wh를 확정하지 않습니다. 라벨의 Wh를 확인해 주세요.",
-      missingInfo: "배터리 정격(Wh)",
-      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
-      checkedAt: "2026-09-02"
-    }
-  ],
-  answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
-}
+    answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "보조배터리",
+        itemId: null,
+        reason: "mAh만으로 정격 Wh를 확정하지 않습니다. 라벨의 Wh를 확인해 주세요.",
+        ruleId: 1,
+        verdict: "NEED_MORE_INFO",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: 20000,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: "배터리 정격(Wh)",
+        ruleKeyword: "보조배터리",
+        conditionNote: "100Wh 이하"
+      }
+    ],
+    followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
+  }
 
-/** 위 되묻기에 "100Wh예요" 라고 답했을 때. 되묻기가 <b>닫힌다</b>. */
+/** 보조배터리 용량을 모르겠어요 */
+const CHAT_BATTERY_UNKNOWN: RuleCheckOutput = {
+    answer: "배터리 정격 Wh가 없어 반입 조건을 아직 판단할 수 없습니다. 라벨을 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "보조배터리",
+        itemId: null,
+        reason: "보조배터리 반입 조건을 확인하려면 라벨의 정격 Wh가 필요합니다.",
+        ruleId: 1,
+        verdict: "NEED_MORE_INFO",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: "배터리 정격(Wh)",
+        ruleKeyword: "보조배터리",
+        conditionNote: "100Wh 이하"
+      }
+    ],
+    followUpQuestion: "배터리 라벨에 표시된 정격 Wh는 얼마인가요?"
+  }
+
+/** 100Wh 보조배터리 기내 반입되나요? */
 const CHAT_BATTERY_100WH: RuleCheckOutput = {
-  results: [
-    {
-      itemId: null,
-      detectionId: null,
-      name: "보조배터리",
-      qty: 1,
-      ruleKeyword: "보조배터리",
-      attributes: {
-        capacityMl: null,
-        batteryWh: 100,
-        batteryMah: 20000,
-        bladeCm: null
-      },
-      verdict: "CABIN_OK",
-      ruleId: 1,
-      conditionNote: "100Wh 이하",
-      reason: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다.",
-      missingInfo: null,
-      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
-      checkedAt: "2026-09-02"
-    }
-  ],
-  answer: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  followUpQuestion: null
-}
+    answer: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "보조배터리",
+        itemId: null,
+        reason: "정격 100Wh 보조배터리는 기내 반입 기준에 해당하며 위탁수하물로 부칠 수 없습니다.",
+        ruleId: 1,
+        verdict: "CABIN_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: 100,
+          batteryMah: 20000,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "보조배터리",
+        conditionNote: "100Wh 이하"
+      }
+    ],
+    followUpQuestion: null
+  }
 
+/** 120Wh 보조배터리 기내 반입되나요? */
+const CHAT_BATTERY_120WH: RuleCheckOutput = {
+    answer: "정격 120Wh 보조배터리는 항공사의 사전 승인이 필요하며 위탁수하물로 부칠 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "보조배터리",
+        itemId: null,
+        reason: "정격 120Wh 보조배터리는 항공사의 사전 승인이 필요하며 위탁수하물로 부칠 수 없습니다.",
+        ruleId: 2,
+        verdict: "ASK_AIRLINE",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: 120,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "보조배터리",
+        conditionNote: "100Wh 초과 160Wh 이하"
+      }
+    ],
+    followUpQuestion: null
+  }
+
+/** 200Wh 보조배터리 기내 반입되나요? */
+const CHAT_BATTERY_200WH: RuleCheckOutput = {
+    answer: "정격 200Wh 보조배터리는 기내·위탁수하물 모두 반입할 수 없습니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "보조배터리",
+        itemId: null,
+        reason: "정격 200Wh 보조배터리는 기내·위탁수하물 모두 반입할 수 없습니다.",
+        ruleId: 3,
+        verdict: "CHECKED_FORBIDDEN",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: 200,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "보조배터리",
+        conditionNote: "160Wh 초과"
+      }
+    ],
+    followUpQuestion: null
+  }
+
+/** 50ml 화장품 기내 반입되나요? */
+const CHAT_LIQUID_50ML: RuleCheckOutput = {
+    answer: "50ml 화장품은 1L 투명 지퍼백에 넣으면 기내 반입 기준에 해당합니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "화장품",
+        itemId: null,
+        reason: "50ml 화장품은 1L 투명 지퍼백에 넣으면 기내 반입 기준에 해당합니다.",
+        ruleId: 4,
+        verdict: "CABIN_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: 50
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "액체",
+        conditionNote: "용기당 100ml 이하, 총 1L 이하"
+      }
+    ],
+    followUpQuestion: null
+  }
+
+/** 120ml 화장품 기내 반입되나요? */
 const CHAT_LIQUID: RuleCheckOutput = {
-  results: [
-    {
-      itemId: null,
-      detectionId: null,
-      name: "화장품",
-      qty: 1,
-      ruleKeyword: "액체",
-      attributes: {
-        capacityMl: 120,
-        batteryWh: null,
-        batteryMah: null,
-        bladeCm: null
-      },
-      verdict: "CHECKED_OK",
-      ruleId: 5,
-      conditionNote: "100ml 초과",
-      reason: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요.",
-      missingInfo: null,
-      sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
-      checkedAt: "2026-09-02"
-    }
-  ],
-  answer: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  followUpQuestion: null
-}
+    answer: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "화장품",
+        itemId: null,
+        reason: "120ml 화장품 용기는 기내 반입 기준을 넘으므로 위탁수하물로 부치세요.",
+        ruleId: 5,
+        verdict: "CHECKED_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: 120
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "액체",
+        conditionNote: "100ml 초과"
+      }
+    ],
+    followUpQuestion: null
+  }
 
+/** 화장품 용량을 모르겠어요 */
+const CHAT_LIQUID_UNKNOWN: RuleCheckOutput = {
+    answer: "화장품 용량을 몰라 반입 조건을 아직 판단할 수 없습니다. 용기를 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "화장품",
+        itemId: null,
+        reason: "화장품 용기 크기에 따라 반입 조건이 달라지므로 용량을 확인해 주세요.",
+        ruleId: 4,
+        verdict: "NEED_MORE_INFO",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/905/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: "용량(ml)",
+        ruleKeyword: "액체",
+        conditionNote: "용기당 100ml 이하, 총 1L 이하"
+      }
+    ],
+    followUpQuestion: "용기 용량은 몇 ml인가요?"
+  }
+
+/** 날 길이 5cm 가위 기내 반입되나요? */
+const CHAT_SCISSORS_5CM: RuleCheckOutput = {
+    answer: "날 길이 5cm 가위는 기내 반입 기준에 해당합니다. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "가위",
+        itemId: null,
+        reason: "날 길이 5cm 가위는 기내 반입 기준에 해당합니다.",
+        ruleId: 7,
+        verdict: "CABIN_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+        attributes: {
+          bladeCm: 5,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "가위",
+        conditionNote: "날 길이 6cm 이하"
+      }
+    ],
+    followUpQuestion: null
+  }
+
+/** 날 길이 7cm 가위 기내 반입되나요? */
 const CHAT_SCISSORS: RuleCheckOutput = {
-  results: [
-    {
-      itemId: null,
-      detectionId: null,
-      name: "가위",
-      qty: 1,
-      ruleKeyword: "가위",
-      attributes: {
-        capacityMl: null,
-        batteryWh: null,
-        batteryMah: null,
-        bladeCm: 7
-      },
-      verdict: "CHECKED_OK",
-      ruleId: 6,
-      conditionNote: "날 길이 6cm 초과",
-      reason: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요.",
-      missingInfo: null,
-      sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
-      checkedAt: "2026-09-02"
-    }
-  ],
-  answer: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  followUpQuestion: null
-}
+    answer: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "가위",
+        itemId: null,
+        reason: "날 길이 7cm 가위는 기내 반입이 제한되므로 위탁수하물로 부치세요.",
+        ruleId: 6,
+        verdict: "CHECKED_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+        attributes: {
+          bladeCm: 7,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "가위",
+        conditionNote: "날 길이 6cm 초과"
+      }
+    ],
+    followUpQuestion: null
+  }
 
-/** 모르는 질문. <b>규정을 지어내지 않는다</b> — 항공사에 넘긴다. */
+/** 가위 길이를 모르겠어요 */
+const CHAT_SCISSORS_UNKNOWN: RuleCheckOutput = {
+    answer: "가위 날 길이를 몰라 반입 조건을 아직 판단할 수 없습니다. 길이를 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "가위",
+        itemId: null,
+        reason: "날 길이에 따라 반입 조건이 달라지므로 가위 날 길이를 확인해 주세요.",
+        ruleId: 6,
+        verdict: "NEED_MORE_INFO",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airport.kr/ap_ko/907/subview.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: "날 길이(cm)",
+        ruleKeyword: "가위",
+        conditionNote: "날 길이 6cm 초과"
+      }
+    ],
+    followUpQuestion: "가위 날 길이는 몇 cm인가요?"
+  }
+
+/** 노트북 기내 반입되나요? */
+const CHAT_LAPTOP: RuleCheckOutput = {
+    answer: "노트북은 기내 반입할 수 있으며 보안검색 시 가방에서 꺼내 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "노트북",
+        itemId: null,
+        reason: "노트북은 기내 반입할 수 있으며 보안검색 시 가방에서 꺼내 주세요.",
+        ruleId: 8,
+        verdict: "CABIN_OK",
+        checkedAt: "2026-09-02",
+        sourceUrl: "https://www.airportal.go.kr/library/security.do",
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: "노트북",
+        conditionNote: null
+      }
+    ],
+    followUpQuestion: null
+  }
+
+/** 우산 기내 반입되나요? */
 const CHAT_UNKNOWN: RuleCheckOutput = {
-  results: [
-    {
-      itemId: null,
-      detectionId: null,
-      name: "문의 물품",
-      qty: 1,
-      ruleKeyword: null,
-      attributes: {
-        capacityMl: null,
-        batteryWh: null,
-        batteryMah: null,
-        bladeCm: null
-      },
-      verdict: "ASK_AIRLINE",
-      ruleId: null,
-      conditionNote: null,
-      reason: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인하세요.",
-      missingInfo: null,
-      sourceUrl: null,
-      checkedAt: null
-    }
-  ],
-  answer: "해당 물품의 규정을 찾지 못했습니다. 항공사에 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
-  followUpQuestion: null
-}
+    answer: "해당 이동수단의 반입 규정을 찾지 못했습니다. 항공사에 확인해 주세요. 최종 반입 여부는 출발 당일 항공사와 보안검색기관의 판단을 따릅니다.",
+    results: [
+      {
+        qty: 1,
+        name: "문의 물품",
+        itemId: null,
+        reason: "해당 규정을 찾지 못했습니다. 항공사에 확인하세요.",
+        ruleId: null,
+        verdict: "ASK_AIRLINE",
+        checkedAt: null,
+        sourceUrl: null,
+        attributes: {
+          bladeCm: null,
+          batteryWh: null,
+          batteryMah: null,
+          capacityMl: null
+        },
+        detectionId: null,
+        missingInfo: null,
+        ruleKeyword: null,
+        conditionNote: null
+      }
+    ],
+    followUpQuestion: null
+  }
 
 /**
- * 질문을 보고 답을 고른다. <b>백엔드 `MockAiClient.ruleCheckFixture` 와 같은 순서·같은 조건이다.</b>
+ * 질문을 보고 답을 고른다. <b>백엔드 `MockAiClient.ruleCheckFixture` 와 같은
+ * 순서·같은 조건이다.</b>
  *
- * 공백을 지우고 소문자로 맞춘 뒤 <b>물품 이름과 기준값을 함께</b> 본다(06:398).
- * "화장품 기내 되나요?" 처럼 수치가 없으면 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
+ * 공백을 지우고 소문자로 맞춘 뒤 물품과 기준값을 함께 본다(06:398). 지원하는
+ * 물품인데 수치가 없으면 속성을 비워 되묻고, 지원하지 않는 수치나 물품은
+ * 규정을 지어내지 않고 `ASK_AIRLINE` 이다.
  *
- * 되묻기에 답하는 턴은 질문에 물품 이름이 없다("100Wh예요"). 그래서 화면이 함께
- * 보낸 `items[]` 의 이름도 본다 — 백엔드의 `hasItem(input, "보조배터리")` 자리다.
+ * 되묻기에 답하는 턴은 질문에 물품 이름이 없다("100Wh예요"). 그래서 화면이
+ * 함께 보낸 `items[]` 의 이름도 본다 — 백엔드의 `hasItem` 자리다.
  *
- * Mock 이 서버보다 후하면 Mock 에서만 되는 화면이 생긴다. 예전에는 무엇을 물어도
- * 보조배터리 답이 돌아왔고, 되묻기에 답해도 같은 되묻기가 다시 나와 끝나지 않았다.
+ * <b>답 13개는 실행 중인 서버에 직접 물어 받아 온 것이다.</b> 손으로 옮기면
+ * 판정이나 문구가 한 글자씩 어긋난다. #47 이 판정을 규칙 엔진으로 옮긴 뒤로는
+ * 서버의 fixture JSON 조차 최종 응답과 다르다 — 규칙 엔진이 verdict 를 덮는다.
  */
 export function RULE_CHECK_CHAT(question: string, itemNames: string[] = []): RuleCheckOutput {
   const q = question.replace(/\s+/g, '').toLowerCase()
-  const asked = (name: string) => q.includes(name) || itemNames.includes(name)
-  if (q.includes('100wh') && asked('보조배터리')) return CHAT_BATTERY_100WH
-  if (q.includes('보조배터리') && q.includes('20000mah')) return CHAT_BATTERY
-  if (q.includes('화장품') && q.includes('120ml')) return CHAT_LIQUID
-  if (q.includes('가위') && q.includes('7cm')) return CHAT_SCISSORS
+  const num = (v: string) => new RegExp(`(^|[^0-9.])${v}([^0-9a-z]|$)`).test(q)
+
+  if (q.includes('보조배터리') || (itemNames.includes('보조배터리') && (q.includes('wh') || q.includes('mah')))) {
+    if (num('200wh')) return CHAT_BATTERY_200WH
+    if (num('120wh')) return CHAT_BATTERY_120WH
+    if (num('100wh')) return CHAT_BATTERY_100WH
+    if (num('20000mah')) return CHAT_BATTERY
+    if (q.includes('wh') || q.includes('mah')) return CHAT_UNKNOWN
+    return CHAT_BATTERY_UNKNOWN
+  }
+  if (q.includes('화장품') || (itemNames.includes('화장품') && q.includes('ml'))) {
+    if (num('120ml')) return CHAT_LIQUID
+    if (num('50ml')) return CHAT_LIQUID_50ML
+    if (q.includes('ml')) return CHAT_UNKNOWN
+    return CHAT_LIQUID_UNKNOWN
+  }
+  if (q.includes('가위') || (itemNames.includes('가위') && q.includes('cm'))) {
+    if (num('7cm')) return CHAT_SCISSORS
+    if (num('5cm')) return CHAT_SCISSORS_5CM
+    if (q.includes('cm')) return CHAT_UNKNOWN
+    return CHAT_SCISSORS_UNKNOWN
+  }
+  if (q.includes('노트북')) return CHAT_LAPTOP
   return CHAT_UNKNOWN
 }
 
