@@ -142,13 +142,17 @@ export default function Landing() {
                   준비 완료된 물품과 빈 가방 무게를 바탕으로 예상 범위를 보여드려요.
                   무게 정보가 없어 계산하지 못한 물품도 함께 확인할 수 있어요.
                 </p>
+                {/* 06-api-spec: minG 4610 · typicalG 5480 · maxG 7010 · limitG 10000 */}
                 <p className="range">
                   <span>4.6</span>
-                  <b>5.4</b>
-                  <span>6.9</span>
+                  <b>5.5</b>
+                  <span>7.0</span>
                   <small>kg</small>
                 </p>
-                <div className="meter"><span style={{ width: '54%' }} /></div>
+                <div className="meter"><span style={{ width: '55%' }} /></div>
+                <p className="tile-sub">
+                  한도 10kg · 빈 가방 3.2kg 포함 · 무게 정보가 없어 뺀 물품 3개
+                </p>
                 <p className="tile-sub">
                   예상 무게는 참고용이에요. 출발 전 실제 무게를 확인해 주세요.
                 </p>
@@ -161,12 +165,32 @@ export default function Landing() {
                   공식 규정의 출처와 확인 날짜를 함께 보여드리고, 정보가 부족하면
                   무엇을 확인해야 하는지 알려드려요.
                 </p>
+                {/*
+                  * <b>판정을 지어내지 않는다.</b> 06-api-spec 의 customs 예시가
+                  * 같은 물품을 NEED_MORE_INFO 로 규정한다 — mAh 만으로는 Wh 를
+                  * 알 수 없기 때문이다.
+                  *
+                  * 앞서는 여기에 "기내 가능" 을 박아 두었는데, 그것은 규정표의
+                  * 한 줄(100Wh 이하 → CABIN_OK)을 <b>이 물품의 판정으로</b>
+                  * 붙인 것이라 틀렸다. 규정 문장 자체는 맞다.
+                  *
+                  * 3단 계단을 함께 펴야 왜 못 정하는지가 납득된다. 문장은
+                  * database/seed.sql 의 transport_rules 원문이다.
+                  */}
                 <div className="verdict-card">
                   <div className="row">
                     <span className="row-name">보조배터리 20,000mAh</span>
-                    <span className="chip chip-ok">기내 가능</span>
+                    <span className="chip chip-warn">정보 부족</span>
                   </div>
-                  <p className="verdict-why">100Wh 이하는 기내 반입이 허용됩니다.</p>
+                  <p className="verdict-why">
+                    보조배터리는 위탁수하물로 부칠 수 없고, 기내 반입은 정격(Wh)에 따라
+                    달라집니다. 라벨의 Wh 를 확인해 주세요.
+                  </p>
+                  <ul className="tier">
+                    <li><b>100Wh 이하</b><span>기내 반입 가능</span></li>
+                    <li><b>100 — 160Wh</b><span>항공사 사전 승인 필요</span></li>
+                    <li><b>160Wh 초과</b><span>기내·위탁 모두 불가</span></li>
+                  </ul>
                   <p className="verdict-src">인천국제공항 제한물품 안내 · 2026.09.02 확인</p>
                 </div>
               </article>
@@ -423,13 +447,14 @@ function ProductShot() {
         <div className="shot-head">
           <div>
             <p className="shot-title">서울 → 도쿄</p>
-            <p className="shot-sub">10.01 — 10.04 · 3박 4일 · 최저 14° 최고 22°</p>
+            {/* 실측 예보가 아니다. 07 의 weatherSource 가 SEASONAL 이면 이렇게 쓴다 */}
+            <p className="shot-sub">10.01 — 10.04 · 3박 4일 · 계절 평균 낮 24° 아침 16°</p>
           </div>
           <div className="shot-pct">
-            <b>86</b><small>%</small>
+            <b>89</b><small>%</small>
           </div>
         </div>
-        <div className="meter meter-slim"><span style={{ width: '86%' }} /></div>
+        <div className="meter meter-slim"><span style={{ width: '89%' }} /></div>
 
         {/*
           * <b>두 덩어리로 나눈다.</b> 한 목록에 섞으면 ③ 의 약속과 어긋난다 —
@@ -456,7 +481,7 @@ function ProductShot() {
         <p className="shot-group">
           내 체크리스트
           {/* 비율만으로는 몇 개를 더 챙겨야 하는지 셈해야 안다 */}
-          <span className="shot-count">6 / 7 준비 완료</span>
+          <span className="shot-count">8 / 9 준비 완료</span>
         </p>
         <ul className="shot-list">
           <li>

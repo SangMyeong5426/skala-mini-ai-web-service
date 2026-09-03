@@ -891,6 +891,16 @@ select:focus-visible, textarea:focus-visible {
   background: var(--paper-2);
 }
 .verdict-card .row { padding: 16px 0 12px; border-top: 0; }
+/* 규정 3단 계단 — 왜 판정을 못 내리는지는 이걸 봐야 납득된다 */
+.tier { margin-top: 14px; display: flex; flex-direction: column; gap: 1px; }
+.tier li {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 11px; border-radius: var(--r-sm);
+  background: var(--paper); font-size: 13px;
+}
+.tier b { flex: 0 0 96px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tier span { color: var(--ink-2); }
+
 .site .verdict-why { font-size: 14.5px; color: var(--ink-2); }
 .site .verdict-src { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
 
