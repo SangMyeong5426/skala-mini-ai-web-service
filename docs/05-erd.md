@@ -25,7 +25,7 @@
 > SQL의 기존 시드는 개정 전 상태이므로 새 자동 등록 흐름을 검증한 데이터로 보지 않는다.
 >
 > **2026-09-03 일정·정리 추가:** `trip_itineraries`·`item_placements` 두 표를 더했다.
-> 기존 10개 테이블과 관계는 그대로다. **팀 DB 에는 `schema.sql` 전체 재실행이 아니라
+> 기존 10개 테이블과 관계는 그대로다. `users` 에는 `login_id`·`password_hash` 가 늘었다. **팀 DB 에는 `schema.sql` 전체 재실행이 아니라
 > [`database/migrations/`](../database/migrations/) 의 파일로 두 표만 더한다** —
 > 전체 재실행은 맨 앞에서 모든 테이블을 DROP 해 실데이터를 지운다.
 
