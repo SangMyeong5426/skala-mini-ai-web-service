@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -17,6 +18,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.checklist.ChecklistItem;
@@ -47,6 +50,9 @@ import com.skala.miniai.domain.photo.DetectedObjectRepository;
 public class AiJobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AiJobRunner.class);
+
+    /** 07 RULE_CHECK 입력 스키마의 {@code items} 한도. 사진에서 나온 물품도 여기 함께 담긴다. */
+    private static final int MAX_RULE_CHECK_ITEMS = 50;
 
     private final AiJobRepository jobs;
     private final AiJobService jobService;
@@ -90,6 +96,10 @@ public class AiJobRunner {
             if (mockDelayMs > 0) Thread.sleep(mockDelayMs);
 
             JsonNode input = json.read(job.getInputPayload());
+            if (job.getJobType() == Codes.JobType.RULE_CHECK) {
+                // 사진을 붙였으면 먼저 인식하고 내 목록에 등록한 뒤, 그 물품까지 함께 판정한다.
+                input = attachPhotos(job, input);
+            }
             JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
                 // 07 「누가 채우나」 — 판정은 모델 몫이 아니다. 모델·Mock 이 낸 verdict·ruleId 는
@@ -167,6 +177,57 @@ public class AiJobRunner {
         // 자동 등록이 이 id 들을 써야 하므로 먼저 내보낸다.
         detections.flush();
         return saved;
+    }
+
+
+    /**
+     * 챗봇에 붙인 사진을 <b>먼저</b> 처리한다 (S-09 · 07 「챗봇 사진 첨부」).
+     *
+     * <p>여행 사진과 <b>같은 취급</b>이다 — 인식하고, {@code detected_objects} 에 저장하고,
+     * 승인 없이 내 목록에 {@code PREPARED} 로 등록한다. 별도 저장소를 두지 않는다.
+     * 그래서 {@code BAG_CHECK} 와 같은 코드를 그대로 지난다.
+     *
+     * <p>그다음 인식된 물품을 {@code items[]} <b>뒤에</b> 이어 붙여 판정 대상으로 만든다.
+     * 접수 시점에는 아직 인식을 돌리지 않아 {@code input_payload} 에 넣을 수 없다 —
+     * 그래서 {@code results[]} 가 입력보다 길어질 수 있고, 계약도 그렇게 검사한다.
+     *
+     * <p>속성({@code capacityMl}·{@code batteryWh}·{@code bladeCm})은 전부 {@code null} 로 둔다.
+     * 사진에는 용량도 정격도 보이지 않는다. 규칙 엔진이 그 자리에서 {@code NEED_MORE_INFO} 와
+     * 되물을 것을 만들어 낸다 — 챗봇이 대화형인 이유가 여기다.
+     */
+    private JsonNode attachPhotos(AiJob job, JsonNode input) {
+        List<Long> photoIds = RuleCheckContract.attachedPhotoIds(input);
+        if (photoIds.isEmpty()) return input;
+        if (job.getTripId() == null) return input;   // 접수에서 이미 막지만, 저장 경로에서 터지지는 않게 둔다
+
+        ObjectNode bagInput = json.newObject();
+        ArrayNode ids = bagInput.putArray("photoIds");
+        photoIds.forEach(ids::add);
+
+        JsonNode recognized = aiClient.run(Codes.JobType.BAG_CHECK, job.getTripId(), bagInput);
+        List<DetectedObject> saved = saveDetections(recognized);
+        Map<Long, Long> linkedItemIds = autoRegistrar.register(job.getTripId(), saved);
+
+        ObjectNode merged = (ObjectNode) input.deepCopy();
+        ArrayNode items = (ArrayNode) merged.get("items");
+        for (DetectedObject detection : saved) {
+            if (items.size() >= MAX_RULE_CHECK_ITEMS) break;
+            ObjectNode item = items.addObject();
+            Long itemId = linkedItemIds.get(detection.getId());
+            if (itemId == null) item.putNull("itemId");
+            else item.put("itemId", itemId);
+            item.put("detectionId", detection.getId());
+            item.put("name", detection.getName());
+            item.put("qty", detection.getQty());
+            ObjectNode attributes = item.putObject("attributes");
+            attributes.putNull("capacityMl");
+            attributes.putNull("batteryWh");
+            attributes.putNull("batteryMah");
+            attributes.putNull("bladeCm");
+        }
+
+        log.info("챗봇 사진 {}장에서 물품 {}개를 인식해 내 목록에 등록했습니다", photoIds.size(), saved.size());
+        return merged;
     }
 
     /** 07: {@code itemId} 와 {@code ruleId} 가 모두 있는 결과만 저장한다. {@code ASK_AIRLINE} 은 JSON 에만 남는다. */

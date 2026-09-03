@@ -105,6 +105,9 @@
 
 - POST 접수 전에 세션을 확인하고 `ai_jobs.user_id`를 서버에서 채운다. 임의 userId는 받지 않는다.
 - tripId·photoIds·itemIds·추천 jobId가 본인 자료이며 서로 같은 여행인지 확인한다.
+  `RULE_CHECK` 는 접수 때 `photoIds`·`items[].itemId`·`items[].detectionId` 를 모두 검사한다.
+  없는 것과 남의 것을 구분하지 않고 `404` 로 답한다 — 구분하면 남의 여행에 어떤 id 가 있는지
+  세어 볼 수 있다. 여행 없이 묻는 질문에는 `itemId`·`detectionId` 자체를 넣을 수 없다.
 - `RULE_CHECK` 챗봇은 여행 없이 가능하지만 로그인은 필요하다. `trip_id=null`이어도 사용자 FK는 필수다.
 - GET 상태 조회·재접속도 작업 소유권을 확인한다. 다른 사용자의 작업은 `404`, 미인증은 `401`이다.
 - 로그인·가입의 아이디·닉네임·이메일·비밀번호·해시·세션 쿠키·CSRF 토큰을 AI 입력·프롬프트에 넣지 않는다.
@@ -1342,6 +1345,19 @@ BAG_CHECK 완료 처리가 `detected_objects`·`item_detections`와 내 목록 �
 
 **원칙 ④ — 최종 판정은 규칙 엔진이 한다.** 그래서 이 작업만 모델을 두 번 부른다.
 
+**챗봇 사진 첨부(`photoIds`)는 여행 사진과 같은 취급이다.** 별도 저장소를 두지 않는다.
+서버가 판정 전에 `BAG_CHECK` 와 **같은 길**로 인식하고 `detected_objects` 에 저장한 뒤
+승인 없이 내 목록에 `PREPARED` 로 등록한다. 그다음 그 물품들을 `items[]` **뒤에** 이어 붙여
+함께 판정한다.
+
+- **`tripId` 가 없으면 사진을 붙일 수 없다.** `trip_photos.trip_id` 와 `checklist_items.trip_id`
+  가 `NOT NULL` 이라 저장할 곳도 등록할 곳도 없다. `400` 으로 막는다.
+- 사진에는 용량·배터리 정격·날 길이가 보이지 않으므로 `attributes` 는 전부 `null` 이다.
+  규칙 엔진이 그 자리에서 `NEED_MORE_INFO` 와 되물을 것을 만든다 — **챗봇이 대화형인 이유다.**
+- 접수 시점에는 아직 인식을 돌리지 않아 `input_payload` 의 `items` 에 넣을 수 없다.
+  그래서 **`results[]` 가 `input.items` 보다 길 수 있다.** 앞부분이 입력과 같은지만 검사한다.
+- 같은 사진을 다시 붙여도 등록은 한 번이다. 사용자의 사후 수정·삭제를 되돌리지 않는다.
+
 ```text
 input ──▶ [모델 1차] 물품·속성·ruleKeyword 구조화 ──▶ [규칙 엔진] transport_rules 대조, verdict
                                                  │
@@ -1384,6 +1400,16 @@ output ◀── [모델 2차] reason · answer · followUpQuestion ◀──┘
       "minLength": 1,
       "maxLength": 500,
       "description": "챗봇(S-09) 자연어 질문. 물품 목록으로 부를 때는 null. 후속 턴은 사용자의 답을 여기에, 직전 output.results[]에서 itemId·detectionId·name·qty·attributes만 골라 items에 보낸다"
+    },
+    "photoIds": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "챗봇(S-09) 사진 첨부. trip_photos.id 다. **선택 필드** — 붙이지 않으면 아예 보내지 않는다. 있으면 tripId 가 필수다"
     },
     "items": {
       "type": "array",
@@ -2091,6 +2117,9 @@ Open-Meteo 가 **오류가 아니라 빈 결과**를 돌려줘 날씨 없이 추
 | 판정을 모델이 못 건드린다 | 모델이 `verdict: CABIN_OK` · `ruleId: 999` · 지어낸 `sourceUrl` 을 내도 규칙 엔진이 전부 덮어쓴다 (`RuleEngineTest`) |
 | 경계값 | 100Wh `CABIN_OK` · 120Wh `ASK_AIRLINE` · 170Wh `CHECKED_FORBIDDEN` · 100ml `CABIN_OK` · 120ml `CHECKED_OK` |
 | 모르면 확정하지 않는다 | 결론이 갈리는 규정에서 속성이 비면 `NEED_MORE_INFO`. 조건 문장을 못 읽어도 마찬가지다 |
+| 챗봇 사진 첨부 | 사진 → `detected_objects` 저장 → 내 목록 `PHOTO`·`PREPARED` 자동 등록 → 판정까지 한 번에 이어진다 (`ChatbotPhotoAttachmentTest`) |
+| 사진 물품도 되묻는다 | 사진에서 나온 보조배터리가 `NEED_MORE_INFO` + `배터리 정격(Wh)` 로 나오고 `followUpQuestion` 이 붙는다 |
+| 사진 첨부 소유권 | 여행 없이 붙이면 `400`, 남의 사진을 붙이면 `404`. 같은 사진을 다시 붙여도 목록이 불어나지 않는다 |
 | 기동 | `./gradlew build` 통과. 기존 테스트도 그대로 통과한다 |
 
 아직 확인하지 못한 것 — **앱을 띄운 상태의 전 구간(사진 업로드 → 폴링 → 내 목록 등록)**.
@@ -2169,7 +2198,10 @@ Open-Meteo 가 **오류가 아니라 빈 결과**를 돌려줘 날씨 없이 추
   같은 값을 두 곳이 다르게 정렬하므로 **어느 쪽이 맞는지 정해야 한다 — TBD.**
 - **Mock의 고정 판정은 이제 쓰이지 않는다.** `RULE_CHECK_*.json`의 `verdict`·`ruleId`·`sourceUrl`
   은 규칙 엔진이 덮어쓴다. 픽스처가 남아 있는 것은 **물품·속성 구조화 결과**를 흉내 내기 위해서다.
-- **챗봇 사진 첨부**의 별도 저장·연결 흐름은 TBD다. 여행 사진의 BAG_CHECK 완료 시 자동 등록 정책과 구분하며, 사진 사전 승인 단계를 다시 추가하지 않는다. 대화 영구 저장은 범위 밖이다.
+- **챗봇 사진 첨부는 자동 등록으로 정했다(2026-09-03).** 여행 사진과 **구분하지 않는다** —
+  `trip_photos` 에 저장하고 `BAG_CHECK` 와 같은 길로 인식해 내 목록에 `PREPARED` 로 등록한다.
+  사진 사전 승인 단계는 여전히 없다. 대화 영구 저장은 범위 밖이다.
+  **여행 없이 묻는 질문에는 붙일 수 없다** — 저장할 곳도 등록할 곳도 없다.
 - **confidenceLevel 경계값 0.80 / 0.50은 초기값이다.** 실제 모델 인식 정확도·사후 수정률을 보고 조정한다.
 - **실제 모델을 한 번 돌려 본 것이지 정확도를 잰 것이 아니다.** 사진 2장·입력 1건이다.
   인식률·오탐률·사후 수정률은 재지 않았다. `confidenceLevel` 경계값 조정도 그다음이다.
