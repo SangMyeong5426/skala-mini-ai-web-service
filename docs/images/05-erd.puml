@@ -75,6 +75,37 @@ entity "checklist_items" as items {
   NEEDS_CHECK / **NOT_IN_PHOTO**
 }
 
+entity "trip_itineraries" as itin {
+  * id : bigint <<PK>>
+  --
+  * trip_id : bigint <<FK>>
+  * kind : varchar(20)
+  * title : varchar(100)
+  place : varchar(100)
+  code : varchar(50)
+  * start_at : timestamptz
+  end_at : timestamptz
+  note : text
+  * created_at : timestamptz
+  ..
+  FLIGHT / LODGING / ACTIVITY /
+  TRANSPORT / OTHER
+}
+
+entity "item_placements" as place {
+  * checklist_item_id : bigint <<PK,FK>>
+  --
+  * compartment : varchar(20)
+  * pos_x : numeric(4,3)
+  * pos_y : numeric(4,3)
+  * pos_z : numeric(4,3)
+  * rotated : boolean
+  * updated_at : timestamptz
+  ..
+  좌표는 0~1 상대값이다
+  1:1 — 별도 id 를 두지 않는다
+}
+
 entity "trip_photos" as photos {
   * id : bigint <<PK>>
   --
@@ -166,15 +197,23 @@ users    ||--o{ trips
 users    ||--o{ jobs
 trips    ||--o{ items
 trips    ||--o{ photos
+trips    ||--o{ itin
 trips    |o--o{ jobs
 photos   ||--o{ detected
 weights  |o--o{ items
+items    ||--o| place
 
 ' ── N:M (조인 테이블 경유) ────────────────────────────────
 items    ||--o{ idt
 detected ||--o{ idt
 items    ||--o{ irc
 rules    ||--o{ irc
+
+note right of place
+  **1:1** 체크리스트 항목 ↔ 가방 안 자리
+  자리를 안 잡은 물품은 행이 없다
+  trip_id 를 두지 않는다 — 이행 종속
+end note
 
 note bottom of idt
   **N:M** 체크리스트 항목 ↔ 인식 물품

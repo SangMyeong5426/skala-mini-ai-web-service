@@ -6,6 +6,8 @@
 
 -- 개발 중 재실행을 위해 기존 테이블을 지운다.
 -- 운영 DB가 아니므로 데이터 손실을 감수한다. 의존 역순으로 지운다.
+DROP TABLE IF EXISTS item_placements    CASCADE;
+DROP TABLE IF EXISTS trip_itineraries   CASCADE;
 DROP TABLE IF EXISTS item_rule_checks   CASCADE;
 DROP TABLE IF EXISTS item_detections    CASCADE;
 DROP TABLE IF EXISTS ai_jobs            CASCADE;
@@ -112,6 +114,49 @@ CREATE TABLE trips (
 CREATE INDEX idx_trips_user_created ON trips (user_id, created_at DESC);
 
 
+-- ── 여행 일정 (S-11 · 캘린더) ─────────────────────────────
+-- 항공편·숙소·관광 일정을 한 테이블에 두고 kind 로 구분한다.
+--
+-- 종류별로 테이블을 나누지 않은 이유는 화면이 이것들을 **한 줄로 섞어**
+-- 시간순으로 보여주기 때문이다. 나누면 조회할 때마다 UNION 이 필요하다.
+-- 종류마다 다른 정보(항공편명·호텔명)는 code 와 place 두 칸으로 덮인다.
+--
+-- **캘린더는 별도 테이블이 아니다.** trips 의 기간과 이 표를 날짜로 묶어 만든다.
+-- 같은 일정을 두 곳에 저장하면 한쪽만 고쳤을 때 달력과 상세가 어긋난다.
+-- 목적지도 trips 에만 있다 — 일정마다 다시 적지 않는다 (3NF).
+CREATE TABLE trip_itineraries (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    trip_id    BIGINT       NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+
+    kind       VARCHAR(20)  NOT NULL,
+    title      VARCHAR(100) NOT NULL,
+
+    -- 공항·호텔·장소 이름. 지도 좌표는 두지 않는다 (범위 밖).
+    place      VARCHAR(100),
+
+    -- 항공편명(KE723)처럼 종류마다 다른 짧은 식별자.
+    code       VARCHAR(50),
+
+    -- 시각은 TIMESTAMPTZ 다. 현지 시간과 UTC 를 섞지 않기 위해서다.
+    -- API 는 06 계약대로 ISO 8601 UTC 로 주고받는다.
+    start_at   TIMESTAMPTZ  NOT NULL,
+
+    -- 끝나는 시각을 모르는 일정이 많다(체크인 등). nullable 이다.
+    end_at     TIMESTAMPTZ,
+
+    note       TEXT,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+
+    CONSTRAINT trip_itineraries_kind_check
+        CHECK (kind IN ('FLIGHT','LODGING','ACTIVITY','TRANSPORT','OTHER')),
+    CONSTRAINT trip_itineraries_time_check
+        CHECK (end_at IS NULL OR start_at <= end_at)
+);
+
+-- 캘린더는 기간으로 훑는다. 여행별 시간순 조회도 같은 인덱스를 쓴다.
+CREATE INDEX idx_trip_itineraries_trip_time ON trip_itineraries (trip_id, start_at);
+
+
 -- ── 체크리스트 항목 (UC-05·06) ────────────────────────────
 CREATE TABLE checklist_items (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -147,6 +192,40 @@ CREATE TABLE checklist_items (
 
 CREATE INDEX idx_checklist_items_trip ON checklist_items (trip_id, category);
 
+
+
+-- ── 3D 가방 정리 배치 (S-12) ──────────────────────────────
+-- 체크리스트 항목 하나가 가방 안 **한 자리**를 차지한다. 1:1 이다.
+-- 그래서 별도 id 없이 checklist_item_id 가 그대로 기본키다.
+--
+-- trip_id 를 두지 않는다. checklist_items 를 거치면 알 수 있고,
+-- 넣으면 id → checklist_item_id → trip_id 이행 종속이 생긴다 (3NF, docs/05-erd.md).
+--
+-- 좌표를 픽셀이 아니라 **0~1 상대값**으로 두는 이유는 화면 크기·기기가 달라도
+-- 같은 자리에 놓여야 하기 때문이다. 가방 모델이 바뀌어도 배치가 살아남는다.
+CREATE TABLE item_placements (
+    checklist_item_id BIGINT       PRIMARY KEY REFERENCES checklist_items(id) ON DELETE CASCADE,
+
+    -- 가방 안 구역. 좌표만으로는 "앞주머니에 넣었다" 를 표현할 수 없다.
+    compartment       VARCHAR(20)  NOT NULL,
+
+    -- 구역 안에서의 상대 위치. pos_z 는 깊이이자 쌓임 순서다.
+    pos_x             NUMERIC(4,3) NOT NULL,
+    pos_y             NUMERIC(4,3) NOT NULL,
+    pos_z             NUMERIC(4,3) NOT NULL DEFAULT 0,
+
+    -- 눕힘·세움. 3D 뷰에서 같은 물건이라도 방향에 따라 자리를 다르게 먹는다.
+    rotated           BOOLEAN      NOT NULL DEFAULT FALSE,
+
+    updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+
+    CONSTRAINT item_placements_compartment_check
+        CHECK (compartment IN ('MAIN_LEFT','MAIN_RIGHT','FRONT_POCKET','MESH','TOP')),
+    CONSTRAINT item_placements_pos_check
+        CHECK (pos_x >= 0 AND pos_x <= 1
+           AND pos_y >= 0 AND pos_y <= 1
+           AND pos_z >= 0 AND pos_z <= 1)
+);
 
 -- ── 짐 사진 (UC-03) ───────────────────────────────────────
 CREATE TABLE trip_photos (

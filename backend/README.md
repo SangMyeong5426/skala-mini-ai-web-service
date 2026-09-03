@@ -53,8 +53,29 @@ DB 접속 정보와 AI API 키는 저장소가 아닌 **팀 채널로 공유한�
 | `MiniAiWebServiceApplicationTests` | Swagger 문서·UI, CORS 허용·차단·`Location` 노출 검증 |
 | `../.github/workflows/backend.yml` | PR·main 반영 시 Java 21로 빌드와 테스트 |
 
-**엔터티·Repository·Controller는 아직 없다.** 후속 기능 작업에서 확정된 데이터 모델과
-API 명세([`docs/05`](../docs/05-erd.md) · [`06`](../docs/06-api-spec.md))를 따라 구현한다.
+**도메인 API 26개가 구현돼 있다.** `docs/05-erd.md` 의 테이블 12개에 대응하는 엔터티와
+`docs/06-api-spec.md` 의 엔드포인트 26개(여행·체크리스트·사진·인식 승인·검수·규정·AI 작업 18개
++ 일정·캘린더 5개 + 3D 가방 정리 3개)다.
+
+```
+com.skala.miniai
+├── common/      오류 봉투 · 도메인 코드값 · 완료율 계산 · jsonb 접근 · 시드 사용자
+├── config/      CORS · 업로드 · 비동기
+└── domain/
+    ├── trip/         여행 (소유권 확인을 다른 도메인이 빌려 쓴다)
+    ├── itinerary/    여행 일정
+    ├── calendar/     캘린더 (테이블 없음 — 여행 기간 + 일정 조합)
+    ├── checklist/    내 목록 · 추천 채택 · 사진 상태 계산
+    ├── packing/      3D 가방 정리 배치
+    ├── photo/        사진 업로드 · 인식 결과 승인
+    ├── master/       무게·규정 마스터
+    ├── inspection/   검수 결과 (준비 상태 + 무게 + 반입 판정)
+    └── ai/           AI 작업 접수·폴링 · Mock 클라이언트
+```
+
+**AI 는 전부 Mock 이다.** `MockAiClient` 가 `resources/mock/<jobType>.json` 을 돌려주고,
+그 내용은 `docs/07-ai-ready.md` 「예시」 절 output 을 **스크립트로 추출**한 것이다.
+실제 LLM 을 붙일 때 바꾸는 것은 `AiClient` 구현 하나뿐이다.
 
 ## 이 스택에서 밟기 쉬운 함정
 

@@ -116,6 +116,38 @@
 | --- | --- | --- | --- | --- | --- |
 | 16 | `GET` | `/api/rules?transport=&keyword=` | 규정 조회 | `200` | `400` 필수 파라미터 누락 |
 
+### 여행 일정 · 캘린더 (S-11)
+
+| # | Method | Path | 설명 | 성공 | 주요 오류 |
+| --- | --- | --- | --- | --- | --- |
+| 19 | `GET` | `/api/trips/{tripId}/itineraries` | 여행 일정 목록 (시간순) | `200` | `404` |
+| 20 | `POST` | `/api/trips/{tripId}/itineraries` | 일정 추가 | **`201`** + `Location` | `400` 시각 역전·필수값 누락<br>`404` |
+| 21 | `PATCH` | `/api/trips/{tripId}/itineraries/{itineraryId}` | 일정 수정 | `200` | `400` `404` |
+| 22 | `DELETE` | `/api/trips/{tripId}/itineraries/{itineraryId}` | 일정 삭제 | **`204`** | `404` |
+| 23 | `GET` | `/api/calendar?from=&to=` | 캘린더 — 기간의 여행 구간 + 일정 | `200` | `400` 범위 누락·역전·과다 |
+
+> **캘린더는 별도 자원이 아니다.** 여행 기간과 일정을 날짜로 묶어 만든 <b>조회 전용</b>
+> 응답이라 `POST`가 없다. 같은 일정을 두 곳에 저장하면 한쪽만 고쳤을 때 달력과 상세가
+> 어긋난다 ([`05-erd.md`](05-erd.md)).
+>
+> 여행을 두 번 조회하게 하지 않는다 — 달력은 여행 구간과 일정을 겹쳐 그리므로 나눠 받으면
+> 두 응답의 도착 순서에 따라 화면이 깜빡인다. `from`·`to`는 **필수**다. 서버가 어느 달을
+> 보여줄지 추측하지 않는다. 한 번에 조회할 수 있는 범위는 366일이다.
+
+### 3D 가방 정리 (S-12)
+
+| # | Method | Path | 설명 | 성공 | 주요 오류 |
+| --- | --- | --- | --- | --- | --- |
+| 24 | `GET` | `/api/trips/{tripId}/packing-layout` | 배치 + 정리 대기 목록 | `200` | `404` |
+| 25 | `PUT` | `/api/trips/{tripId}/packing-layout` | 배치 **전체 교체** | `200` | `400` 남의 항목·중복 배치<br>`404` |
+| 26 | `DELETE` | `/api/trips/{tripId}/packing-layout` | **정리 초기화** | **`204`** | `404` |
+
+> `PATCH`가 아니라 **`PUT`** 인 이유는 "지금 화면의 배치 전부"를 저장하는 동작이기 때문이다.
+> 드래그마다 요청을 보내면 네트워크 순서가 뒤집혔을 때 물건이 엉뚱한 자리에 남는다.
+> 이번에 오지 않은 항목은 **가방에서 뺀 것**으로 처리한다.
+>
+> 초기화는 배치만 지운다. 체크리스트 항목과 완료 상태는 그대로다.
+
 ### AI 확장 지점 (UC-04 · 05 · 07 · 08 · 10)
 
 | # | Method | Path | 설명 | 성공 | 주요 오류 |
@@ -824,6 +856,101 @@ Location: /api/trips/12
 ```
 
 `transport` 는 필수다. 없으면 `400`.
+
+### `GET /api/trips/{tripId}/itineraries` — 여행 일정 (화면 `S-11`)
+
+```json
+{
+  "itineraries": [
+    { "itineraryId": 1, "tripId": 1, "kind": "FLIGHT", "title": "인천 → 나리타",
+      "place": "ICN", "code": "KE703",
+      "startAt": "2026-10-01T00:20:00Z", "endAt": "2026-10-01T02:50:00Z", "note": "2시간 30분" },
+    { "itineraryId": 2, "tripId": 1, "kind": "LODGING", "title": "신주쿠 체크인",
+      "place": "호텔 그레이스 신주쿠", "code": null,
+      "startAt": "2026-10-01T06:00:00Z", "endAt": null, "note": "15:00 체크인" }
+  ]
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `kind` | `FLIGHT` `LODGING` `ACTIVITY` `TRANSPORT` `OTHER` |
+| `place` | 공항·호텔·장소 이름. **지도 좌표는 두지 않는다** (범위 밖) |
+| `code` | 항공편명(`KE703`)처럼 종류마다 다른 짧은 식별자 |
+| `endAt` | **nullable.** 끝나는 시각을 모르는 일정이 많다(체크인 등) |
+
+> **목적지는 일정에 없다.** `trips.destination` 에만 있다. 일정마다 다시 적으면 여행을
+> 고쳤을 때 일정이 옛 목적지를 가리킨다 ([`05-erd.md`](05-erd.md) 3NF).
+>
+> 시각은 다른 응답과 같이 **ISO 8601 UTC** 다. 현지 시간 변환은 화면이 한다 —
+> 서버가 어느 시간대로 보여줄지 추측하지 않는다.
+
+`POST` 는 `kind` · `title` · `startAt` 이 필수이고 `201 Created` + `Location` 이다.
+`PATCH` 는 보낸 필드만 바꾼다. `endAt` 이 `startAt` 보다 빠르면 `400` 이다.
+
+### `GET /api/calendar?from=2026-10-01&to=2026-10-31` — 캘린더 (화면 `S-11`)
+
+```json
+{
+  "from": "2026-10-01",
+  "to": "2026-10-31",
+  "trips": [
+    { "tripId": 1, "origin": "서울", "destination": "도쿄",
+      "startDate": "2026-10-01", "endDate": "2026-10-04",
+      "transport": "FLIGHT", "status": "CONFIRMED" }
+  ],
+  "days": [
+    { "date": "2026-10-01", "tripIds": [1], "itineraries": [ /* 위와 같은 모양 */ ] },
+    { "date": "2026-10-02", "tripIds": [1], "itineraries": [ /* … */ ] }
+  ]
+}
+```
+
+| 필드 | 쓰임 |
+| --- | --- |
+| `trips[]` | 달력에 **색칠할 구간**과 목적지. 화면은 이것으로 기간을 칠한다 |
+| `days[]` | **무언가 있는 날만** 담는다. 빈 날까지 채우면 한 달에 빈 칸 31개가 오간다 |
+| `days[].tripIds` | 그 날 진행 중인 여행. 여행이 겹치면 둘 이상이다 |
+
+날짜 묶음은 **UTC 기준**이다. 자정 근처 일정이 화면의 현지 날짜와 다르게 보일 수 있고,
+이는 시각 계약(ISO 8601 UTC)을 따른 결과다.
+
+### `GET /api/trips/{tripId}/packing-layout` — 3D 가방 정리 (화면 `S-12`)
+
+```json
+{
+  "tripId": 1,
+  "placements": [
+    { "itemId": 2, "compartment": "MAIN_LEFT", "posX": 0.300, "posY": 0.650, "posZ": 0.200, "rotated": false },
+    { "itemId": 6, "compartment": "MESH",      "posX": 0.600, "posY": 0.250, "posZ": 0.000, "rotated": true }
+  ],
+  "unplaced": [
+    { "itemId": 1, "name": "여권", "category": "DOCUMENT", "qty": 1 }
+  ]
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `compartment` | `MAIN_LEFT` `MAIN_RIGHT` `FRONT_POCKET` `MESH` `TOP` |
+| `posX` `posY` `posZ` | **0~1 상대값.** 픽셀이 아니다 — 화면 크기·기기가 달라도 같은 자리에 놓인다. `posZ` 는 깊이이자 쌓임 순서다 |
+| `rotated` | 눕힘·세움. 같은 물건이라도 방향에 따라 자리를 다르게 먹는다 |
+| `unplaced[]` | 아직 자리를 안 잡은 물품. 화면의 "정리 대기" 목록이다 |
+
+```json
+// PUT 요청 — 지금 화면의 배치 전부를 보낸다
+{ "placements": [
+    { "itemId": 2, "compartment": "TOP", "posX": 0.111, "posY": 0.222, "posZ": 0.333, "rotated": true }
+] }
+```
+
+- 이번에 오지 않은 항목은 **가방에서 뺀 것**이다. 응답은 `GET` 과 같은 모양이다.
+- 그 여행의 체크리스트 항목만 배치할 수 있다. 다른 여행의 `itemId` 는 `400` 이다 —
+  조용히 무시하면 화면은 저장됐다고 믿는다.
+- 같은 물품을 두 번 배치하면 `400` 이다. 한 물품은 한 자리이므로 어느 쪽이 맞는지
+  서버가 정하게 두지 않는다.
+- **배치는 완료 상태와 무관하다.** 가방에 넣었다고 `checkStatus` 가 바뀌지 않는다.
+  실제 챙김 확인은 `PATCH /items/{itemId}` 가 한다.
 
 > **필드명은 `camelCase`, DB 컬럼은 `snake_case`다.** 경계에서 변환한다.
 > `origin` · `checkStatus` · `bagEmptyG` 처럼 [`05-erd.md`](05-erd.md)의 컬럼과
