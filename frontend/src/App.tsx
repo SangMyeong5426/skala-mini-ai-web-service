@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { LOGIN_PATH, SCREENS, screenElement } from './routes'
 import { Placeholder } from './pages/Placeholder'
+import { MockCheck } from './pages/MockCheck'
 
 /**
  * 공통 셸. 헤더 + 본문.
@@ -51,6 +52,8 @@ export default function App() {
               />
             }
           />
+          {/* Mock 점검. 화면이 다 붙으면 이 라우트와 pages/MockCheck.tsx 를 지운다. */}
+          <Route path="/__mock" element={<MockCheck />} />
           <Route
             path="*"
             element={<Placeholder id="404" name="없는 화면" note="주소를 확인해 주세요" />}
