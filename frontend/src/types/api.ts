@@ -78,9 +78,11 @@ export interface Detection {
   confidence: number
   confidenceLevel: ConfidenceLevel
   approved: boolean
-  missingInfo?: string
-  labelText?: string
-  linkedItems: { itemId: number; name: string; confirmedByUser: boolean }[]
+  /** 보이지 않는 속성. `null` 이 아니면 S-04 「확인 필요」 묶음에 넣는다. */
+  missingInfo?: string | null
+  labelText?: string | null
+  /** `PATCH /detections/{id}` 응답에만 온다. `GET /detections` 목록에는 없다. */
+  linkedItems?: { itemId: number; name: string; confirmedByUser: boolean }[]
 }
 
 /** 06 PATCH /detections — `matchedItemIds` 는 **전체 교체**다. 증분이 아니다. */
@@ -93,21 +95,51 @@ export interface DetectionPatch {
 }
 
 // ── 검수 결과 (S-06) ──────────────────────────────────────
-export type WeightVerdict = 'ROOM' | 'NEAR' | 'OVER'
+/** 06: `ROOM`(여유) · `NEAR`(근접) · `OVER_RISK`(초과 가능성) · `UNKNOWN`(정보 부족) */
+export type WeightVerdict = 'ROOM' | 'NEAR' | 'OVER_RISK' | 'UNKNOWN'
 export type RuleVerdict =
   | 'CABIN_OK' | 'CHECKED_OK' | 'CHECKED_FORBIDDEN'
   | 'RESTRICTED' | 'NEED_MORE_INFO' | 'ASK_AIRLINE'
 
+export interface ReadyItem {
+  itemId: number
+  name: string
+  qty: number
+}
+
+export interface NeedsCheckItem extends ReadyItem {
+  /** 유사 후보. 사용자가 어느 것인지 고른다. */
+  candidates: { detectionId: number; name: string; matchConfidence: number }[]
+}
+
+export interface NotInPhotoItem {
+  itemId: number
+  name: string
+  priority: Priority
+}
+
+/** 사진에는 있는데 체크리스트에 없던 승인 물품. */
+export interface ExtraItem {
+  detectionId: number
+  name: string
+  confidence: number
+  verdict?: RuleVerdict
+  missingInfo?: string | null
+}
+
 export interface Inspection {
   tripId: number
+  /** 아직 계산 전이면 `null`. 프런트는 그 영역만 로딩으로 그린다. */
   readiness: {
-    prepared: ChecklistItem[]
-    needsCheck: ChecklistItem[]
-    notInPhoto: ChecklistItem[]
-    extra: { detectionId: number; name: string; qty: number }[]
+    prepared: ReadyItem[]
+    needsCheck: NeedsCheckItem[]
+    /** **`missing` 이 아니다.** 사진에서 못 찾았을 뿐 없다는 뜻이 아니다. */
+    notInPhoto: NotInPhotoItem[]
+    extra: ExtraItem[]
     completionRate: number
   } | null
   weight: {
+    /** 단일 값이 아니라 **범위**다. 실측값처럼 표현하지 않는다. */
     minG: number
     typicalG: number
     maxG: number
@@ -115,6 +147,7 @@ export interface Inspection {
     verdict: WeightVerdict
     confidence: ConfidenceLevel
     confidenceReason: string
+    /** 계산에서 뺀 항목 수를 숨기지 않는다. */
     excludedCount: number
     contributions: { name: string; typicalG: number; qty: number; subtotalG: number }[]
   } | null
@@ -122,10 +155,15 @@ export interface Inspection {
     itemId: number
     name: string
     verdict: RuleVerdict
+    /** 판정을 단정하지 않고 무엇이 부족한지 알려준다. */
+    missingInfo?: string | null
     reason: string
-    source?: string
+    /** 규정 최신성 — 출처와 확인 날짜를 항상 함께 보여준다. */
+    sourceUrl?: string
     checkedAt?: string
   }[] | null
+  /** 책임 범위 고지. 화면에 반드시 넣는다. */
+  notice?: string
 }
 
 // ── AI 작업 (S-04 · S-05 · S-06 · S-09) ───────────────────
@@ -151,6 +189,89 @@ export interface AiJob<T = unknown> {
   createdAt: string
   completedAt: string | null
   pollAfterMs?: number
+}
+
+// ── AI 출력 (docs/07-ai-ready.md) ─────────────────────────
+/**
+ * **06 의 REST 응답과 모양이 다르다.** 07 은 모델이 내는 원본이고 06 은 서버가
+ * 저장·가공한 뒤다. 섞어 쓰면 백엔드 Mock 이 07 대로 응답하는 날 화면이 깨진다.
+ *
+ * 07 의 출력 Schema 는 `additionalProperties: false` 다. 필드를 더하지 않는다.
+ */
+
+/** AI-02 `PACKING_LIST` — 부족한 준비물만 돌려준다. */
+export interface PackingListOutput {
+  items: { name: string; category: Category; qty: number; priority: Priority }[]
+  tips: string[]
+  /** 예보 범위(16일) 안이면 FORECAST, 넘으면 계절 평균. */
+  weatherSource: 'FORECAST' | 'SEASONAL'
+}
+
+/** AI-01 `BAG_CHECK` — 사진 속 물품 인식. */
+export interface BagCheckOutput {
+  /** `detectionId` 는 없다. 서버가 저장하면서 붙인다. */
+  detections: {
+    photoId: number
+    name: string
+    qty: number
+    confidence: number
+    confidenceLevel: ConfidenceLevel
+    missingInfo: string | null
+    labelText: string | null
+  }[]
+  /** 분석에 실패한 사진. 성공한 것만 보여주고 이건 재시도 대상이다. */
+  failedPhotoIds: number[]
+}
+
+/** AI-03 `WEIGHT_ESTIMATE` — 무게 범위. 단일 값이 아니다. */
+export interface WeightEstimateOutput {
+  minG: number
+  typicalG: number
+  maxG: number
+  limitG: number
+  bagEmptyG: number
+  verdict: WeightVerdict
+  confidence: ConfidenceLevel
+  confidenceReason: string
+  excludedCount: number
+  /** 계산에서 뺀 항목과 이유. 숨기지 않는다. */
+  excluded: { name: string; reason: string }[]
+  contributions: {
+    name: string
+    minG: number
+    typicalG: number
+    maxG: number
+    qty: number
+    subtotalG: number
+  }[]
+}
+
+/** AI-04 `RULE_CHECK` — 물품 구조화와 판정 설명. 최종 판정은 규칙 엔진이 한다. */
+export interface RuleCheckOutput {
+  results: {
+    /** 체크리스트에서 온 것이면 값, 챗봇 질문이면 null. */
+    itemId: number | null
+    /** 사진 인식에서 온 것이면 값. */
+    detectionId: number | null
+    name: string
+    qty: number
+    ruleKeyword: string | null
+    /** 용량·Wh·날 길이 등 판정에 쓴 속성. 물품마다 다르다. */
+    attributes: Record<string, unknown>
+    verdict: RuleVerdict
+    ruleId: number | null
+    conditionNote: string | null
+    reason: string
+    /** 판정에 부족한 정보. 채우면 확정 판정이 가능해진다. */
+    missingInfo: string | null
+    /** 규정 최신성 — 출처와 확인 날짜를 항상 함께. */
+    sourceUrl: string | null
+    checkedAt: string | null
+  }[]
+  /** 챗봇(S-09)이 말풍선에 넣는 문장. S-06 검수 경로에서는 null 이다. */
+  answer: string | null
+  /** 정보가 부족할 때 되묻는 질문. 한 번에 하나씩. 없으면 null. */
+  followUpQuestion: string | null
 }
 
 // ── 반입 규정 (S-08) ──────────────────────────────────────
