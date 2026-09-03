@@ -112,7 +112,11 @@ export interface Detection {
   missingInfo?: string | null
   labelText?: string | null
   /** `PATCH /detections/{id}` 응답에만 온다. `GET /detections` 목록에는 없다. */
-  linkedItems?: { itemId: number; name: string; confirmedByUser: boolean }[]
+  /**
+   * 06:667 — GET 이 돌려주는 것은 <b>itemId 와 confirmedByUser 뿐</b>이다.
+   * name 은 없다. 화면에 이름을 보이려면 내 목록에서 itemId 로 찾아야 한다.
+   */
+  linkedItems?: { itemId: number; confirmedByUser: boolean }[]
 }
 
 /** 06 PATCH /detections — `matchedItemIds` 는 **전체 교체**다. 증분이 아니다. */

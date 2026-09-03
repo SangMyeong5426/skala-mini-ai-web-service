@@ -203,6 +203,14 @@ function DetectionRow({
   const [qty, setQty] = useState(d.qty)
   const lv = LEVEL[d.confidenceLevel] ?? LEVEL.MEDIUM
   const linked = d.linkedItems?.[0]
+  /*
+   * 06:667 의 linkedItems 에는 itemId 만 있다. 이름은 <b>내 목록에서 찾는다.</b>
+   * 실서버에 붙였을 때 "내 목록의  로 등록됨" 처럼 이름 자리가 비어 있었다.
+   * 아직 목록을 못 받았거나 그 사이 지워졌으면 이름 없는 문장으로 낮춘다.
+   */
+  const linkedName = linked
+    ? items.find((i) => i.itemId === linked.itemId)?.name ?? null
+    : null
 
   const save = () => {
     setEditing(false)
@@ -230,7 +238,11 @@ function DetectionRow({
         {d.missingInfo && (
           <p className="row-sub">확인 필요 — <b>{d.missingInfo}</b></p>
         )}
-        {linked && <p className="row-sub">내 목록의 <b>{linked.name}</b> 로 등록됨</p>}
+        {linked && (
+          <p className="row-sub">
+            {linkedName ? <>내 목록의 <b>{linkedName}</b> 로 등록됨</> : '내 목록에 등록됨'}
+          </p>
+        )}
         {!linked && items.length > 0 && <p className="row-sub">내 목록에 새로 추가됨</p>}
       </div>
       <div className="row-right">

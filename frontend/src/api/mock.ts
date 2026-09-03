@@ -269,9 +269,10 @@ function completionRate(t: TripState): number {
 function linkedItems(t: TripState, detectionId: number) {
   // 06:700 — 자동 연결은 confirmedByUser=false 여도 유효하다. 사람이 고친
   // 연결만 true 다. 승인 게이트가 없으므로 approved 로 판단하지 않는다.
+  // 실서버는 itemId 와 confirmedByUser 만 준다(06:667). Mock 이 name 을 얹으면
+  // Mock 에서만 이름이 보이고 실서버에서는 빈칸이 된다 — 실제로 그랬다.
   return (t.links.get(detectionId) ?? []).map((itemId) => ({
     itemId,
-    name: t.items.find((i) => i.itemId === itemId)?.name ?? '',
     confirmedByUser: t.confirmed.has(detectionId),
   }))
 }
