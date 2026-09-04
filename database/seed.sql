@@ -7,7 +7,7 @@
 --   docs/01-service-plan.md 의 1차 핵심 페르소나 그대로다.
 
 -- ── 사용자 ────────────────────────────────────────────────
--- 이번 데모에서 인증 흐름을 구현하지 않으므로 이 사용자 하나를 고정으로 쓴다.
+-- 인증 흐름을 바로 시연할 수 있는 데모 사용자다.
 -- password_hash 는 데모용 BCrypt 해시다. 평문을 저장하지 않는다.
 -- 데모 계정 로그인: jiwoo28 / skala1234
 -- 이 해시는 앱의 BCryptPasswordEncoder 로 실제 생성해 확인한 값이다.
@@ -98,11 +98,10 @@ INSERT INTO trips (user_id, origin, destination, country_code, start_date, end_d
    'CARRY_ON', 3200, NULL, '1박 2일, KTX', 'DONE');
 
 
--- ── 체크리스트 (AI 추천 + 규칙 보강) ──────────────────────
--- source: RULE = 고정 필수 규칙, PHOTO = 사진에서 승인, AI = 추천, USER = 직접 추가
---
--- PHOTO 인 5개는 item_detections 에서 confirmed_by_user = TRUE 로 연결된 것들이다.
--- 화장품은 후보(화장품 용기·검정 파우치)만 있고 아직 승인 전이라 AI 로 둔다.
+-- ── 체크리스트 (사진 자동 등록 + 규칙 보강) ───────────────
+-- source: RULE = 고정 필수 규칙, PHOTO = 사진 자동 등록, AI = 추천 채택, USER = 직접 추가
+-- 사진 인식 8개는 모두 PREPARED다. 여권만 사진 미확인이라 완료율은 8/9다.
+-- 추천 후보는 ai_jobs.output_payload에만 있고, 사용자가 채택하기 전에는 이 표에 넣지 않는다.
 INSERT INTO checklist_items (trip_id, item_weight_id, name, category, qty, priority, source, check_status) VALUES
   (1,  1, '여권',        'DOCUMENT',   1, 'REQUIRED',    'RULE',  'NOT_IN_PHOTO'),
   (1,  2, '상의',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
@@ -110,10 +109,9 @@ INSERT INTO checklist_items (trip_id, item_weight_id, name, category, qty, prior
   (1,  4, '속옷',        'CLOTHING',   4, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
   (1,  7, '충전기',      'ELECTRONIC', 1, 'REQUIRED',    'PHOTO', 'PREPARED'),
   (1,  8, '보조배터리',  'ELECTRONIC', 1, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
-  (1,  9, '변환 플러그', 'ELECTRONIC', 1, 'REQUIRED',    'AI',    'NOT_IN_PHOTO'),
-  (1, 11, '화장품',      'TOILETRY',   1, 'RECOMMENDED', 'AI',    'NEEDS_CHECK'),
-  (1, 13, '상비약',      'MEDICINE',   1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO'),
-  (1, 14, '우산',        'ETC',        1, 'RECOMMENDED', 'AI',    'NOT_IN_PHOTO');
+  (1, 15, '가위',        'ETC',         1, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1, 11, '화장품',      'TOILETRY',    1, 'RECOMMENDED', 'PHOTO', 'PREPARED'),
+  (1, NULL, '검정 파우치','ETC',         1, 'RECOMMENDED', 'PHOTO', 'PREPARED');
 
 
 -- ── 짐 사진 ───────────────────────────────────────────────
@@ -123,8 +121,7 @@ INSERT INTO trip_photos (trip_id, file_path, bag_kind) VALUES
 
 
 -- ── 사진에서 인식된 물품 ──────────────────────────────────
--- approved = false 인 것은 아직 사용자 승인 전이다.
--- 명세 9.2: "승인 전에는 최종 준비 상태에 반영되지 않아야 한다"
+-- approved는 호환용 컬럼이며 등록 조건이 아니다. FALSE 행도 모두 목록에 자동 등록돼 있다.
 -- missing_info · label_text 는 docs/07-ai-ready.md BAG_CHECK 예시 output 과 같다.
 INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level, approved, missing_info, label_text) VALUES
   (1, '충전기',      1, 0.930, 'HIGH',   TRUE,  NULL,              NULL),
@@ -132,7 +129,7 @@ INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level,
   (1, '상의',        4, 0.810, 'HIGH',   TRUE,  NULL,              NULL),
   (1, '하의',        2, 0.790, 'MEDIUM', TRUE,  NULL,              NULL),
   (1, '속옷',        4, 0.720, 'MEDIUM', TRUE,  NULL,              NULL),
-  (2, '화장품 용기', 1, 0.640, 'MEDIUM', FALSE, '용량(ml)',        NULL),   -- 확인 필요
+  (2, '화장품 용기', 1, 0.640, 'MEDIUM', TRUE,  '용량(ml)',        NULL),   -- 사후 이름 확인
   (2, '가위',        1, 0.910, 'HIGH',   TRUE,  '날 길이(cm)',     NULL),   -- 체크리스트에 없던 추가 물품
   (2, '검정 파우치', 1, 0.430, 'LOW',    FALSE, NULL,              NULL);   -- 무엇인지 불분명
 
@@ -145,14 +142,15 @@ INSERT INTO detected_objects (photo_id, name, qty, confidence, confidence_level,
 --  명세 F-06: "유사한 후보를 제시하고 사용자가 연결하도록 한다"
 -- ══════════════════════════════════════════════════════════
 INSERT INTO item_detections (checklist_item_id, detected_object_id, match_confidence, confirmed_by_user) VALUES
-  (5, 1, 0.950, TRUE),    -- 충전기      ← 충전기
-  (6, 2, 0.920, TRUE),    -- 보조배터리  ← 보조배터리
-  (2, 3, 0.880, TRUE),    -- 상의        ← 상의
-  (3, 4, 0.850, TRUE),    -- 하의        ← 하의
-  (4, 5, 0.800, TRUE),    -- 속옷        ← 속옷
-  (8, 6, 0.710, FALSE),   -- 화장품      ← 화장품 용기  (승인 전)
+  (5, 1, 0.950, FALSE),   -- 충전기      ← 충전기
+  (6, 2, 0.920, FALSE),   -- 보조배터리  ← 보조배터리
+  (2, 3, 0.880, FALSE),   -- 상의        ← 상의
+  (3, 4, 0.850, FALSE),   -- 하의        ← 하의
+  (4, 5, 0.800, FALSE),   -- 속옷        ← 속옷
+  (8, 6, 0.710, TRUE),    -- 화장품      ← 화장품 용기  (사후 이름 확인)
+  (7, 7, 0.910, FALSE),   -- 가위        ← 가위
   (8, 8, 0.310, FALSE),   -- 화장품      ← 검정 파우치  ┐ 같은 인식 결과가
-  (9, 8, 0.280, FALSE);   -- 상비약      ← 검정 파우치  ┘ 두 항목의 후보다
+  (9, 8, 0.500, FALSE);   -- 검정 파우치 ← 검정 파우치  ┘ 두 항목에 연결된 N:M 예시
 
 
 -- ══════════════════════════════════════════════════════════
@@ -173,12 +171,8 @@ INSERT INTO item_rule_checks (checklist_item_id, rule_id, verdict, missing_info)
 -- ── AI 작업 이력 ─────────────────────────────────────────
 -- 완료된 output_payload 를 시드에 넣지 않는다.
 --
--- docs/07-ai-ready.md 의 출력 JSON Schema 가 아직 확정되지 않았고
--- (properties 가 TBD, additionalProperties: false), 그 전에 완료 결과를 넣으면
--- AGENTS.md 의 "Mock 응답 JSON 은 07 의 출력 스키마를 정확히 지킨다" 를 어긴다.
--- 스키마가 확정되면 그때 맞춰 넣는다.
---
--- 데모에는 오히려 이 편이 낫다. 화면에서 직접 작업을 만들어야
+-- 스키마가 확정됐더라도 과거 완료 결과를 미리 넣으면 실제 시연과 혼동된다.
+-- 화면에서 직접 작업을 만들어야
 -- POST → 202 → 폴링 → 렌더링 이 눈에 보인다.
 
 

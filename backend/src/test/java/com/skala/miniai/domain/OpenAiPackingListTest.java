@@ -98,7 +98,7 @@ class OpenAiPackingListTest {
                 """, null);
 
         assertThat(output.path("items")).hasSize(1);
-        assertThat(output.path("items").path(0).path("name").asText()).isEqualTo("변환 플러그");
+        assertThat(candidate(output, "변환 플러그")).isNotNull();
     }
 
     @Test
@@ -112,9 +112,9 @@ class OpenAiPackingListTest {
                  "tips":["도쿄 콘센트는 A타입, 100V입니다."]}
                 """, weather);
 
-        JsonNode candidate = output.path("items").path(0);
-        assertThat(candidate.path("source").asText()).isEqualTo("AI");
-        assertThat(candidate.path("acceptedItemId").isNull()).isTrue();
+        JsonNode umbrella = candidate(output, "우산");
+        assertThat(umbrella.path("source").asText()).isEqualTo("AI");
+        assertThat(umbrella.path("acceptedItemId").isNull()).isTrue();
         assertThat(output.path("weatherSource").asText()).isEqualTo("FORECAST");
         assertThat(output.path("weatherAsOf").asText()).isEqualTo("2026-09-03");
         assertThat(output.path("tips")).hasSize(1);
@@ -146,6 +146,14 @@ class OpenAiPackingListTest {
                 """, null);
 
         assertThat(output.path("items")).hasSize(1);
-        assertThat(output.path("items").path(0).path("qty").asInt()).isEqualTo(99);
+        assertThat(candidate(output, "양말").path("qty").asInt()).isEqualTo(99);
+        assertThat(candidate(output, "모자")).isNull();
+    }
+
+    private JsonNode candidate(JsonNode output, String name) {
+        for (JsonNode candidate : output.path("items")) {
+            if (name.equals(candidate.path("name").asText())) return candidate;
+        }
+        return null;
     }
 }

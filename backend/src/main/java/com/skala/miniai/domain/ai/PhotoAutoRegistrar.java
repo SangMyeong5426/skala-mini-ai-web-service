@@ -86,6 +86,8 @@ public class PhotoAutoRegistrar {
                 target.setItemWeightId(weights.findByKeyword(name).map(w -> w.getId()).orElse(null));
                 byName.put(name, target);
             } else {
+                // 기존 목록에서 처음 사진으로 확인된 항목도 실제 준비 완료로 반영한다.
+                target.setCheckStatus(Codes.CheckStatus.PREPARED);
                 reflect(target.getId(), detection);
             }
 

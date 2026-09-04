@@ -12,7 +12,7 @@ import type { BagType, Purpose, Transport, TripCreated, TripDetail } from '../ty
  * `PACKING_LIST` 의 input(07:513-521)과 `RULE_CHECK` 의 `transport`·`airline`
  * 로 그대로 흘러간다 — <b>이 화면이 비면 AI 입력이 빈다.</b>
  *
- * 필수는 여섯이다(03) — 출발일·귀국일·출발지·도착지·목적·이동수단.
+ * 필수는 일곱이다(03) — 출발일·귀국일·출발지·도착지·목적지 국가 코드·목적·이동수단.
  * 항공사·공항은 선택이지만 <b>비우면 정확도가 낮아진다고 미리 알려 준다.</b>
  * 저장하고 나서 알려 주면 늦다.
  */
@@ -79,12 +79,17 @@ export default function NewTrip() {
   const [loading, setLoading] = useState(editing)
 
   /*
-   * <b>도시는 상태가 아니라 공항에서 나온 값이다.</b>
+   * <b>도시도 국가도 상태가 아니라 공항에서 나온 값이다.</b>
    *
-   * 공항이 필수가 되면서 도시를 따로 들고 있을 이유가 사라졌다. 상태로 두면
-   * 공항과 도시가 어긋날 수 있는데(NRT 인데 도시는 오사카), 파생값이면 그런
+   * 공항이 필수가 되면서 따로 들고 있을 이유가 사라졌다. 상태로 두면 공항과
+   * 어긋날 수 있는데(NRT 인데 도시는 오사카, 나라는 CN), 파생값이면 그런
    * 상태가 <b>존재할 수 없다.</b> 자동 채움 여부를 기억하던 플래그 두 개도
    * 같이 없앴다 — 덮어쓸지 말지를 판단할 일이 없다.
+   *
+   * #52 가 `목적지 국가 코드` 를 <b>손으로 치는 필수 칸</b>으로 넣었는데,
+   * 여기서는 칸을 지우고 `countryOf(arrivalAirport)` 로 만든다. 요구사항은
+   * 같다 — countryCode 를 반드시 보낸다. 다만 사람이 `JP` 를 치지 않아도 되고,
+   * 공항과 나라가 어긋난 값이 애초에 만들어지지 않는다.
    *
    * 대신 "나리타로 들어가 요코하마에 묵는" 경우를 표현할 수 없다. 날씨가
    * 공항 도시 기준이 된다는 뜻이라, 07 의 알려진 한계에 적어 둔다.
@@ -185,6 +190,14 @@ export default function NewTrip() {
     const miss = required.find(([, v]) => !v.trim())
     if (miss) { setField(miss[0]); setError(miss[2]); return }
     if (pastStart) { setField('startDate'); setError('출발일은 오늘 이후로 골라 주세요.'); return }
+    /*
+     * #52 의 `국가 코드는 영문 2자` 검사를 대신한다. 목록에서 고른 공항이면
+     * 나라는 반드시 나오므로, 안 나왔다는 것은 <b>목록에 없는 코드</b>라는 뜻이다.
+     * 그대로 보내면 서버가 countryCode 없이 받아 추천 프롬프트가 빈다.
+     */
+    if (isFlight && !countryOf(arrivalAirport)) {
+      setField('arrivalAirport'); setError('도착 공항을 목록에서 다시 골라 주세요.'); return
+    }
     if (badRange) { setField('endDate'); setError('귀국일이 출발일보다 빠릅니다.'); return }
 
     setBusy(true)
@@ -241,6 +254,10 @@ export default function NewTrip() {
    * 저장만 조용히 실패한다. 그때는 아래 일반 오류로 떨어뜨린다.
    */
   const INLINE = new Set([
+    /*
+     * `countryCode` 는 뺀다. 손입력 칸이 없어져서 그 이름의 칸이 화면에 없다 —
+     * 인라인으로 돌리면 오류가 <b>아무 데도 안 뜬다.</b> 일반 오류로 떨어뜨린다.
+     */
     'origin', 'destination', 'startDate', 'endDate', 'purpose', 'transport',
     'airline', 'departureAirport', 'arrivalAirport', 'note',
     'bagType', 'bagEmptyG', 'weightLimitG',

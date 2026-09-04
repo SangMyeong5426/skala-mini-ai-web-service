@@ -16,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import tools.jackson.databind.JsonNode;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 import com.skala.miniai.domain.ai.AiClient;
@@ -24,6 +25,8 @@ import com.skala.miniai.domain.ai.AiJobRepository;
 import com.skala.miniai.domain.ai.AiJobService;
 import com.skala.miniai.domain.checklist.ChecklistDtos;
 import com.skala.miniai.domain.checklist.ChecklistService;
+import com.skala.miniai.domain.photo.DetectionService;
+import com.skala.miniai.domain.photo.PhotoDtos;
 import com.skala.miniai.domain.trip.TripDtos;
 import com.skala.miniai.domain.trip.TripService;
 
@@ -51,6 +54,7 @@ class AiJobAndChecklistTest {
     @Autowired AiJobService aiJobService;
     @Autowired AiJobRepository jobs;
     @Autowired ChecklistService checklist;
+    @Autowired DetectionService detectionService;
     @Autowired TripService trips;
     @Autowired JdbcTemplate jdbc;
     @Autowired Json json;
@@ -146,11 +150,15 @@ class AiJobAndChecklistTest {
                  "tips":[],"weatherSource":"SEASONAL","weatherAsOf":"2026-09-03"}"""));
 
         Long jobId = aiJobService.create(new AiJobDtosFixture().packingList(tripId)).jobId();
-        assertThat(awaitSettled(jobId).getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+        AiJob completed = awaitSettled(jobId);
+        assertThat(completed.getStatus()).isEqualTo(Codes.JobStatus.COMPLETED);
+        JsonNode output = json.read(completed.getOutputPayload());
+        assertThat(output.path("items").get(0).path("name").asText()).isEqualTo("여권");
+        assertThat(output.path("items").get(0).path("source").asText()).isEqualTo("RULE");
 
         var request = new ChecklistDtos.CreateRequest(
                 "변환 플러그", Codes.Category.ELECTRONIC, 1, Codes.Priority.REQUIRED,
-                new ChecklistDtos.RecommendationRef(jobId, 0));
+                new ChecklistDtos.RecommendationRef(jobId, 1));
 
         ChecklistService.Added first = checklist.add(tripId, request);
         assertThat(first.created()).isTrue();
@@ -164,6 +172,27 @@ class AiJobAndChecklistTest {
                 .hasSize(1);
     }
 
+    @Test
+    void packingRulesRemoveCurrentItemsAndDomesticPassport() {
+        checklist.add(tripId, new ChecklistDtos.CreateRequest(
+                "우산", Codes.Category.ETC, 1, Codes.Priority.RECOMMENDED, null));
+        jdbc.update("update trips set country_code = 'KR' where id = ?", tripId);
+        given(aiClient.run(any(), any(), any())).willReturn(json.read("""
+                {"items":[
+                   {"name":"우산","category":"ETC","qty":1,"priority":"RECOMMENDED",
+                    "reason":"비에 대비하세요.","source":"AI","acceptedItemId":null},
+                   {"name":"여권","category":"DOCUMENT","qty":1,"priority":"REQUIRED",
+                    "reason":"신분증을 확인하세요.","source":"RULE","acceptedItemId":null}],
+                 "tips":[],"weatherSource":"SEASONAL","weatherAsOf":null}
+                """));
+
+        Long jobId = aiJobService.create(new AiJobDtosFixture().packingList(tripId)).jobId();
+        AiJob completed = awaitSettled(jobId);
+
+        assertThat(json.read(completed.getOutputPayload()).path("items"))
+                .as("미완료 기존 항목과 국내 여행 여권은 추천하지 않는다")
+                .isEmpty();
+    }
 
     /**
      * 사진 인식 물품은 <b>승인 없이</b> 내 목록에 {@code PREPARED} 로 등록된다 (06 개정).
@@ -202,15 +231,35 @@ class AiJobAndChecklistTest {
                 .isEqualByComparingTo(new java.math.BigDecimal("1.000"));
     }
 
+    @Test
+    void firstPhotoMatchMarksAnExistingItemPrepared() {
+        checklist.add(tripId, new ChecklistDtos.CreateRequest(
+                "충전기", Codes.Category.ELECTRONIC, 1, Codes.Priority.REQUIRED, null));
+        jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
+                + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
+        Long photoId = jdbc.queryForObject(
+                "select id from trip_photos where trip_id = ?", Long.class, tripId);
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(
+                "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,"
+                + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
+                + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}"));
+
+        Long jobId = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
+                Codes.JobType.BAG_CHECK, tripId, null)).jobId();
+        awaitSettled(jobId);
+
+        assertThat(checklist.list(tripId).items()).singleElement()
+                .satisfies(item -> assertThat(item.checkStatus()).isEqualTo(Codes.CheckStatus.PREPARED));
+    }
+
     /**
-     * 같은 작업을 다시 돌려도 항목이 늘지 않고, 사용자가 되돌린 준비 상태를 덮어쓰지 않는다.
+     * 새 분석은 사용자가 고친 행을 보존하되 이름이 다른 새 인식을 순서만으로 버리지 않는다.
      *
-     * <p>06 4·5번: "같은 완료 처리 재시도는 항목을 다시 생성하거나 사용자의 수정·삭제를
-     * 되돌리지 않는다", "이미 반영된 연결을 다시 읽는 것만으로 사용자가 바꾼 UNCHECKED 를
-     * 되돌리지 않는다."
+     * <p>모델 출력에는 안정 ID가 없으므로 이름이 다르면 같은 물품이라는 근거가 없다.
+     * 추가 행을 사용자가 지울 수는 있지만 조용히 누락된 결과는 복구할 수 없다.
      */
     @Test
-    void reanalysisDoesNotDuplicateOrOverwriteUserEdits() {
+    void reanalysisPreservesEditsWithoutDroppingNewDetections() {
         jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
                 + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
         Long photoId = jdbc.queryForObject(
@@ -219,13 +268,31 @@ class AiJobAndChecklistTest {
         String output = "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,"
                 + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
                 + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}";
-        given(aiClient.run(any(), any(), any())).willReturn(json.read(output));
+        String reanalysis = "{\"detections\":["
+                + "{\"photoId\":" + photoId + ",\"name\":\"우산\",\"qty\":1,\"confidence\":0.91,"
+                + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null},"
+                + "{\"photoId\":" + photoId + ",\"name\":\"모자\",\"qty\":1,\"confidence\":0.88,"
+                + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null}],"
+                + "\"failedPhotoIds\":[]}";
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(output), json.read(reanalysis));
 
         Long first = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
                 Codes.JobType.BAG_CHECK, tripId, null)).jobId();
         awaitSettled(first);
 
         Long itemId = checklist.list(tripId).items().get(0).itemId();
+        Long detectionId = jdbc.queryForObject(
+                "select id from detected_objects where photo_id = ? and name = '충전기'",
+                Long.class, photoId);
+        detectionService.patch(tripId, detectionId,
+                new PhotoDtos.PatchRequest(null, null, null, null, null));
+        assertThat(jdbc.queryForObject(
+                "select approved from detected_objects where id = ?", Boolean.class, detectionId)).isFalse();
+        assertThat(jdbc.queryForObject(
+                "select confirmed_by_user from item_detections where detected_object_id = ?",
+                Boolean.class, detectionId)).isFalse();
+        detectionService.patch(tripId, detectionId,
+                new PhotoDtos.PatchRequest(null, "USB 충전기", null, null, null));
         // 사용자가 "아직 안 챙겼다" 로 되돌린다.
         checklist.update(tripId, itemId, new ChecklistDtos.UpdateRequest(
                 null, null, null, null, Codes.CheckStatus.UNCHECKED));
@@ -235,10 +302,19 @@ class AiJobAndChecklistTest {
         awaitSettled(second);
 
         var items = checklist.list(tripId).items();
-        assertThat(items).as("재분석이 항목을 또 만들면 안 된다").hasSize(1);
-        assertThat(items.get(0).checkStatus())
+        assertThat(items).as("수정한 인식은 보존하고 근거 없이 새 인식을 버리지 않는다").hasSize(3);
+        var edited = items.stream().filter(item -> item.name().equals("USB 충전기")).findFirst().orElseThrow();
+        assertThat(edited.checkStatus())
                 .as("사용자가 되돌린 UNCHECKED 를 재분석이 뒤집으면 안 된다")
                 .isEqualTo(Codes.CheckStatus.UNCHECKED);
+        assertThat(items).extracting(ChecklistDtos.Item::name).contains("우산", "모자");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from detected_objects where photo_id = ?", Integer.class, photoId))
+                .as("수정한 행과 이름이 다른 새 인식을 모두 저장한다")
+                .isEqualTo(3);
+        assertThat(jdbc.queryForList(
+                "select name from detected_objects where photo_id = ? order by id", String.class, photoId))
+                .containsExactly("USB 충전기", "우산", "모자");
     }
 
     /**

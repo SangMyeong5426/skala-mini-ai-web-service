@@ -33,4 +33,9 @@ public interface AiClient {
 
     /** {@code ai_jobs.model_name} 에 남길 이름. 코드에 쓰지 않고 설정에서 읽는다. */
     String modelName();
+
+    /** 작업별로 실제 사용한 구현 이름. 혼합 모드에서도 사용 이력을 정확히 남긴다. */
+    default String modelName(Codes.JobType jobType, Long tripId) {
+        return modelName();
+    }
 }

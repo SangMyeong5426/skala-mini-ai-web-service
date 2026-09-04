@@ -11,18 +11,18 @@
 
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
-- **로그인 포함 목표 ERD:** 아래 DSL·`.puml`·PNG·SVG에 `users.login_id`를 추가 설계한다.
-  현재 `schema.sql`·DB에 적용된 것으로 보지 않는다. 인증 구현 시 SQL·시드·엔티티를 함께 반영해야 한다
+- **로그인 포함 ERD:** 아래 DSL·`.puml`·PNG·SVG의 `users.login_id`는
+  `schema.sql`·마이그레이션·시드·JPA 엔티티에 적용됐고 PostgreSQL 17.6 검증을 통과했다
 - **테이블은 12개다.** `trip_itineraries`(여행 일정·캘린더)와 `item_placements`(3D 가방 정리)는
   `login_id`와 달리 **`schema.sql`에 실제로 적용돼 있다.** 무엇이 적용됐고 무엇이 목표인지
   섞이지 않게 둘을 나눠 적는다
 - **PNG·SVG 는 2026-09-03 에 아래 DSL 기준으로 재렌더했다.** DSL·`.puml`·`schema.sql` 이
-  `users.login_id` 하나만 빼고 일치한다. 정본은 아래 DSL 이다
+  일치하며 정본은 아래 DSL 이다
 - dbdiagram.io 링크: TBD — 아래 DSL을 붙여 넣으면 즉시 생성된다
 
 > **2026-09-03 로그인 개정:** 체크리스트 저장 규약은 유지하며 회원의 로그인 아이디를 추가한다.
 > 원본·PNG·SVG에도 후보 JSON·채택 책임·사진 자동 등록 트랜잭션과 조회 계산값을 반영했다.
-> SQL의 기존 시드는 개정 전 상태이므로 새 자동 등록 흐름을 검증한 데이터로 보지 않는다.
+> SQL 시드도 사진 8개 자동 완료 등록·미채택 여권 1개 흐름으로 갱신했다.
 >
 > **2026-09-03 일정·정리 추가:** `trip_itineraries`·`item_placements` 두 표를 더했다.
 > 기존 10개 테이블과 관계는 그대로다. `users` 에는 `login_id`·`password_hash` 가 늘었다. **팀 DB 에는 `schema.sql` 전체 재실행이 아니라
@@ -43,7 +43,7 @@
 
 Table users {
   id            bigserial   [pk]
-  login_id      varchar(30) [not null, unique, note: '로그인용 아이디, 소문자 정규화. SQL 반영 예정']
+  login_id      varchar(30) [not null, unique, note: '로그인용 아이디, 소문자 정규화']
   email         varchar(255)[not null, unique]
   password_hash varchar(255)[not null]  // bcrypt 해시. 평문 저장·응답 금지
   nickname      varchar(50) [not null]
@@ -281,8 +281,9 @@ Table ai_jobs {
 서버가 같은 여행의 항목인지 검증한다. 항목 삭제 시 해당 여행의 후보 연결도 `null`로
 해제한다(06). 이름 변경 후에도 재승인을 판별하기 위해 이름만으로 채택 여부를 저장하지 않는다.
 
-`detected_objects.approved`는 이전 설계와 SQL의 호환을 위해 남기되 신규 흐름에서는 사용하지 않는다.
-자동 인식 행은 기본 false로 저장한다. `confirmed_by_user`도 선택적 사후 수정 이력일 뿐이며,
+`detected_objects.approved`는 이전 컬럼명을 유지하지만 승인 게이트가 아니다. 자동 인식 행은
+기본 `false`, 사용자가 이름·수량·연결 항목을 고친 행은 재분석 보존 표식으로 `true`다.
+`confirmed_by_user`도 선택적 사후 수정 이력일 뿐이며,
 두 값이 false여도 내 목록 등록·준비 완료 집계·무게 입력에 포함한다.
 
 ### 준비 완료와 사진 확인 상태

@@ -74,9 +74,15 @@ class AllBackendApiTest {
         read(auth, get("/api/trips/1/placements"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+        write(auth, post("/api/trips"), """
+                {"origin":"서울","destination":"도쿄",
+                 "startDate":"2026-10-01","endDate":"2026-10-04","purpose":"TOUR",
+                 "transport":"FLIGHT"}
+                """).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("countryCode"));
 
         MvcResult createdTrip = write(auth, post("/api/trips"), """
-                {"origin":"서울","destination":"도쿄","countryCode":"JP",
+                {"origin":"서울","destination":"도쿄","countryCode":"jp",
                  "startDate":"2026-10-01","endDate":"2026-10-04","purpose":"TOUR",
                  "transport":"FLIGHT","airline":"대한항공","departureAirport":"ICN",
                  "arrivalAirport":"NRT","bagType":"CARRY_ON","bagEmptyG":3200,
@@ -89,7 +95,9 @@ class AllBackendApiTest {
         read(auth, get("/api/trips"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.trips[0].tripId").value(tripId));
         read(auth, get("/api/trips/{tripId}", tripId))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.destination").value("도쿄"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.destination").value("도쿄"))
+                .andExpect(jsonPath("$.countryCode").value("JP"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"   \"}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.field").value("origin"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"서울\\n\"}")
@@ -201,6 +209,32 @@ class AllBackendApiTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void csrfAndUserOwnershipBoundariesAreEnforced() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        SessionAuth owner = createAccount("owner_" + suffix);
+        MvcResult created = write(owner, post("/api/trips"), """
+                {"origin":"서울","destination":"도쿄","countryCode":"JP",
+                 "startDate":"2026-10-01","endDate":"2026-10-04","purpose":"TOUR",
+                 "transport":"FLIGHT","bagType":"CARRY_ON"}
+                """).andExpect(status().isCreated()).andReturn();
+        long tripId = body(created).path("tripId").asLong();
+        long jobId = createAndAwait(owner, "RULE_CHECK", null, """
+                {"transport":"FLIGHT","airline":null,
+                 "question":"노트북 기내 반입되나요?","items":[]}
+                """).path("jobId").asLong();
+
+        SessionAuth other = createAccount("other_" + suffix);
+        read(other, get("/api/trips/{tripId}", tripId)).andExpect(status().isNotFound());
+        write(other, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"부산\"}")
+                .andExpect(status().isNotFound());
+        read(other, get("/api/ai-jobs/{jobId}", jobId)).andExpect(status().isNotFound());
+
+        mvc.perform(withAuth(owner, patch("/api/trips/{tripId}", tripId), false)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"origin\":\"부산\"}"))
+                .andExpect(status().isForbidden());
+    }
+
     private SessionAuth signUpAndLogin() throws Exception {
         MvcResult bootstrap = mvc.perform(get("/api/auth/session")).andExpect(status().isOk()).andReturn();
         String csrf = body(bootstrap).path("csrfToken").asText();
@@ -237,6 +271,25 @@ class AllBackendApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.field").value("loginId"));
 
+        MvcResult login = mvc.perform(post("/api/auth/login").cookie(cookies).header("X-CSRF-TOKEN", csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginId\":\"%s\",\"password\":\"testpass123\"}".formatted(loginId)))
+                .andExpect(status().isOk()).andReturn();
+        return new SessionAuth((MockHttpSession) login.getRequest().getSession(false), cookies, csrf);
+    }
+
+    private SessionAuth createAccount(String suffix) throws Exception {
+        MvcResult bootstrap = mvc.perform(get("/api/auth/session")).andExpect(status().isOk()).andReturn();
+        String csrf = body(bootstrap).path("csrfToken").asText();
+        Cookie[] cookies = bootstrap.getResponse().getCookies();
+        String loginId = "e2e_" + suffix;
+
+        mvc.perform(post("/api/auth/signup").cookie(cookies).header("X-CSRF-TOKEN", csrf)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"nickname":"격리검증","loginId":"%s","password":"testpass123",
+                                 "email":"%s@test.local"}
+                                """.formatted(loginId, loginId)))
+                .andExpect(status().isCreated());
         MvcResult login = mvc.perform(post("/api/auth/login").cookie(cookies).header("X-CSRF-TOKEN", csrf)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"%s\",\"password\":\"testpass123\"}".formatted(loginId)))
