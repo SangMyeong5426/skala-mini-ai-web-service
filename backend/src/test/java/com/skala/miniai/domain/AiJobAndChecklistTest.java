@@ -202,6 +202,27 @@ class AiJobAndChecklistTest {
                 .isEqualByComparingTo(new java.math.BigDecimal("1.000"));
     }
 
+    @Test
+    void firstPhotoMatchMarksAnExistingItemPrepared() {
+        checklist.add(tripId, new ChecklistDtos.CreateRequest(
+                "충전기", Codes.Category.ELECTRONIC, 1, Codes.Priority.REQUIRED, null));
+        jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
+                + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
+        Long photoId = jdbc.queryForObject(
+                "select id from trip_photos where trip_id = ?", Long.class, tripId);
+        given(aiClient.run(any(), any(), any())).willReturn(json.read(
+                "{\"detections\":[{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,"
+                + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
+                + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}"));
+
+        Long jobId = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
+                Codes.JobType.BAG_CHECK, tripId, null)).jobId();
+        awaitSettled(jobId);
+
+        assertThat(checklist.list(tripId).items()).singleElement()
+                .satisfies(item -> assertThat(item.checkStatus()).isEqualTo(Codes.CheckStatus.PREPARED));
+    }
+
     /**
      * 같은 작업을 다시 돌려도 항목이 늘지 않고, 사용자가 되돌린 준비 상태를 덮어쓰지 않는다.
      *
@@ -228,7 +249,7 @@ class AiJobAndChecklistTest {
         Long itemId = checklist.list(tripId).items().get(0).itemId();
         // 사용자가 "아직 안 챙겼다" 로 되돌린다.
         checklist.update(tripId, itemId, new ChecklistDtos.UpdateRequest(
-                null, null, null, null, Codes.CheckStatus.UNCHECKED));
+                "USB 충전기", null, null, null, Codes.CheckStatus.UNCHECKED));
 
         Long second = aiJobService.create(new com.skala.miniai.domain.ai.AiJobDtos.CreateRequest(
                 Codes.JobType.BAG_CHECK, tripId, null)).jobId();
@@ -239,6 +260,11 @@ class AiJobAndChecklistTest {
         assertThat(items.get(0).checkStatus())
                 .as("사용자가 되돌린 UNCHECKED 를 재분석이 뒤집으면 안 된다")
                 .isEqualTo(Codes.CheckStatus.UNCHECKED);
+        assertThat(items.get(0).name()).as("사용자가 고친 이름을 재분석이 되돌리면 안 된다")
+                .isEqualTo("USB 충전기");
+        assertThat(jdbc.queryForObject("select count(*) from detected_objects", Integer.class))
+                .as("사후 수정한 사진을 재분석해 인식 행을 중복 생성하면 안 된다")
+                .isEqualTo(1);
     }
 
     /**

@@ -19,12 +19,11 @@ import jakarta.persistence.Table;
 /**
  * 사진에서 인식된 물품 (UC-04).
  *
- * <p>명세 9.2 수용 기준: <b>"사진 분석 결과는 사용자가 승인하기 전 최종 준비 상태에
- * 반영되지 않아야 한다"</b>. 그래서 {@code approved} 가 기본 {@code false} 이고,
- * 검수·무게·규정 계산은 승인된 것만 본다.
+ * <p>{@code approved}는 이전 승인 흐름과의 DB 호환용 컬럼이다. 등록·집계 조건으로 쓰지 않고,
+ * 사용자가 사후 수정한 인식 결과를 재분석에서 보존하는 내부 표식으로만 쓴다.
  *
  * <p>{@code confidenceLevel} 을 컬럼으로 두는 이유는 경계값이 바뀌어도 <b>사용자가 그때 보고
- * 승인한 표시</b>가 그대로여야 하기 때문이다 (docs/05-erd.md).
+ * 확인한 표시</b>가 그대로여야 하기 때문이다 (docs/05-erd.md).
  */
 @Entity
 @Table(name = "detected_objects")

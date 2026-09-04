@@ -48,8 +48,9 @@ import com.skala.miniai.domain.weather.WeatherSnapshot;
  * ({@code @Primary}). <b>기본값은 그대로 {@code mock} 이다</b> — 발표 데모는 네트워크에 묶이면 안 된다
  * (AGENTS.md). 환경 변수 한 줄로 켜고 끄는 것이 07 이 설계해 둔 모습이다.
  *
- * <p>{@code WEIGHT_ESTIMATE} 만 {@link MockAiClient} 에 넘긴다. 나머지 셋은 실제로 부른다.
- * {@code RULE_CHECK} 는 <b>모델을 두 번</b> 부르고 그 사이에 규칙 엔진이 들어간다 —
+ * <p>{@code WEIGHT_ESTIMATE} 와 여행 없는 {@code RULE_CHECK}(S-09 챗봇)는
+ * {@link MockAiClient} 에 넘긴다. 여행에 연결된 {@code RULE_CHECK} 는 <b>모델을 두 번</b>
+ * 부르고 그 사이에 규칙 엔진이 들어간다 —
  * <b>반입 판정은 AI 가 하지 않는다</b>(07 「AI-04」).
  *
  * <p>호출하는 쪽은 하나도 바뀌지 않는다. {@link AiJobRunner} 는 {@code AiClient} 만 알고,
@@ -128,6 +129,11 @@ public class OpenAiClient implements AiClient {
     }
 
     @Override
+    public String modelName(Codes.JobType jobType, Long tripId) {
+        return usesMock(jobType, tripId) ? mock.modelName() : api.model();
+    }
+
+    @Override
     public JsonNode run(Codes.JobType jobType, JsonNode input) {
         return run(jobType, null, input);
     }
@@ -137,10 +143,16 @@ public class OpenAiClient implements AiClient {
         return switch (jobType) {
             case BAG_CHECK -> bagCheck(input);
             case PACKING_LIST -> packingList(tripId, input);
-            case RULE_CHECK -> ruleCheck(input);
+            // S-09 챗봇은 팀 결정대로 Mock. S-06/S-08 여행 검수만 실제 모델을 쓴다.
+            case RULE_CHECK -> tripId == null ? mock.run(jobType, input) : ruleCheck(input);
             // 합산은 산식이 정본이다. LLM 보정은 07 로드맵 3-4 로 남겨 뒀다.
             case WEIGHT_ESTIMATE -> mock.run(jobType, input);
         };
+    }
+
+    private static boolean usesMock(Codes.JobType jobType, Long tripId) {
+        return jobType == Codes.JobType.WEIGHT_ESTIMATE
+                || jobType == Codes.JobType.RULE_CHECK && tripId == null;
     }
 
     /**
@@ -677,7 +689,7 @@ public class OpenAiClient implements AiClient {
 
         JsonNode raw = callWithOneRetry(
                 () -> callPacking(trip, input, current, snapshot), "PACKING_LIST");
-        return toPackingOutput(raw, input, current, snapshot);
+        return toPackingOutput(raw, input, current, snapshot, trip);
     }
 
     private JsonNode callPacking(Trip trip, JsonNode input,
@@ -696,7 +708,7 @@ public class OpenAiClient implements AiClient {
     }
 
     private JsonNode toPackingOutput(JsonNode raw, JsonNode input,
-                                     List<ChecklistItem> current, WeatherSnapshot snapshot) {
+                                     List<ChecklistItem> current, WeatherSnapshot snapshot, Trip trip) {
         // 이미 있는 이름을 모은다. 실제 완료(alreadyPacked)와 미완료를 모두 넣는다.
         Set<String> taken = new LinkedHashSet<>();
         for (JsonNode packed : input.path("alreadyPacked")) {
@@ -706,6 +718,20 @@ public class OpenAiClient implements AiClient {
 
         ObjectNode output = json.newObject();
         ArrayNode candidates = output.putArray("items");
+
+        String countryCode = trip.getCountryCode();
+        if (countryCode != null && !countryCode.isBlank() && !"KR".equalsIgnoreCase(countryCode.trim())
+                && taken.add(RecommendationStore.normalize("여권"))) {
+            ObjectNode passport = candidates.addObject();
+            passport.put("name", "여권");
+            passport.put("category", Codes.Category.DOCUMENT.name());
+            passport.put("qty", 1);
+            passport.put("priority", Codes.Priority.REQUIRED.name());
+            passport.put("reason", "해외 여행 출국 전 여권 준비 여부를 확인하세요.");
+            passport.put("source", Codes.ItemSource.RULE.name());
+            passport.putNull("acceptedItemId");
+        }
+
         for (JsonNode node : raw.path("items")) {
             if (candidates.size() >= MAX_CANDIDATES) break;
 
@@ -724,7 +750,7 @@ public class OpenAiClient implements AiClient {
             candidate.put("priority", enumOrDefault(Codes.Priority.class,
                     node.path("priority").asText(""), Codes.Priority.RECOMMENDED).name());
             candidate.put("reason", reason);
-            // 07 서버 필드. RULE 후보 보강은 아직 없다 — 모델 후보는 전부 AI 다.
+            // 모델 후보는 AI, 위의 고정 필수 후보는 RULE로 구분한다.
             candidate.put("source", Codes.ItemSource.AI.name());
             candidate.putNull("acceptedItemId");
         }

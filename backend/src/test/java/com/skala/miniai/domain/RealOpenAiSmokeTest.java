@@ -164,7 +164,7 @@ class RealOpenAiSmokeTest {
     @Test
     void 자연어_질문을_구조화하고_규칙_엔진_판정을_설명한다() {
         JsonNode output = client(mock(TripPhotoRepository.class), mock(ChecklistItemRepository.class))
-                .run(Codes.JobType.RULE_CHECK, null, json.read("""
+                .run(Codes.JobType.RULE_CHECK, 1L, json.read("""
                         {"transport":"FLIGHT","airline":"대한항공",
                          "question":"20000mAh 보조배터리랑 120ml 클렌징오일 기내 되나요?","items":[]}
                         """));

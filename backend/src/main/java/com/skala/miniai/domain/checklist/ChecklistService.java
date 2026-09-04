@@ -186,6 +186,12 @@ public class ChecklistService {
         if (req.priority() != null) item.setPriority(req.priority());
         if (req.checkStatus() != null) item.setCheckStatus(req.checkStatus());
 
+        // 사진으로 등록된 항목을 사용자가 고쳤다는 사실을 남겨 재분석이 되돌리지 않게 한다.
+        for (ItemDetection link : links.findByChecklistItemIdIn(List.of(itemId))) {
+            link.setConfirmedByUser(true);
+            detections.findById(link.getDetectedObjectId()).ifPresent(d -> d.setApproved(true));
+        }
+
         return toDto(item, photoStatusOf(item));
     }
 

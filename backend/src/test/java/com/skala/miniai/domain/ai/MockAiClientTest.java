@@ -14,8 +14,15 @@ import tools.jackson.databind.json.JsonMapper;
 class MockAiClientTest {
 
     private final Json json = new Json(JsonMapper.builder().build());
-    private final MockAiClient client = new MockAiClient(json, "mock");
+    private final MockAiClient client = new MockAiClient(json);
     private final RuleCheckContract contract = new RuleCheckContract();
+
+    @Test
+    void 제공자_오타를_Mock으로_조용히_처리하지_않는다() {
+        assertThatThrownBy(() -> client.validateProvider("opneai"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("mock 또는 openai");
+    }
 
     @Test
     void twelveRepresentativeChatbotQuestionsReturnTheirRuleResults() {
@@ -149,6 +156,42 @@ class MockAiClientTest {
         assertThatThrownBy(() -> contract.validateOutput(input, json.read("{}")))
                 .isInstanceOf(com.skala.miniai.common.ApiException.class)
                 .hasMessageContaining("필수");
+    }
+
+    @Test
+    void weightEstimateUsesCurrentItemsAndQuantities() {
+        JsonNode output = client.run(Codes.JobType.WEIGHT_ESTIMATE, json.read("""
+                {"bagType":"CARRY_ON","bagEmptyG":1000,"weightLimitG":2000,
+                 "items":[
+                   {"itemId":1,"name":"충전기","qty":2},
+                   {"itemId":2,"name":"텀블러","qty":1}
+                 ],
+                 "excluded":[{"name":"여권","reason":"UNCHECKED"}]}
+                """));
+
+        assertThat(output.path("typicalG").asInt()).isEqualTo(1180);
+        assertThat(output.path("contributions")).hasSize(1);
+        assertThat(output.path("contributions").get(0).path("subtotalG").asInt()).isEqualTo(180);
+        assertThat(output.path("excluded")).hasSize(2);
+        assertThat(output.path("excludedCount").asInt()).isEqualTo(2);
+        assertThat(output.path("confidence").asText()).isEqualTo("MEDIUM");
+        assertThat(output.path("verdict").asText()).isEqualTo("ROOM");
+        assertThat(client.modelName()).isEqualTo("mock");
+    }
+
+    @Test
+    void packingListDoesNotRecommendAlreadyPackedItems() {
+        JsonNode output = client.run(Codes.JobType.PACKING_LIST, json.read("""
+                {"destination":"도쿄","startDate":"2026-10-03","endDate":"2026-10-06",
+                 "transport":"FLIGHT","purpose":"TOUR","note":null,
+                 "alreadyPacked":[
+                   {"name":"여권","category":"DOCUMENT","qty":1},
+                   {"name":"우산","category":"ETC","qty":1}
+                 ]}
+                """));
+
+        assertThat(output.path("items")).noneMatch(item ->
+                "여권".equals(item.path("name").asText()) || "우산".equals(item.path("name").asText()));
     }
 
     private void assertQuestion(String question, String name, String verdict, String attribute, int value) {

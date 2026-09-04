@@ -97,8 +97,9 @@ class OpenAiPackingListTest {
                 ],"tips":[]}
                 """, null);
 
-        assertThat(output.path("items")).hasSize(1);
-        assertThat(output.path("items").path(0).path("name").asText()).isEqualTo("변환 플러그");
+        assertThat(output.path("items")).hasSize(2);
+        assertThat(candidate(output, "변환 플러그")).isNotNull();
+        assertThat(candidate(output, "여권").path("source").asText()).isEqualTo("RULE");
     }
 
     @Test
@@ -112,9 +113,9 @@ class OpenAiPackingListTest {
                  "tips":["도쿄 콘센트는 A타입, 100V입니다."]}
                 """, weather);
 
-        JsonNode candidate = output.path("items").path(0);
-        assertThat(candidate.path("source").asText()).isEqualTo("AI");
-        assertThat(candidate.path("acceptedItemId").isNull()).isTrue();
+        JsonNode umbrella = candidate(output, "우산");
+        assertThat(umbrella.path("source").asText()).isEqualTo("AI");
+        assertThat(umbrella.path("acceptedItemId").isNull()).isTrue();
         assertThat(output.path("weatherSource").asText()).isEqualTo("FORECAST");
         assertThat(output.path("weatherAsOf").asText()).isEqualTo("2026-09-03");
         assertThat(output.path("tips")).hasSize(1);
@@ -145,7 +146,26 @@ class OpenAiPackingListTest {
                 ],"tips":[]}
                 """, null);
 
-        assertThat(output.path("items")).hasSize(1);
-        assertThat(output.path("items").path(0).path("qty").asInt()).isEqualTo(99);
+        assertThat(output.path("items")).hasSize(2);
+        assertThat(candidate(output, "양말").path("qty").asInt()).isEqualTo(99);
+        assertThat(candidate(output, "모자")).isNull();
+    }
+
+    @Test
+    void 이미_있는_여권은_RULE_후보로_중복_추천하지_않는다() {
+        given(items.findByTripIdOrderById(7L)).willReturn(List.of(
+                new ChecklistItem(7L, "여권", Codes.Category.DOCUMENT, 1,
+                        Codes.Priority.REQUIRED, Codes.ItemSource.USER, Codes.CheckStatus.UNCHECKED)));
+
+        JsonNode output = run("{\"items\":[],\"tips\":[]}", null);
+
+        assertThat(output.path("items")).isEmpty();
+    }
+
+    private JsonNode candidate(JsonNode output, String name) {
+        for (JsonNode candidate : output.path("items")) {
+            if (name.equals(candidate.path("name").asText())) return candidate;
+        }
+        return null;
     }
 }

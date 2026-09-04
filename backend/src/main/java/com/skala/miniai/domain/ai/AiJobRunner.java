@@ -110,7 +110,7 @@ public class AiJobRunner {
             persistSideEffects(job, output);
             jobs.flush();
 
-            job.complete(json.write(output), aiClient.modelName());
+            job.complete(json.write(output), aiClient.modelName(job.getJobType(), job.getTripId()));
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -137,24 +137,34 @@ public class AiJobRunner {
         }
     }
 
-    /**
-     * 07: 같은 사진의 <b>미승인</b> 행은 지우고 다시 넣는다. 승인된 행은 건드리지 않는다 —
-     * 재분석이 사용자가 이미 확인한 결과를 지우면 안 된다.
-     */
+    /** 07: 사용자가 사후 수정한 사진은 기존 스냅샷을 유지하고, 나머지만 다시 저장한다. */
     private List<DetectedObject> saveDetections(JsonNode output) {
+        List<JsonNode> proposed = new ArrayList<>();
+        output.path("detections").forEach(d -> proposed.add(d.deepCopy()));
+
         // 사진마다 한 번만 지운다. 인식 결과 수만큼 반복하면 같은 삭제를 여러 번 돌린다.
         Set<Long> photoIds = new LinkedHashSet<>();
-        output.path("detections").forEach(d -> photoIds.add(d.path("photoId").asLong()));
+        proposed.forEach(d -> photoIds.add(d.path("photoId").asLong()));
+        List<DetectedObject> existing = photoIds.isEmpty()
+                ? List.of() : detections.findByPhotoIdInOrderById(photoIds);
+        Set<Long> editedPhotoIds = existing.stream()
+                .filter(DetectedObject::isApproved)
+                .map(DetectedObject::getPhotoId)
+                .collect(java.util.stream.Collectors.toSet());
         if (!photoIds.isEmpty()) {
-            List<DetectedObject> stale = detections.findByPhotoIdInOrderById(photoIds).stream()
-                    .filter(o -> !o.isApproved())
+            List<DetectedObject> stale = existing.stream()
+                    .filter(o -> !editedPhotoIds.contains(o.getPhotoId()))
                     .toList();
             detections.deleteAll(stale);
             detections.flush();
         }
 
         List<DetectedObject> saved = new ArrayList<>();
-        for (JsonNode d : output.path("detections")) {
+        existing.stream()
+                .filter(o -> editedPhotoIds.contains(o.getPhotoId()))
+                .forEach(saved::add);
+        for (JsonNode d : proposed) {
+            if (editedPhotoIds.contains(d.path("photoId").asLong())) continue;
             BigDecimal confidence = new BigDecimal(d.path("confidence").asText("0"))
                     .setScale(3, java.math.RoundingMode.HALF_UP);
             saved.add(detections.save(new DetectedObject(
@@ -169,6 +179,23 @@ public class AiJobRunner {
         }
         // 자동 등록이 이 id 들을 써야 하므로 먼저 내보낸다.
         detections.flush();
+
+        // 작업 결과도 실제 저장된 스냅샷과 같게 돌려준다.
+        if (output instanceof ObjectNode root) {
+            var finalDetections = root.putArray("detections");
+            for (DetectedObject d : saved) {
+                ObjectNode node = finalDetections.addObject();
+                node.put("photoId", d.getPhotoId());
+                node.put("name", d.getName());
+                node.put("qty", d.getQty());
+                node.put("confidence", d.getConfidence());
+                node.put("confidenceLevel", d.getConfidenceLevel().name());
+                if (d.getMissingInfo() == null) node.putNull("missingInfo");
+                else node.put("missingInfo", d.getMissingInfo());
+                if (d.getLabelText() == null) node.putNull("labelText");
+                else node.put("labelText", d.getLabelText());
+            }
+        }
         return saved;
     }
 

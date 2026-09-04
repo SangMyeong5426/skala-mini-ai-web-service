@@ -189,11 +189,11 @@ AI가 아니라 버전 관리된 공식 규정을 사용하는 규칙 엔진이 
 
 | Use-Case | `jobType` | 현재 | 향후 | 바뀌는 곳 |
 | --- | --- | --- | --- | --- |
-| UC-04 물품 인식 | `BAG_CHECK` | Mock 인식 결과 | 비전 모델 결과 | 백엔드 내부 |
-| UC-05 추가 준비물 추천 | `PACKING_LIST` | Mock 추천 후보 | LLM 추천 후보 | 백엔드 내부 |
-| UC-07 반입 규정 확인(부분) | `RULE_CHECK` | Mock 물품명 | AI 물품명 구조화 + 규칙 엔진 판정 | 백엔드 내부 |
-| UC-08 수하물 확인 챗봇 | `RULE_CHECK` | Mock 답변 | AI 설명 + 규칙 엔진 판정 | 백엔드 내부 |
-| UC-10 예상 무게 산정 | `WEIGHT_ESTIMATE` | Mock 범위 | 품목 중량 데이터 + AI 보정 | 백엔드 내부 |
+| UC-04 물품 인식 | `BAG_CHECK` | `openai`면 실제 비전 모델 | 비전 모델 고도화 | 백엔드 내부 |
+| UC-05 추가 준비물 추천 | `PACKING_LIST` | `openai`면 실제 LLM + Open-Meteo | 추천 품질 검증 | 백엔드 내부 |
+| UC-07 반입 규정 확인(부분) | 여행 연결 `RULE_CHECK` | `openai`면 실제 AI 구조화·설명 + 규칙 엔진 판정 | 규정 데이터 갱신 | 백엔드 내부 |
+| UC-08 수하물 확인 챗봇 | 여행 없는 `RULE_CHECK` | **Mock 답변 + 규칙 엔진 판정** | 팀 결정 전까지 Mock 유지 | 백엔드 내부 |
+| UC-10 예상 무게 산정 | `WEIGHT_ESTIMATE` | 현재 물품 기준 Mock 범위 + 서버 합산 | 품목 중량 DB + AI 보정 | 백엔드 내부 |
 
 AI 작업은 `POST /api/ai-jobs` 하나에서 `jobType`으로 구분한다. 프런트엔드와
 API 규격을 유지한 채 백엔드 내부 구현만 교체하는 것이 AI-Ready 원칙이다.

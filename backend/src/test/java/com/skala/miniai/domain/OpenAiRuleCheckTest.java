@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
 
@@ -45,16 +47,35 @@ class OpenAiRuleCheckTest {
     private final Json json = new Json(JsonMapper.builder().build());
 
     private OpenAiChatApi api;
+    private MockAiClient mockClient;
     private OpenAiClient client;
 
     @BeforeEach
     void setUp() {
         api = mock(OpenAiChatApi.class);
-        client = new OpenAiClient(mock(MockAiClient.class), api, new BagCheckPrompt(json),
+        mockClient = mock(MockAiClient.class);
+        given(api.model()).willReturn("gpt-test");
+        given(mockClient.modelName()).willReturn("mock");
+        client = new OpenAiClient(mockClient, api, new BagCheckPrompt(json),
                 new PackingListPrompt(json), new RuleCheckPrompt(json), SeedRules.engine(),
                 mock(VisionImageLoader.class), mock(TripPhotoRepository.class),
                 mock(TripRepository.class), mock(ChecklistItemRepository.class),
                 Optional.empty(), json, 20);
+    }
+
+    @Test
+    void 여행없는_챗봇만_Mock으로_실행하고_모델명도_Mock으로_남긴다() {
+        JsonNode input = json.read("""
+                {"transport":"FLIGHT","airline":null,"question":"100Wh 보조배터리 되나요?","items":[]}
+                """);
+        JsonNode expected = json.read("{\"results\":[]}");
+        given(mockClient.run(Codes.JobType.RULE_CHECK, input)).willReturn(expected);
+
+        assertThat(client.run(Codes.JobType.RULE_CHECK, null, input)).isSameAs(expected);
+        assertThat(client.modelName(Codes.JobType.RULE_CHECK, null)).isEqualTo("mock");
+        assertThat(client.modelName(Codes.JobType.RULE_CHECK, 7L)).isEqualTo("gpt-test");
+        assertThat(client.modelName(Codes.JobType.WEIGHT_ESTIMATE, 7L)).isEqualTo("mock");
+        verify(api, never()).complete(any(), any(), any(), any(), any());
     }
 
     /** 1차 구조화 응답과 2차 설명 응답을 차례로 돌려준다. */

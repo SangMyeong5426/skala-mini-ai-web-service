@@ -110,6 +110,7 @@ public class DetectionService {
                 // 준비 상태는 건드리지 않는다. 이미 PREPARED 이고, 사용자가 되돌렸다면 그 뜻을 지킨다.
             });
         }
+        detection.setApproved(true);
 
         return new PhotoDtos.PatchResponse(
                 detection.getId(), detection.getName(), detection.getQty(), linkedItemsOf(detection.getId()));
