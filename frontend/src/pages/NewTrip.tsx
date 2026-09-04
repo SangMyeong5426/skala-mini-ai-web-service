@@ -135,8 +135,25 @@ export default function NewTrip() {
    *
    * 그래서 <b>공항에서 값이 나올 때만 덮어쓴다.</b>
    */
-  const loaded = useRef<{ origin: string; destination: string; countryCode: string }>({
+  const loaded = useRef<{
+    origin: string
+    destination: string
+    countryCode: string
+    /*
+     * <b>가방 수치도 보존한다.</b> 예전에는 `bagType` 만 불러오고 무게는 늘
+     * `BAGS` 상수의 기본값을 보냈다. 그래서 서버에 `2500g / 7000g` 으로 저장된
+     * 여행을 열어 <b>메모만 고쳐도</b> `3200g / 10000g` 으로 덮였다.
+     *
+     * 표시가 어긋나는 정도가 아니다. 두 값은 S-07 의 무게 계산과 초과 판정에
+     * 그대로 들어가는 <b>입력</b>이라, 사용자가 손대지 않은 계산 근거가 조용히
+     * 바뀐다. 출발지·도착지에 쓴 것과 같은 원칙으로 바닥을 깐다.
+     */
+    bagType: BagType | null
+    bagEmptyG: number | null
+    weightLimitG: number | null
+  }>({
     origin: '', destination: '', countryCode: '',
+    bagType: null, bagEmptyG: null, weightLimitG: null,
   })
 
   /* 수정이면 지금 값을 먼저 채운다. 못 불러오면 빈 폼으로 덮지 않고 오류를 말한다 */
@@ -157,6 +174,9 @@ export default function NewTrip() {
           origin: t.origin ?? '',
           destination: t.destination ?? '',
           countryCode: t.countryCode ?? '',
+          bagType: t.bagType ?? null,
+          bagEmptyG: t.bagEmptyG ?? null,
+          weightLimitG: t.weightLimitG ?? null,
         }
         clean.current = JSON.stringify({
           startDate: t.startDate ?? '', endDate: t.endDate ?? '',
@@ -204,6 +224,8 @@ export default function NewTrip() {
   const countryCode = countryOf(arrivalAirport) ?? loaded.current.countryCode
 
   const bag = BAGS.find((b) => b.v === bagType)!
+  /* 새 여행이면 늘 기본값이고, 고치기면 종류를 바꿨을 때만 기본값이다 */
+  const bagChanged = !editing || bagType !== loaded.current.bagType
   // 03: "귀국일 < 출발일 시 날짜칸 강조". 저장을 눌러야 알려 주면 늦다
   const badRange = Boolean(startDate && endDate && endDate < startDate)
   // 03 "귀국일 < 출발일 시 날짜칸 강조" 와 같은 자리. 지난 출발일도 저장 전에 잡는다
@@ -274,8 +296,13 @@ export default function NewTrip() {
          */
         countryCode,
         bagType,
-        bagEmptyG: bag.emptyG,
-        weightLimitG: bag.limitG,
+        /*
+         * 가방 <b>종류를 실제로 바꿨을 때만</b> 기본값으로 갈아 끼운다.
+         * 그대로 두면 서버에 있던 수치를 그대로 돌려보낸다 — 사용자가 저울로
+         * 잰 값을 상수가 덮지 않는다.
+         */
+        bagEmptyG: bagChanged ? bag.emptyG : loaded.current.bagEmptyG ?? bag.emptyG,
+        weightLimitG: bagChanged ? bag.limitG : loaded.current.weightLimitG ?? bag.limitG,
         /*
          * <b>빈 문자열로 보낸다. `undefined` 가 아니다.</b>
          *

@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { Shell, TopBar } from '../components/Shell'
 import { Empty, Failed, Skeleton } from '../components/States'
 import { CATEGORY_LABEL } from '../lib/format'
+import { confirmLeave, useUnsavedGuard } from '../lib/unsaved'
 import type {
   Compartment, ItemsResponse, PackingLayout, Placement, UnplacedItem,
 } from '../types/api'
@@ -95,6 +96,15 @@ export default function PackingLayoutPage() {
     }])
     setDirty(true); setSaved(false)
   }
+
+  /*
+   * <b>여기도 저장 전에는 잃을 것이 있다.</b> 구역에 넣고 빼는 것은 화면 안에서만
+   * 일어나고 `저장` 을 눌러야 PUT 이 나간다. 그런데 상단 내비·새로고침은 그대로
+   * 나갔다 — S-02 에 붙인 가드를 여기에는 안 붙였다(리뷰 지적).
+   *
+   * 아래 `검수 결과로` 도 마찬가지라 같은 확인을 거치게 했다.
+   */
+  useUnsavedGuard(dirty)
 
   const save = () => {
     setBusy(true); setError(null)
@@ -247,7 +257,7 @@ export default function PackingLayoutPage() {
           type="button"
           className="btn btn-ghost"
           style={{ marginTop: 16 }}
-          onClick={() => nav(`/trips/${tripId}/inspection`)}
+          onClick={() => { if (confirmLeave()) nav(`/trips/${tripId}/inspection`) }}
         >
           검수 결과로
         </button>
