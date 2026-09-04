@@ -35,15 +35,6 @@
       "reason": "여행 중 강수에 대비할 휴대용 우산을 검토하세요.",
       "source": "AI",
       "acceptedItemId": null
-    },
-    {
-      "name": "여권",
-      "category": "DOCUMENT",
-      "qty": 1,
-      "priority": "REQUIRED",
-      "reason": "해외 여행 출국 전 여권 준비 여부를 확인하세요.",
-      "source": "RULE",
-      "acceptedItemId": null
     }
   ],
   "tips": [

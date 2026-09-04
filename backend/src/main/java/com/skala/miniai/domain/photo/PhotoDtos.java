@@ -23,7 +23,7 @@ public final class PhotoDtos {
      * 인식 결과. <b>{@code approved} 가 없다.</b>
      *
      * <p>06 개정: 인식 물품은 승인 없이 내 목록에 등록되므로 승인 여부라는 필드가 성립하지 않는다.
-     * DB 컬럼은 호환 목적으로만 남는다(05).
+     * DB 컬럼은 승인 게이트가 아니라 사후 수정 행을 재분석에서 보존하는 내부 표식이다(05).
      */
     public record Detection(
             Long detectionId, Long photoId, String name, Integer qty,

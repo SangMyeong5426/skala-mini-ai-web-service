@@ -16,8 +16,7 @@
 
 > **2026-09-04 작업별 제공자 확정:** `AI_PROVIDER=openai`이면 `BAG_CHECK`(사진 인식),
 > `PACKING_LIST`(준비물 추천), 여행에 연결된 `RULE_CHECK`(S-06/S-08 검수)가 실제
-> OpenAI Chat Completions를 호출한다. 어디로 나갈지는 `AI_BASE_URL`이 정한다. 비워 둔 자리가 정말로 비어 있었는지 확인하는 것이 목적이다 —
-> 06 계약·DB 스키마·화면은 바꾸지 않았다. `AiClient`에는 혼합 모드의 실제 실행 모델을
+> OpenAI Chat Completions를 호출한다. 어디로 나갈지는 `AI_BASE_URL`이 정한다. `AiClient`에는 혼합 모드의 실제 실행 모델을
 > 기록하기 위한 작업별 `modelName(jobType, tripId)` 기본 메서드만 추가했다.
 > `PACKING_LIST` 의 날씨는 Open-Meteo 에서 실제로 읽는다(키 불필요).
 >
@@ -677,7 +676,7 @@ BAG_CHECK 완료 처리가 `detected_objects`·`item_detections`와 내 목록 �
 | 누가 | 무엇을 |
 | --- | --- |
 | **모델** | 후보의 `name/category/qty/priority/reason` · `tips[]` |
-| **서버 (규칙)** | 후보의 `source/acceptedItemId`, `weatherSource/weatherAsOf`. RULE 후보는 서버가 같은 스키마로 보강하고 중복을 제외한다 |
+| **서버 (규칙)** | 후보의 `source/acceptedItemId`, `weatherSource/weatherAsOf`. AI 클라이언트가 반환한 뒤 실제·Mock 공통 단계에서 RULE 후보를 보강하고 중복을 제외한다 |
 
 **작업 접수 전:** 입력 형식·여행 소유권을 검증한 뒤 서버가 현재 내 목록을 읽는다.
 그중 PREPARED 물품의 이름·분류·수량으로 `alreadyPacked`를 덮어써 `input_payload`에 저장한다.
@@ -2026,7 +2025,8 @@ Mock을 사용한다. 따라서 발표 시 Mock 사용 범위는 **챗봇의 물
 - `BAG_CHECK`는 실제 입력 photoIds에 맞춰 후보를 만든다. 사진 한 장이면 존재하지 않는
   두 번째 photoId를 사용하지 않는다. 성공한 인식 물품은 완료 처리에서 승인 없이 내 목록에 PREPARED로 등록한다. 실패 사진만 재시도한다.
 - `PACKING_LIST`는 현재 내 목록과 중복을 제거하고 reason을 포함한 후보만 반환한다.
-  source·acceptedItemId·날씨 메타데이터는 서버가 채운다. 내 목록에 자동 INSERT하지 않는다.
+  source·acceptedItemId·날씨 메타데이터는 서버가 채운다. 해외여행 여권 후보도 제공자와
+  무관하게 작업 저장 직전 서버 규칙이 보강한다. 내 목록에 자동 INSERT하지 않는다.
 - `WEIGHT_ESTIMATE`는 입력의 실제 완료 물품·수량과 품목별 Mock/마스터 범위로 계산한다.
   bagEmptyG·limitG만 바꾼 고정 합계를 반환하지 않는다. 미완료·미채택 추천은 합산하지 않는다.
 - `RULE_CHECK`는 같은 여행의 내 목록 항목·확인된 속성을 사용한다. 사진 자동 등록 항목도 포함한다. 출력 ID는 입력과 일치해야
@@ -2071,7 +2071,7 @@ Mock을 사용한다. 따라서 발표 시 Mock 사용 범위는 **챗봇의 물
 | 어댑터 실제 완료 확인 | 완료율 4/4, 무게 정보가 있으면 재계산에 포함 |
 | 사진 자동 등록 물품명·수량 수정 | 내 목록·사진 연결·무게 입력을 같은 확인값으로 갱신 |
 | 추천 실패·낮은 신뢰도 인식 물품 | 자동 등록된 내 목록 유지. LOW 물품도 PREPARED로 집계하고 확인 필요 배지만 표시 |
-| 같은 BAG_CHECK 완료 재처리·반복 GET | 등록은 한 번, 사용자 사후 수정·삭제를 되돌리지 않음 |
+| 같은 BAG_CHECK 완료 재처리·반복 GET | 등록은 한 번, 사용자 사후 수정·삭제를 되돌리지 않음. 새 재분석은 수정한 인식 행만 보존하고 같은 사진의 나머지 결과 갱신 |
 | 일부 사진 실패·목록 저장 실패 | 성공 사진만 자동 등록. 저장 트랜잭션 실패 시 부분 반영·거짓 COMPLETED 없음 |
 | 사진에 없는 물품을 직접 완료 확인 | 완료·무게 대상 유지, 사진 미확인 배지는 별도 표시 |
 | 내 목록은 모두 완료·여권 필수 후보는 미채택 | 완료율 `1`·표시 `100%`, S-05·S-06의 `미채택 필수 후보 1건` 유지. `확인하기`로 S-05 이동 |
@@ -2159,7 +2159,7 @@ HTTP E2E를 통과했으며, Playground 실행 여부와 혼동하지 않는다.
 | 사진 긴 변 | `AI_VISION_MAX_EDGE_PX` | `1024` | 이 크기로 줄여 JPEG로 다시 굽는다. 요청 크기와 토큰 비용이 여기서 정해진다 |
 | 원본 전송 한도 | `AI_VISION_MAX_RAW_BYTES` | `4194304` | webp는 JDK가 읽지 못해 줄이지 못한다. 그때만 원본을 보내고, 넘으면 그 사진을 포기한다 |
 
-> `AI_PROVIDER=mock`이면 Mock 응답을, 다른 값이면 실제 API를 호출하도록
+> `AI_PROVIDER=mock`이면 Mock 응답을, `openai`이면 작업별 실제/Mock 혼합 경로를 사용하도록
 > 백엔드를 분기해 두면 **환경 변수 한 줄로 AI를 켜고 끌 수 있다.**
 > 발표에서 보여주기 좋은 지점이다.
 
@@ -2221,8 +2221,9 @@ HTTP E2E를 통과했으며, Playground 실행 여부와 혼동하지 않는다.
   그때는 응답이 잘려 `FAILED` 가 되고 오류 문구가 그 사실을 알려 준다.
 - **`weatherAsOf` 는 날씨를 못 받으면 `null` 이다.** 쓰지 않은 자료의 기준일을 실행일로
   지어내지 않으며 출력 스키마와 FE 타입도 nullable로 맞췄다. `weatherSource`는 `SEASONAL`이다.
-- **해외여행 여권 후보는 서버 규칙이다.** 국가 코드가 `KR`이 아니고 현재 목록에 여권이 없으면
-  모델 응답과 무관하게 `source=RULE`, `priority=REQUIRED`로 보강한다. 실제·Mock 모두 기존 여권은 제외한다.
+- **해외여행 여권 후보는 서버 규칙이다.** 여행 등록 API와 S-02가 목적지 ISO 국가 코드를
+  필수로 받고, `KR`이 아니며 현재 목록에 여권이 없으면 클라이언트 반환 뒤 공통 단계에서
+  `source=RULE`, `priority=REQUIRED`로 보강한다. 실제·Mock 모두 기존 여권은 제외한다.
 - **느린 AI 호출이 DB 커넥션을 쥐고 있다.** `AiJobRunner` 는 `@Transactional` 안에서
   `AiClient` 를 부르므로, OpenAI 응답을 기다리는 동안 커넥션 하나가 묶인다. 풀 기본값이
   `DB_POOL_SIZE=5` 라 **동시에 5명이 사진을 분석하면 여섯 번째 요청이 밀린다.** Mock 은

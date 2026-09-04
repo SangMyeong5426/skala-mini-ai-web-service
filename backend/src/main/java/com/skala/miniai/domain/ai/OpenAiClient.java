@@ -45,8 +45,8 @@ import com.skala.miniai.domain.weather.WeatherSnapshot;
  * 스키마 검증 + 재시도 1회).
  *
  * <p>{@code AI_PROVIDER=openai} 일 때만 빈으로 올라오고, 그때 {@link MockAiClient} 를 밀어낸다
- * ({@code @Primary}). <b>기본값은 그대로 {@code mock} 이다</b> — 발표 데모는 네트워크에 묶이면 안 된다
- * (AGENTS.md). 환경 변수 한 줄로 켜고 끄는 것이 07 이 설계해 둔 모습이다.
+ * ({@code @Primary}). <b>미설정 기본값은 그대로 {@code mock} 이다.</b> 실제 시연은
+ * {@code backend/.env}에서 명시적으로 켜며, 환경 변수 한 줄로 되돌릴 수 있다.
  *
  * <p>{@code WEIGHT_ESTIMATE} 와 여행 없는 {@code RULE_CHECK}(S-09 챗봇)는
  * {@link MockAiClient} 에 넘긴다. 여행에 연결된 {@code RULE_CHECK} 는 <b>모델을 두 번</b>
@@ -689,7 +689,7 @@ public class OpenAiClient implements AiClient {
 
         JsonNode raw = callWithOneRetry(
                 () -> callPacking(trip, input, current, snapshot), "PACKING_LIST");
-        return toPackingOutput(raw, input, current, snapshot, trip);
+        return toPackingOutput(raw, input, current, snapshot);
     }
 
     private JsonNode callPacking(Trip trip, JsonNode input,
@@ -708,7 +708,7 @@ public class OpenAiClient implements AiClient {
     }
 
     private JsonNode toPackingOutput(JsonNode raw, JsonNode input,
-                                     List<ChecklistItem> current, WeatherSnapshot snapshot, Trip trip) {
+                                     List<ChecklistItem> current, WeatherSnapshot snapshot) {
         // 이미 있는 이름을 모은다. 실제 완료(alreadyPacked)와 미완료를 모두 넣는다.
         Set<String> taken = new LinkedHashSet<>();
         for (JsonNode packed : input.path("alreadyPacked")) {
@@ -718,19 +718,6 @@ public class OpenAiClient implements AiClient {
 
         ObjectNode output = json.newObject();
         ArrayNode candidates = output.putArray("items");
-
-        String countryCode = trip.getCountryCode();
-        if (countryCode != null && !countryCode.isBlank() && !"KR".equalsIgnoreCase(countryCode.trim())
-                && taken.add(RecommendationStore.normalize("여권"))) {
-            ObjectNode passport = candidates.addObject();
-            passport.put("name", "여권");
-            passport.put("category", Codes.Category.DOCUMENT.name());
-            passport.put("qty", 1);
-            passport.put("priority", Codes.Priority.REQUIRED.name());
-            passport.put("reason", "해외 여행 출국 전 여권 준비 여부를 확인하세요.");
-            passport.put("source", Codes.ItemSource.RULE.name());
-            passport.putNull("acceptedItemId");
-        }
 
         for (JsonNode node : raw.path("items")) {
             if (candidates.size() >= MAX_CANDIDATES) break;

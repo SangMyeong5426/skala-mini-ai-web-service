@@ -97,9 +97,8 @@ class OpenAiPackingListTest {
                 ],"tips":[]}
                 """, null);
 
-        assertThat(output.path("items")).hasSize(2);
+        assertThat(output.path("items")).hasSize(1);
         assertThat(candidate(output, "변환 플러그")).isNotNull();
-        assertThat(candidate(output, "여권").path("source").asText()).isEqualTo("RULE");
     }
 
     @Test
@@ -146,20 +145,9 @@ class OpenAiPackingListTest {
                 ],"tips":[]}
                 """, null);
 
-        assertThat(output.path("items")).hasSize(2);
+        assertThat(output.path("items")).hasSize(1);
         assertThat(candidate(output, "양말").path("qty").asInt()).isEqualTo(99);
         assertThat(candidate(output, "모자")).isNull();
-    }
-
-    @Test
-    void 이미_있는_여권은_RULE_후보로_중복_추천하지_않는다() {
-        given(items.findByTripIdOrderById(7L)).willReturn(List.of(
-                new ChecklistItem(7L, "여권", Codes.Category.DOCUMENT, 1,
-                        Codes.Priority.REQUIRED, Codes.ItemSource.USER, Codes.CheckStatus.UNCHECKED)));
-
-        JsonNode output = run("{\"items\":[],\"tips\":[]}", null);
-
-        assertThat(output.path("items")).isEmpty();
     }
 
     private JsonNode candidate(JsonNode output, String name) {

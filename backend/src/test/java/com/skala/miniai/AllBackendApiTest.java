@@ -74,9 +74,15 @@ class AllBackendApiTest {
         read(auth, get("/api/trips/1/placements"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+        write(auth, post("/api/trips"), """
+                {"origin":"서울","destination":"도쿄",
+                 "startDate":"2026-10-01","endDate":"2026-10-04","purpose":"TOUR",
+                 "transport":"FLIGHT"}
+                """).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.field").value("countryCode"));
 
         MvcResult createdTrip = write(auth, post("/api/trips"), """
-                {"origin":"서울","destination":"도쿄","countryCode":"JP",
+                {"origin":"서울","destination":"도쿄","countryCode":"jp",
                  "startDate":"2026-10-01","endDate":"2026-10-04","purpose":"TOUR",
                  "transport":"FLIGHT","airline":"대한항공","departureAirport":"ICN",
                  "arrivalAirport":"NRT","bagType":"CARRY_ON","bagEmptyG":3200,
@@ -89,7 +95,9 @@ class AllBackendApiTest {
         read(auth, get("/api/trips"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.trips[0].tripId").value(tripId));
         read(auth, get("/api/trips/{tripId}", tripId))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.destination").value("도쿄"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.destination").value("도쿄"))
+                .andExpect(jsonPath("$.countryCode").value("JP"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"   \"}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.field").value("origin"));
         write(auth, patch("/api/trips/{tripId}", tripId), "{\"origin\":\"서울\\n\"}")

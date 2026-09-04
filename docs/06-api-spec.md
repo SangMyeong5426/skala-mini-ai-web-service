@@ -741,7 +741,8 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 
 세 물품은 이미 내 체크리스트에 `PREPARED`로 등록되어 있다. `confirmedByUser=false`는
 아직 사후 수정을 하지 않았다는 뜻이며 승인 대기·등록 실패가 아니다. `approved`는
-신규 요청·응답에서 사용하지 않는다. 기존 DB 컬럼은 호환 목적으로만 남긴다(05).
+신규 요청·응답에서 사용하지 않는다. 기존 DB 컬럼은 승인 게이트가 아니라 사용자가 고친
+인식 행을 재분석에서 보존하기 위한 내부 표식이다(05).
 `missingInfo`·`labelText`는 BAG_CHECK 출력 그대로다. S-04의 확인 필요 안내는 LOW 또는
 속성 부족에 붙지만 등록을 막지 않는다. 규정 판정의 속성 보완과 사진 인식 신뢰도는 구분한다.
 
@@ -760,8 +761,9 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
    자동 연결은 `confirmed_by_user=false`여도 유효하다.
 4. 한 작업의 완료 처리는 한 번만 한다. 같은 완료 처리 재시도·GET 폴링은 항목을 다시 생성하거나
    사용자의 수정·삭제를 되돌리지 않는다. 새로운 사진 분석 작업도 기존 연결·동일 이름 항목을
-   재사용한다. 사용자가 사후 수정한 이름·수량·준비 상태는 덮어쓰지 않는다.
-   사용자 item PATCH도 해당 사진 연결의 사후 확인을 기록해 이후 분석에서 보존한다.
+   재사용한다. 재분석은 사용자가 고친 인식 행만 보존하고 같은 사진의 나머지 인식 행은
+   새 결과로 교체한다. 사용자 item PATCH도 해당 인식 행의 사후 확인을 기록하므로 이름·수량·
+   준비 상태를 덮어쓰지 않으면서 새로 인식된 다른 물품은 추가할 수 있다.
 5. 현재 내 목록에 새롭게 매칭된 물품은 `PREPARED`로 처리한다. 같은 사진의 이미 반영된
    연결을 다시 읽는 것만으로 사용자가 바꾼 `UNCHECKED`를 되돌리지 않는다.
 6. FE는 BAG_CHECK 완료를 확인한 뒤 내 목록을 다시 조회하고 PACKING_LIST를 요청한다.
@@ -828,6 +830,7 @@ GET  /api/ai-jobs/{jobId}      → 200 status=COMPLETED  ┘
 | 필드 | 필수 | 값 |
 | --- | --- | --- |
 | `origin` `destination` | ✅ | **이동수단과 무관하게 필수** |
+| `countryCode` | ✅ | 목적지 ISO 영문 2자리. 서버가 대문자로 저장하며 해외여행 필수 후보 규칙에 사용 |
 | `startDate` `endDate` | ✅ | `startDate <= endDate` 아니면 `400` |
 | `purpose` | ✅ | `TOUR` `BUSINESS` `REST` `STUDY` |
 | `transport` | ✅ | `FLIGHT` `TRAIN` `BUS` `CAR` |
@@ -1221,7 +1224,7 @@ Location: /api/trips/12
 
 | | 근거 |
 | --- | --- |
-| **데모** | `checklist.md` 의 데모 사고 방지 — *"인터넷이 끊겨도 되도록 Mock을 로컬 백엔드에 둔다"* |
+| **데모** | 실제 OpenAI를 주 경로로 시연하고, 네트워크·쿼터 장애 시 로컬 Mock으로 전환해 같은 API 계약을 유지한다 |
 | **발표** | `AiClient` 인터페이스에 구현 둘(`MockAiClient` · `RealAiClient`)을 두면 **교체 지점이 코드로 드러난다** |
 | **일관성** | Mock 도 같은 DB(`ai_jobs`)에 기록한다. 폴링·상태 전이가 실제와 똑같이 돈다 |
 
@@ -1233,7 +1236,7 @@ public interface AiClient {
 
 ```properties
 # .env 만 바꾸면 교체된다. 코드는 고치지 않는다.
-AI_PROVIDER=mock          # mock | openai | anthropic
+AI_PROVIDER=mock          # mock | openai
 AI_MOCK_DELAY_MS=0        # 발표 때 1000~2000 으로 두면 로딩 화면을 보여줄 수 있다
 ```
 

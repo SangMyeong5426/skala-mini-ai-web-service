@@ -2,8 +2,11 @@ package com.skala.miniai.domain.ai;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -17,6 +20,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
@@ -27,6 +31,8 @@ import com.skala.miniai.domain.checklist.ItemRuleCheckRepository;
 import com.skala.miniai.domain.master.RuleEngine;
 import com.skala.miniai.domain.photo.DetectedObject;
 import com.skala.miniai.domain.photo.DetectedObjectRepository;
+import com.skala.miniai.domain.trip.Trip;
+import com.skala.miniai.domain.trip.TripRepository;
 
 /**
  * 접수된 작업을 <b>요청과 별개로</b> 실행한다.
@@ -48,12 +54,14 @@ import com.skala.miniai.domain.photo.DetectedObjectRepository;
 public class AiJobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AiJobRunner.class);
+    private static final int MAX_PACKING_CANDIDATES = 40;
 
     private final AiJobRepository jobs;
     private final AiJobService jobService;
     private final AiClient aiClient;
     private final DetectedObjectRepository detections;
     private final ChecklistItemRepository items;
+    private final TripRepository trips;
     private final ItemRuleCheckRepository ruleChecks;
     private final PhotoAutoRegistrar autoRegistrar;
     private final RuleCheckContract ruleCheckContract;
@@ -63,7 +71,8 @@ public class AiJobRunner {
 
     public AiJobRunner(AiJobRepository jobs, AiJobService jobService, AiClient aiClient,
                        DetectedObjectRepository detections, ChecklistItemRepository items,
-                       ItemRuleCheckRepository ruleChecks, PhotoAutoRegistrar autoRegistrar, Json json,
+                       TripRepository trips, ItemRuleCheckRepository ruleChecks,
+                       PhotoAutoRegistrar autoRegistrar, Json json,
                        RuleCheckContract ruleCheckContract, RuleEngine ruleEngine,
                        @Value("${app.ai.mock-delay-ms:0}") long mockDelayMs) {
         this.jobs = jobs;
@@ -71,6 +80,7 @@ public class AiJobRunner {
         this.aiClient = aiClient;
         this.detections = detections;
         this.items = items;
+        this.trips = trips;
         this.ruleChecks = ruleChecks;
         this.autoRegistrar = autoRegistrar;
         this.ruleCheckContract = ruleCheckContract;
@@ -92,6 +102,9 @@ public class AiJobRunner {
 
             JsonNode input = json.read(job.getInputPayload());
             JsonNode output = aiClient.run(job.getJobType(), job.getTripId(), input);
+            if (job.getJobType() == Codes.JobType.PACKING_LIST) {
+                applyPackingRules(job, output);
+            }
             if (job.getJobType() == Codes.JobType.RULE_CHECK) {
                 // 07 「누가 채우나」 — 판정은 모델 몫이 아니다. 모델·Mock 이 낸 verdict·ruleId 는
                 // 버리고 transport_rules 로 다시 매긴다. 검증은 그다음이라 계약이 최종값을 본다.
@@ -107,7 +120,7 @@ public class AiJobRunner {
             //      그때 터지는 제약 위반은 아래 catch 를 못 탄다. 작업이 PENDING 에 갇힌다.
             //   ② job.complete() 를 뒤에 둔다 — 앞에 두면 이 트랜잭션이 ai_jobs 행을
             //      UPDATE 로 잠근 채 markFailed 의 새 트랜잭션이 같은 행을 기다려 **교착**한다.
-            persistSideEffects(job, output);
+            persistSideEffects(job, input, output);
             jobs.flush();
 
             job.complete(json.write(output), aiClient.modelName(job.getJobType(), job.getTripId()));
@@ -128,54 +141,102 @@ public class AiJobRunner {
         }
     }
 
-    private void persistSideEffects(AiJob job, JsonNode output) {
+    private void persistSideEffects(AiJob job, JsonNode input, JsonNode output) {
         switch (job.getJobType()) {
-            case BAG_CHECK -> autoRegistrar.register(job.getTripId(), saveDetections(output));
+            case BAG_CHECK -> autoRegistrar.register(job.getTripId(), saveDetections(input, output));
             case RULE_CHECK -> saveRuleChecks(job, output);
             // 07: 추천과 무게는 output_payload 에만 남는다. 내 목록에 자동으로 넣지 않는다.
             case PACKING_LIST, WEIGHT_ESTIMATE -> { }
         }
     }
 
-    /** 07: 사용자가 사후 수정한 사진은 기존 스냅샷을 유지하고, 나머지만 다시 저장한다. */
-    private List<DetectedObject> saveDetections(JsonNode output) {
+    /** 제공자와 무관하게 해외 여행의 여권 필수 후보를 서버 규칙으로 보강한다. */
+    private void applyPackingRules(AiJob job, JsonNode output) {
+        if (job.getTripId() == null || !(output.path("items") instanceof ArrayNode candidates)) return;
+
+        Trip trip = trips.findById(job.getTripId()).orElse(null);
+        if (trip == null) return;
+
+        boolean passportInChecklist = items.findByTripIdOrderById(job.getTripId()).stream()
+                .anyMatch(item -> "여권".equals(RecommendationStore.normalize(item.getName())));
+        boolean foreign = trip.getCountryCode() != null
+                && !"KR".equalsIgnoreCase(trip.getCountryCode().trim());
+
+        List<JsonNode> kept = new ArrayList<>();
+        for (JsonNode candidate : candidates) {
+            if (!"여권".equals(RecommendationStore.normalize(candidate.path("name").asText()))) {
+                kept.add(candidate.deepCopy());
+            }
+        }
+        candidates.removeAll();
+
+        if (foreign && !passportInChecklist) {
+            ObjectNode passport = candidates.addObject();
+            passport.put("name", "여권");
+            passport.put("category", Codes.Category.DOCUMENT.name());
+            passport.put("qty", 1);
+            passport.put("priority", Codes.Priority.REQUIRED.name());
+            passport.put("reason", "해외 여행 출국 전 여권 준비 여부를 확인하세요.");
+            passport.put("source", Codes.ItemSource.RULE.name());
+            passport.putNull("acceptedItemId");
+        }
+        kept.stream().limit(MAX_PACKING_CANDIDATES - candidates.size()).forEach(candidates::add);
+    }
+
+    /** 07: 재분석은 사후 수정한 인식 결과만 보존하고 같은 사진의 나머지는 새 결과로 바꾼다. */
+    private List<DetectedObject> saveDetections(JsonNode input, JsonNode output) {
         List<JsonNode> proposed = new ArrayList<>();
         output.path("detections").forEach(d -> proposed.add(d.deepCopy()));
 
-        // 사진마다 한 번만 지운다. 인식 결과 수만큼 반복하면 같은 삭제를 여러 번 돌린다.
+        Set<Long> failedPhotoIds = new HashSet<>();
+        output.path("failedPhotoIds").forEach(id -> failedPhotoIds.add(id.asLong()));
         Set<Long> photoIds = new LinkedHashSet<>();
-        proposed.forEach(d -> photoIds.add(d.path("photoId").asLong()));
+        input.path("photoIds").forEach(id -> {
+            if (!failedPhotoIds.contains(id.asLong())) photoIds.add(id.asLong());
+        });
+        proposed.removeIf(d -> !photoIds.contains(d.path("photoId").asLong()));
+
         List<DetectedObject> existing = photoIds.isEmpty()
                 ? List.of() : detections.findByPhotoIdInOrderById(photoIds);
-        Set<Long> editedPhotoIds = existing.stream()
-                .filter(DetectedObject::isApproved)
-                .map(DetectedObject::getPhotoId)
-                .collect(java.util.stream.Collectors.toSet());
-        if (!photoIds.isEmpty()) {
-            List<DetectedObject> stale = existing.stream()
-                    .filter(o -> !editedPhotoIds.contains(o.getPhotoId()))
-                    .toList();
-            detections.deleteAll(stale);
-            detections.flush();
-        }
+        Map<Long, List<DetectedObject>> existingByPhoto = new LinkedHashMap<>();
+        existing.forEach(d -> existingByPhoto.computeIfAbsent(d.getPhotoId(), ignored -> new ArrayList<>()).add(d));
+        Map<Long, List<JsonNode>> proposedByPhoto = new LinkedHashMap<>();
+        proposed.forEach(d -> proposedByPhoto.computeIfAbsent(
+                d.path("photoId").asLong(), ignored -> new ArrayList<>()).add(d));
+
+        List<DetectedObject> stale = existing.stream().filter(d -> !d.isApproved()).toList();
+        detections.deleteAll(stale);
+        detections.flush();
 
         List<DetectedObject> saved = new ArrayList<>();
-        existing.stream()
-                .filter(o -> editedPhotoIds.contains(o.getPhotoId()))
-                .forEach(saved::add);
-        for (JsonNode d : proposed) {
-            if (editedPhotoIds.contains(d.path("photoId").asLong())) continue;
-            BigDecimal confidence = new BigDecimal(d.path("confidence").asText("0"))
-                    .setScale(3, java.math.RoundingMode.HALF_UP);
-            saved.add(detections.save(new DetectedObject(
-                    d.path("photoId").asLong(),
-                    d.path("name").asText(),
-                    d.path("qty").asInt(1),
-                    confidence,
-                    // 07: confidenceLevel 은 서버가 confidence 로 채운다. 모델 값이 있어도 덮어쓴다.
-                    DetectedObject.levelOf(confidence),
-                    d.path("missingInfo").isNull() ? null : d.path("missingInfo").asText(null),
-                    d.path("labelText").isNull() ? null : d.path("labelText").asText(null))));
+        for (Long photoId : photoIds) {
+            List<DetectedObject> previous = existingByPhoto.getOrDefault(photoId, List.of());
+            List<JsonNode> next = proposedByPhoto.getOrDefault(photoId, List.of());
+            Set<Integer> consumed = new HashSet<>();
+
+            for (DetectedObject edited : previous.stream().filter(DetectedObject::isApproved).toList()) {
+                int matched = matchingProposal(edited, next, consumed);
+                if (matched < 0) {
+                    // ponytail: 모델은 안정 ID를 주지 않는다. 이름이 바뀐 행은 기존 순서로 대응한다.
+                    int ordinal = previous.indexOf(edited);
+                    if (ordinal < next.size() && !consumed.contains(ordinal)) matched = ordinal;
+                }
+                if (matched >= 0) consumed.add(matched);
+                saved.add(edited);
+            }
+
+            for (int i = 0; i < next.size(); i++) {
+                if (consumed.contains(i)) continue;
+                JsonNode d = next.get(i);
+                BigDecimal confidence = new BigDecimal(d.path("confidence").asText("0"))
+                        .setScale(3, java.math.RoundingMode.HALF_UP);
+                saved.add(detections.save(new DetectedObject(
+                        photoId, d.path("name").asText(), d.path("qty").asInt(1), confidence,
+                        // 07: confidenceLevel 은 서버가 confidence 로 채운다. 모델 값이 있어도 덮어쓴다.
+                        DetectedObject.levelOf(confidence),
+                        d.path("missingInfo").isNull() ? null : d.path("missingInfo").asText(null),
+                        d.path("labelText").isNull() ? null : d.path("labelText").asText(null))));
+            }
         }
         // 자동 등록이 이 id 들을 써야 하므로 먼저 내보낸다.
         detections.flush();
@@ -197,6 +258,15 @@ public class AiJobRunner {
             }
         }
         return saved;
+    }
+
+    private int matchingProposal(DetectedObject edited, List<JsonNode> proposed, Set<Integer> consumed) {
+        String editedName = RecommendationStore.normalize(edited.getName());
+        for (int i = 0; i < proposed.size(); i++) {
+            if (!consumed.contains(i) && editedName.equals(RecommendationStore.normalize(
+                    proposed.get(i).path("name").asText()))) return i;
+        }
+        return -1;
     }
 
 

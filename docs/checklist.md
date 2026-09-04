@@ -128,7 +128,8 @@
 ## 데모 사고 방지
 
 - [x] 데모용 시드 데이터를 미리 넣어 둔다 (빈 화면 시연 방지) — 2026-09-03 Supabase 적용. 여행 1 · 체크리스트 10(`PHOTO` 5 · `AI` 4 · `RULE` 1) · 인식 물품 8 · N:M 8/4
-- [x] 인터넷이 끊겨도 되도록 Mock을 **로컬 백엔드**에 둔다
+- [x] 주 시연은 `AI_PROVIDER=openai`. 네트워크·쿼터 장애 시 `backend/.env`를
+  `AI_PROVIDER=mock`으로 바꾸고 백엔드를 재기동하는 fallback을 둔다
 - [x] 실제 연동 시 `frontend/.env`의 `VITE_USE_MOCK=false` 확인
 - [x] OpenAI `gpt-4o-mini` 사진·추천·여행 검수 스모크 + H2 사진 업로드 → 자동 등록 → 추천 후보 E2E
 - [ ] 발표 PC에서 한 번 실행해 본다 (`npm install`부터)
