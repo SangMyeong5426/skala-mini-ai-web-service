@@ -133,7 +133,12 @@ public class MockAiClient implements AiClient {
     private boolean containsMeasurement(String text, String measurement) {
         for (int index = text.indexOf(measurement); index >= 0;
                 index = text.indexOf(measurement, index + 1)) {
-            if (index == 0 || !Character.isDigit(text.charAt(index - 1))) return true;
+            if (index == 0) return true;
+            char previous = text.charAt(index - 1);
+            if (Character.isDigit(previous)) continue;
+            if ((previous == ',' || previous == '.')
+                    && index > 1 && Character.isDigit(text.charAt(index - 2))) continue;
+            return true;
         }
         return false;
     }

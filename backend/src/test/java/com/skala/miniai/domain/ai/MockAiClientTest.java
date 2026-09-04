@@ -57,6 +57,10 @@ class MockAiClientTest {
                 .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
         assertThat(run("1200Wh 보조배터리 기내 반입되나요?").path("results").get(0)
                 .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        assertThat(run("1,200Wh 보조배터리 기내 반입되나요?").path("results").get(0)
+                .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
+        assertThat(run("1.200Wh 보조배터리 기내 반입되나요?").path("results").get(0)
+                .path("verdict").asText()).isEqualTo("ASK_AIRLINE");
 
         assertQuestion("150ml 말고 50ml 화장품은 되나요?", "화장품", "CABIN_OK", "capacityMl", 50);
     }

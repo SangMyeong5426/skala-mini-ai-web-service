@@ -97,20 +97,22 @@ public class DetectionService {
             detection.setQty(req.qty());
         }
 
-        for (ItemDetection link : current) {
-            // 06: 사후 수정된 연결은 confirmed_by_user = true 로 기록한다.
-            // 최초 등록의 조건이 아니라 "사용자가 확인했다" 는 표시다.
-            link.setConfirmedByUser(true);
-            link.setMatchConfidence(USER_CONFIRMED);
+        if (editsContent) {
+            for (ItemDetection link : current) {
+                // 06: 사후 수정된 연결은 confirmed_by_user = true 로 기록한다.
+                // 최초 등록의 조건이 아니라 "사용자가 확인했다" 는 표시다.
+                link.setConfirmedByUser(true);
+                link.setMatchConfidence(USER_CONFIRMED);
 
-            items.findById(link.getChecklistItemId()).ifPresent(item -> {
-                if (req.name() != null) item.setName(detection.getName());
-                if (req.qty() != null) item.setQty(detection.getQty());
-                if (req.category() != null) item.setCategory(req.category());
-                // 준비 상태는 건드리지 않는다. 이미 PREPARED 이고, 사용자가 되돌렸다면 그 뜻을 지킨다.
-            });
+                items.findById(link.getChecklistItemId()).ifPresent(item -> {
+                    if (req.name() != null) item.setName(detection.getName());
+                    if (req.qty() != null) item.setQty(detection.getQty());
+                    if (req.category() != null) item.setCategory(req.category());
+                    // 준비 상태는 건드리지 않는다. 이미 PREPARED 이고, 사용자가 되돌렸다면 그 뜻을 지킨다.
+                });
+            }
         }
-        detection.setApproved(true);
+        if (editsContent || req.matchedItemIds() != null) detection.setApproved(true);
 
         return new PhotoDtos.PatchResponse(
                 detection.getId(), detection.getName(), detection.getQty(), linkedItemsOf(detection.getId()));

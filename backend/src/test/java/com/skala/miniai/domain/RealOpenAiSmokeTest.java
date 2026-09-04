@@ -78,7 +78,7 @@ class RealOpenAiSmokeTest {
         api = new OpenAiChatApi(json,
                 env.getOrDefault("AI_BASE_URL", "https://api.openai.com/v1"),
                 env.get("AI_API_KEY"),
-                env.getOrDefault("AI_MODEL", "gpt-4o"),
+                env.getOrDefault("AI_MODEL", "gpt-4o-mini"),
                 Double.parseDouble(env.getOrDefault("AI_TEMPERATURE", "0.2")),
                 Integer.parseInt(env.getOrDefault("AI_MAX_TOKENS", "4096")),
                 Long.parseLong(env.getOrDefault("AI_TIMEOUT_MS", "60000")));

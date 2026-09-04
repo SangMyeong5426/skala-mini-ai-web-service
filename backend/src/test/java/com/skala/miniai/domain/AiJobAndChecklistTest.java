@@ -172,6 +172,27 @@ class AiJobAndChecklistTest {
                 .hasSize(1);
     }
 
+    @Test
+    void packingRulesRemoveCurrentItemsAndDomesticPassport() {
+        checklist.add(tripId, new ChecklistDtos.CreateRequest(
+                "우산", Codes.Category.ETC, 1, Codes.Priority.RECOMMENDED, null));
+        jdbc.update("update trips set country_code = 'KR' where id = ?", tripId);
+        given(aiClient.run(any(), any(), any())).willReturn(json.read("""
+                {"items":[
+                   {"name":"우산","category":"ETC","qty":1,"priority":"RECOMMENDED",
+                    "reason":"비에 대비하세요.","source":"AI","acceptedItemId":null},
+                   {"name":"여권","category":"DOCUMENT","qty":1,"priority":"REQUIRED",
+                    "reason":"신분증을 확인하세요.","source":"RULE","acceptedItemId":null}],
+                 "tips":[],"weatherSource":"SEASONAL","weatherAsOf":null}
+                """));
+
+        Long jobId = aiJobService.create(new AiJobDtosFixture().packingList(tripId)).jobId();
+        AiJob completed = awaitSettled(jobId);
+
+        assertThat(json.read(completed.getOutputPayload()).path("items"))
+                .as("미완료 기존 항목과 국내 여행 여권은 추천하지 않는다")
+                .isEmpty();
+    }
 
     /**
      * 사진 인식 물품은 <b>승인 없이</b> 내 목록에 {@code PREPARED} 로 등록된다 (06 개정).
@@ -263,6 +284,13 @@ class AiJobAndChecklistTest {
         Long detectionId = jdbc.queryForObject(
                 "select id from detected_objects where photo_id = ? and name = '충전기'",
                 Long.class, photoId);
+        detectionService.patch(tripId, detectionId,
+                new PhotoDtos.PatchRequest(null, null, null, null, null));
+        assertThat(jdbc.queryForObject(
+                "select approved from detected_objects where id = ?", Boolean.class, detectionId)).isFalse();
+        assertThat(jdbc.queryForObject(
+                "select confirmed_by_user from item_detections where detected_object_id = ?",
+                Boolean.class, detectionId)).isFalse();
         detectionService.patch(tripId, detectionId,
                 new PhotoDtos.PatchRequest(null, "USB 충전기", null, null, null));
         // 사용자가 "아직 안 챙겼다" 로 되돌린다.

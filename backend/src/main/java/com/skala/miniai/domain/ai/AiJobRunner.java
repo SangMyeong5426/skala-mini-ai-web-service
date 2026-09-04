@@ -149,21 +149,24 @@ public class AiJobRunner {
         }
     }
 
-    /** 제공자와 무관하게 해외 여행의 여권 필수 후보를 서버 규칙으로 보강한다. */
+    /** 제공자와 무관하게 현재 목록의 중복을 제거하고 해외 여행의 여권 필수 후보를 보강한다. */
     private void applyPackingRules(AiJob job, JsonNode output) {
         if (job.getTripId() == null || !(output.path("items") instanceof ArrayNode candidates)) return;
 
         Trip trip = trips.findById(job.getTripId()).orElse(null);
         if (trip == null) return;
 
-        boolean passportInChecklist = items.findByTripIdOrderById(job.getTripId()).stream()
-                .anyMatch(item -> "여권".equals(RecommendationStore.normalize(item.getName())));
+        Set<String> checklistNames = new HashSet<>();
+        items.findByTripIdOrderById(job.getTripId()).forEach(item ->
+                checklistNames.add(RecommendationStore.normalize(item.getName())));
+        boolean passportInChecklist = checklistNames.contains("여권");
         boolean foreign = trip.getCountryCode() != null
                 && !"KR".equalsIgnoreCase(trip.getCountryCode().trim());
 
         List<JsonNode> kept = new ArrayList<>();
         for (JsonNode candidate : candidates) {
-            if (!"여권".equals(RecommendationStore.normalize(candidate.path("name").asText()))) {
+            String name = RecommendationStore.normalize(candidate.path("name").asText());
+            if (!"여권".equals(name) && !checklistNames.contains(name)) {
                 kept.add(candidate.deepCopy());
             }
         }
