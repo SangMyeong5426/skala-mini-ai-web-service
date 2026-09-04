@@ -4,7 +4,7 @@ import { ApiFailure } from '../api/client'
 import { useAuth } from '../auth/context'
 import { AuthShell, Field } from '../components/AuthShell'
 import { USE_MOCK } from '../api/mock'
-import { LOGIN_ID_RE, PASSWORD_MIN } from '../types/api'
+import { EMAIL_RE, LOGIN_ID_RE, PASSWORD_MAX_BYTES, PASSWORD_MIN } from '../types/api'
 
 /**
  * S-00 로그인 · 회원가입.
@@ -23,6 +23,40 @@ import { LOGIN_ID_RE, PASSWORD_MIN } from '../types/api'
  */
 type Mode = 'login' | 'signup'
 
+/**
+ * 가입 칸 하나의 규칙. <b>제출 검사와 실시간 검사가 같은 함수를 쓴다.</b>
+ *
+ * 두 벌로 두면 한쪽만 고쳐서 "칸에서는 통과인데 제출하면 거절" 이 된다.
+ * 06 "회원가입·로그인 계약" 을 그대로 옮긴 것이고, 서버·Mock 과도 같은 기준이다.
+ */
+function ruleError(name: string, value: string): string | null {
+  const v = value.trim()
+  switch (name) {
+    case 'nickname':
+      return v.length < 2 || v.length > 50 ? '닉네임은 2~50자로 입력해 주세요.' : null
+    case 'loginId':
+      return LOGIN_ID_RE.test(v.toLowerCase()) ? null : '아이디는 영문 소문자·숫자·밑줄 4~30자입니다.'
+    case 'password':
+      // 공백도 비밀번호의 일부다. trim 하지 않는다
+      if (value.length < PASSWORD_MIN) return `비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`
+      /*
+       * <b>BCrypt 가 72바이트에서 자른다.</b> 그래서 06 이 상한을 글자 수가 아니라
+       * 바이트로 정했다 — 한글은 한 자에 3바이트라 24자면 넘는다.
+       *
+       * 예전에는 이 검사가 서버와 Mock 에만 있어서, 한글 비밀번호를 쓴 사람은
+       * 가입 버튼을 눌러야 거절당했다.
+       */
+      if (new TextEncoder().encode(value).length > PASSWORD_MAX_BYTES) {
+        return `비밀번호가 너무 깁니다. 한글은 ${Math.floor(PASSWORD_MAX_BYTES / 3)}자까지 됩니다.`
+      }
+      return null
+    case 'email':
+      return EMAIL_RE.test(v) && v.length <= 255 ? null : '이메일 형식을 확인해 주세요.'
+    default:
+      return null
+  }
+}
+
 export default function Login() {
   const { user, loading, login, signup } = useAuth()
   const nav = useNavigate()
@@ -35,6 +69,19 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
+  /*
+   * 칸을 떠날 때 검사한다. <b>타이핑 중에는 하지 않는다</b> — 두 글자 쳤을 때
+   * "4자 이상" 이 뜨면 아직 쓰는 중인 사람을 나무라는 꼴이다.
+   *
+   * 로그인 모드에서는 하지 않는다. 예전 규칙으로 만든 아이디를 쓰는 사람에게
+   * 화면이 먼저 "아이디가 틀렸다" 고 단정하면 안 된다(아래 제출 검사와 같은 이유).
+   */
+  const checkOnBlur = (name: string, value: string) => {
+    if (mode !== 'signup' || !value.trim()) return
+    const msg = ruleError(name, value)
+    if (msg) { setField(name); setError(msg) }
+    else if (field === name) { setField(null); setError(null) }
+  }
   const [field, setField] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -80,13 +127,12 @@ export default function Login() {
      * 나왔다. 아이디가 틀렸다는 사실을 화면이 먼저 단정한 셈이다.
      */
     if (mode === 'signup') {
-      if (!LOGIN_ID_RE.test(id)) {
-        setField('loginId'); setError('아이디는 영문 소문자·숫자·밑줄 4~30자입니다.')
-        return
-      }
-      if (password.length < PASSWORD_MIN) {
-        setField('password'); setError(`비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다.`)
-        return
+      // 위에서 아래로 처음 걸리는 칸 하나만 짚는다. 한꺼번에 다 띄우면 어디부터 고칠지 모른다
+      for (const [name, value] of [
+        ['nickname', nickname], ['loginId', id], ['password', password], ['email', email],
+      ] as const) {
+        const msg = ruleError(name, value)
+        if (msg) { setField(name); setError(msg); return }
       }
     } else if (!id || !password) {
       setField(id ? 'password' : 'loginId')
@@ -154,6 +200,7 @@ export default function Login() {
             <input
               id="nickname" name="nickname" autoComplete="nickname"
               value={nickname} onChange={(e) => setNickname(e.target.value)}
+              onBlur={(e) => checkOnBlur('nickname', e.target.value)}
             />
           </Field>
         )}
@@ -162,10 +209,11 @@ export default function Login() {
           <input
             id="loginId" name="username" autoComplete="username" autoFocus
             value={loginId} onChange={(e) => setLoginId(e.target.value)}
+            onBlur={(e) => checkOnBlur('loginId', e.target.value)}
           />
         </Field>
 
-        <Field label="비밀번호" htmlFor="password" error={errFor('password')} hint={isLogin ? undefined : '8자 이상.'}>
+        <Field label="비밀번호" htmlFor="password" error={errFor('password')} hint={isLogin ? undefined : `${PASSWORD_MIN}자 이상. 한글은 ${Math.floor(PASSWORD_MAX_BYTES / 3)}자까지.`}>
           <div className="pw">
             <input
               id="password" name="password"
@@ -175,6 +223,7 @@ export default function Login() {
               type={showPw ? 'text' : 'password'}
               autoComplete={isLogin ? 'current-password' : 'new-password'}
               value={password} onChange={(e) => setPassword(e.target.value)}
+              onBlur={(e) => checkOnBlur('password', e.target.value)}
             />
             <button
               type="button" className="pw-toggle"
@@ -191,6 +240,7 @@ export default function Login() {
             <input
               id="email" name="email" type="email" autoComplete="email"
               value={email} onChange={(e) => setEmail(e.target.value)}
+              onBlur={(e) => checkOnBlur('email', e.target.value)}
             />
           </Field>
         )}

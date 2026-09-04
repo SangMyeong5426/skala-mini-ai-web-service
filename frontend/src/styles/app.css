@@ -132,13 +132,71 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   box-shadow: var(--shadow);
   padding: 22px;
 }
+/*
+ * 카드를 <b>세로로 쌓을 때만</b> 벌린다.
+ *
+ * 이 규칙 하나가 나란히 놓은 카드의 상단을 어긋나게 만들었다. 그리드에서도
+ * 두 번째 칸은 첫째 칸의 <b>인접 형제</b>라 `margin-top` 이 그대로 걸리고,
+ * 오른쪽 카드만 16px 내려앉는다. S-05 의 `AI 추천`, S-06 의 `반입 판정` 이
+ * 그래서 제목부터 한 줄씩 밀려 있었다.
+ *
+ * 가로로 늘어놓는 그릇은 이미 `gap` 으로 사이를 벌린다 — 거기서는 끈다.
+ */
 .card + .card { margin-top: 16px; }
-.card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.grid > .card + .card,
+.items-cols > .card + .card,
+.stack > .card + .card { margin-top: 0; }
+/*
+ * <b>머리의 키를 고정한다.</b> 제목만 있는 머리는 글자 한 줄 높이인데, 배지나
+ * 작은 버튼이 들어간 머리는 그보다 크다. 카드를 나란히 놓으면 그 차이만큼
+ * 제목 두 개가 어긋나 앉고, 아래 내용도 한 줄씩 밀린다.
+ *
+ * 실제로 두 번 걸렸다 — S-05 의 `내 체크리스트`·`AI 추천`, S-06 의 `예상 무게`·
+ * `반입 판정`. 카드마다 고쳐 다니지 않고 여기서 바닥을 깐다.
+ */
+.card-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 32px; margin-bottom: 14px;
+}
 .card-title { font-size: 16px; font-weight: 700; }
 .card-sub { font-size: 13.5px; color: var(--text-2); }
 .card-head .spacer { margin-left: auto; }
 
 .grid { display: grid; gap: 16px; }
+/*
+ * 본문 + 옆 기둥. 기둥은 240px 고정이고 본문이 남는 만큼 가져간다.
+ * 바깥 폭(--shell)이 그만큼 넓어서 본문은 1120px 로 떨어진다.
+ *
+ * 좁아지면 기둥을 아래로 내린다 — 240px 을 억지로 유지하면 본문이 읽을 수
+ * 없을 만큼 좁아진다.
+ */
+.grid-aside { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; }
+@media (max-width: 1100px) {
+  .grid-aside { grid-template-columns: minmax(0, 1fr); }
+}
+
+/*
+ * S-05 체크리스트 — 내 목록(왼쪽) · AI 추천(오른쪽).
+ *
+ * 쌓아 두면 추천이 화면 밖으로 밀린다. 두 목록은 <b>견주라고</b> 있는 것이라
+ * (무엇이 빠졌나) 나란히 놓아야 스크롤 왕복이 사라진다.
+ *
+ * 왼쪽이 조금 넓다. 이름·수량 입력칸과 배지·버튼 셋이 한 줄에 들어가야 해서
+ * 반반으로 나누면 줄이 접힌다. 오른쪽은 이름·이유·버튼 하나뿐이라 좁아도 된다.
+ *
+ * `align-items: start` — 두 카드의 키가 다르다. 늘리면 짧은 쪽 아래에
+ * 빈 바닥이 생겨 카드가 반쯤 비어 보인다.
+ */
+.items-cols {
+  display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: 20px; align-items: start;
+}
+
+/* 좁아지면 위아래로 되돌린다. 억지로 두 기둥을 유지하면 양쪽 다 못 읽는다 */
+@media (max-width: 1100px) {
+  .items-cols { grid-template-columns: minmax(0, 1fr); }
+}
+
 .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 860px) {
@@ -183,6 +241,22 @@ select:focus-visible, textarea:focus-visible {
 .bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .bar-lg { height: 10px; }
+
+/*
+ * 한도 대비 무게 막대의 색.
+ *
+ * <b>배지만 빨갛고 막대는 초록이면 안전해 보인다.</b> 눈이 먼저 가는 것은 색을
+ * 채운 막대 쪽이라, 판정과 막대가 다른 말을 하면 막대를 믿는다. 수하물 계산기들이
+ * 공통으로 초록 → 앰버 → 빨강을 쓰는 이유다.
+ *
+ * <b>색만으로 구분하지 않는다.</b> 옆의 판정 배지에 글자(여유·한도 근접·초과
+ * 가능성)가 함께 있으므로 색각 이상에서도 뜻이 전달된다 (03-wireframe 접근성).
+ *
+ * 기준은 서버가 이미 정한 verdict 를 그대로 쓴다. 화면에서 다시 계산하면
+ * 산식이 둘이 되고, 07 이 "verdict 는 서버가 채운다" 로 못박은 것을 어긴다.
+ */
+.bar > span.is-near { background: var(--warn); }
+.bar > span.is-over { background: var(--danger); }
 
 .stat { display: flex; flex-direction: column; gap: 2px; }
 .stat-label { font-size: 12px; color: var(--text-2); }
@@ -275,6 +349,84 @@ select:focus-visible, textarea:focus-visible {
 .fab-ico { color: var(--accent-line); }
 
 /* ── 사진 등록 (S-03) ───────────────────────────────────── */
+/*
+ * 가방 종류 단계. 기내용 → 위탁용 순서로 하나씩 받는다.
+ *
+ * 두 칸을 나란히 두면 어느 쪽에 놓을지 매번 고르게 되고 칸도 좁아진다.
+ * 단계로 나누면 화면이 <b>지금 무엇을 받는지</b> 한 가지만 말한다.
+ *
+ * <b>지나간 단계로 돌아갈 수 있다.</b> 이 표시는 진행 상태이자 이동 수단이다 —
+ * 위탁용을 올리다 기내용을 빠뜨린 걸 알았을 때 되돌아갈 길이 필요하다.
+ */
+.bag-steps { display: flex; gap: 8px; margin-bottom: 14px; }
+.bag-step { flex: 1; }
+.bag-step-in {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); background: var(--surface);
+  font-size: 14px; font-weight: 600; color: var(--text-2);
+}
+.bag-step.is-current .bag-step-in {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong);
+}
+.bag-step-no {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--line); color: var(--text-2);
+  font-size: 12px; font-weight: 700;
+}
+.bag-step.is-current .bag-step-no { background: var(--accent); color: #fff; }
+.bag-step-in .card-sub { margin-left: auto; }
+
+.bag-sec-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.bag-sec-title { font-size: 15px; font-weight: 700; }
+
+/* 종류 미상 — 예전 데이터에만 남는다. 지우는 길이 여기 말고 없어서 보여준다 */
+/*
+ * 사진 칸과 촬영 가이드를 <b>카드 안에서</b> 나눈다.
+ *
+ * 바깥에 `aside` 로 두면 카드가 가이드 폭만큼 짧아지고, 카드 아래 오른쪽에
+ * 붙는 `다음` 버튼이 S-02 여행 정보의 것보다 그만큼 왼쪽에 선다. 두 화면은
+ * 1→2 로 이어 걷는 자리라 버튼이 옆으로 튀는 것이 바로 보인다.
+ *
+ * 푸터는 이 두 열 <b>바깥</b>, 카드 바로 아래에 둔다. 그래야 카드 폭 전체를
+ * 쓰고 버튼 오른쪽 끝이 여행 정보와 같은 x 에 온다.
+ */
+.bag-cols { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; }
+
+/* 카드 안이므로 또 카드로 만들지 않는다 — 테두리 대신 세로줄 하나로 나눈다 */
+.bag-guide { border-left: 1px solid var(--line); padding-left: 22px; }
+.bag-guide-title { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--text-2); }
+
+/*
+ * 가이드 안의 주의문은 <b>말풍선이 아니다.</b>
+ *
+ * 기본 `.disclaimer` 는 색을 채우고 왼쪽에 굵은 띠를 두른 알림 상자다. 넓은
+ * 카드 안에서 한 번 튀어나오라고 만든 모양인데, 이 좁은 기둥에서는 글이
+ * 두 줄로 접히면서 둥근 덩어리 하나가 떠 있는 것처럼 보인다.
+ *
+ * 여기서는 가이드의 <b>마지막 한 줄</b>일 뿐이다. 채움을 걷고 가는 선 하나로
+ * 나눈다 — 위 목록과 이어 읽히되 성격이 다르다는 것만 표시한다.
+ */
+.bag-guide .disclaimer {
+  margin-top: 16px; padding: 14px 0 0;
+  background: none; border-left: 0; border-radius: 0;
+  border-top: 1px solid var(--line);
+  line-height: 1.6;
+}
+
+/* 좁아지면 가이드를 사진 칸 아래로 내린다 — 옆에 두면 글이 세로로 몰린다 */
+@media (max-width: 900px) {
+  .bag-cols { grid-template-columns: 1fr; }
+  .bag-guide { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 18px; }
+}
+
+.bag-unknown { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.bag-unknown .thumbs { margin-top: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
 .dropzone {
   border: 1.5px dashed var(--line-strong); border-radius: var(--r);
   background: var(--surface-2); padding: 16px;
@@ -282,6 +434,23 @@ select:focus-visible, textarea:focus-visible {
 .dropzone.is-over { border-color: var(--accent); background: var(--accent-soft); }
 
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+
+/*
+ * 사진을 더 올리는 타일. <b>썸네일과 같은 크기·같은 줄에 선다.</b>
+ *
+ * 헤더에 작은 `사진 추가` 버튼을 두던 것을 여기로 옮겼다 — 끌어다 놓는 곳과
+ * 눌러서 고르는 곳이 따로 있으면 어느 쪽이 맞는지 고민하게 된다. 한 자리로 합친다.
+ */
+.thumb-add {
+  aspect-ratio: 4 / 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px dashed var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text-2);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.thumb-add span[aria-hidden] { font-size: 24px; line-height: 1; }
+.thumb-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.thumb-add:disabled { opacity: 0.5; cursor: default; }
 .thumb { margin: 0; }
 .thumb img {
   width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
@@ -310,8 +479,18 @@ select:focus-visible, textarea:focus-visible {
   background: var(--surface-2, var(--surface));
 }
 
-.guide { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text-2); }
-.guide li { padding-left: 14px; position: relative; }
+/*
+ * 촬영 가이드.
+ *
+ * 좁은 기둥에 글이 몰려 보이던 것을 <b>세 가지로</b> 푼다 — 기둥을 넓히고
+ * (`.bag-cols` 280px), 줄 간격을 키우고, 항목 사이를 벌린다. 폭만 넓히면
+ * 줄이 길어질 뿐 답답한 느낌은 그대로다.
+ */
+.guide {
+  display: flex; flex-direction: column; gap: 14px;
+  font-size: 13px; line-height: 1.65; color: var(--text-2);
+}
+.guide li { padding-left: 16px; position: relative; }
 .guide li::before {
   content: ''; position: absolute; left: 2px; top: 8px;
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
@@ -391,7 +570,15 @@ select:focus-visible, textarea:focus-visible {
    *   --shell  글 기둥의 최대 폭
    *   --edge   화면 가장자리에 남기는 여백
    */
-  --shell: 1120px;
+  /*
+   * <b>모든 화면이 같은 폭을 쓴다.</b> 랜딩·여행 정보·짐 사진이 같은 자리에서
+   * 시작해 같은 자리에서 끝나야, 화면을 넘길 때 좌우 여백이 흔들리지 않는다.
+   *
+   * 1120 이 아니라 1416 인 것은 짐 사진의 옆 기둥(280) + 간격(16) 몫이다.
+   * 그 화면만 넓히는 방법도 있었지만 그러면 거기서만 여백이 달라진다.
+   * <b>넓히는 쪽으로 맞췄다</b> — 좁히면 사진 칸이 쓸 수 없을 만큼 줄어든다.
+   */
+  --shell: 1416px;
   --edge: 64px;
   --head-h: 66px;   /* 상단 헤더 높이. 히어로가 이 아래에 붙는다 */
   --gap: 24px;   /* 좁은 화면에서 색 띠가 화면에 닿지 않도록 남기는 최소 여백 */
@@ -580,30 +767,72 @@ select:focus-visible, textarea:focus-visible {
  * 지도 묶음(땅·항로·도시·비행기)을 통째로 아래로 내린다.
  *
  * <b>비행기가 글자를 침범하지 않게 하는 장치다.</b> 기체 반높이(약 25)까지 넣어
- * 항로의 가장 높은 지점(=출발점 서울)이 복사 블록 바닥보다 아래 오도록 잡았다.
- * viewBox 를 xMidYMin 으로 자르므로 이 거리는 화면 높이와 무관하게 일정하다.
+ * 항로의 가장 높은 지점이 복사 블록 바닥보다 아래 오도록 잡았다.
  *
- * 창이 낮아지면 지도가 세로로 다 안 들어가 도쿄가 화면 밖으로 밀린다. 그래서
- * 높이 구간마다 축척을 줄인다. <b>내리는 양과 축척은 짝이다</b> — 한쪽만 바꾸면
- * 글자와 겹치거나 도착점이 잘린다.
+ * <b>높이별 축척 보정을 걷어냈다.</b> 예전에는 viewBox 를 위 기준(xMidYMin)으로
+ * 잘라서, 창이 낮아지면 아래쪽 도쿄가 화면 밖으로 밀렸다. 그걸 막으려고
+ * max-height 구간마다 지도를 줄였는데 — 창 높이와 지도 크기를 손으로 맞추는
+ * 방식이라 해상도 하나 바뀔 때마다 어긋났다.
+ *
+ * 이제 아래 기준(xMidYMax)으로 자른다. 세로가 모자라면 <b>빈 하늘부터</b>
+ * 사라지고 두 도시는 언제나 남으므로, 보정 자체가 필요 없다.
  */
 .art-map {
   transform: translateY(110px);
   transform-box: view-box;
   transform-origin: 50% 0;
 }
-@media (max-height: 880px) {
-  .art-map { transform: translateY(104px) scale(0.88); }
+
+/*
+ * 좁은 창에서는 가로가 잘린다 — `slice` 가 세로에 맞춰 채우기 때문이다.
+ * 폭이 세로의 1.8배보다 좁아지면 양옆이 깎이므로, 지도를 줄여 두 도시를
+ * 가운데로 끌어당긴다. 세로 보정과 달리 이건 <b>폭</b>이 기준이라
+ * 창 높이가 바뀌어도 어긋나지 않는다.
+ */
+@media (max-width: 860px) {
+  .art-map { transform: translateY(96px) scale(0.82); }
 }
-@media (max-height: 780px) {
-  .art-map { transform: translateY(100px) scale(0.78); }
+@media (max-width: 640px) {
+  .art-map { transform: translateY(84px) scale(0.66); }
 }
 
 /* 땅 — 바다(배경) 위에 옅게 깔린 지도. 글자가 위에 오므로 진하게 하지 않는다 */
 .art-land path,
 .art-land ellipse { fill: #c3d2ad; opacity: 0.55; }
 
-.art-cloud ellipse { fill: #fff; opacity: 0.55; }
+/*
+ * <b>색을 그룹에 준다.</b> `.art-cloud ellipse` 로 주면 구름이 <b>검게</b> 나온다 —
+ * `<use>` 로 복제한 쪽은 그림자 트리에 들어가서 후손 선택자가 걸리지 않고,
+ * 칠하지 않은 SVG 도형의 기본값이 검정이기 때문이다.
+ *
+ * 그림자 트리로 넘어가는 것은 <b>상속되는 속성</b>뿐이다. `fill` 이 그렇다.
+ * 그래서 원본이 아니라 부모 `<g>` 에 칠한다.
+ *
+ * `opacity` 는 상속되지 않지만 그룹에 걸면 그룹 전체에 한 번 적용된다 —
+ * 겹친 타원 두 개가 겹치는 자리에서 진해지지 않아 오히려 낫다.
+ */
+.art-cloud { fill: #fff; opacity: 0.55; }
+
+/*
+ * 구름이 흐른다. 1760 은 두 벌을 벌려 놓은 간격과 같은 값이라, 한 바퀴를
+ * 돌면 뒤의 것이 앞의 것 자리에 정확히 겹친다 — 그래서 마디가 안 보인다.
+ * 둘 중 하나만 고치면 이음매가 튄다.
+ *
+ * `linear` 여야 한다. 기본값(`ease`)은 양끝에서 느려져서 한 바퀴마다 멈칫하고,
+ * 그 순간이 곧 이음매를 드러낸다.
+ *
+ * 한 바퀴 길이는 인라인 `animationDuration` 이 정한다 — 구름마다 달라야 한다.
+ */
+@keyframes art-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(1760px); }
+}
+.art-drift { animation: art-drift 180s linear infinite; }
+
+/* 움직임을 줄여 달라고 한 사람에게는 멈춰 세운다 — 배경 장식이라 없어도 된다 */
+@media (prefers-reduced-motion: reduce) {
+  .art-drift { animation: none; }
+}
 
 .art-route,
 .art-route-done { fill: none; stroke-linecap: round; }
@@ -1026,12 +1255,6 @@ select:focus-visible, textarea:focus-visible {
 }
 
 /* 인식 결과 사후 수정 — 이름·수량을 그 자리에서 고친다 */
-.edit-row { display: flex; gap: 8px; align-items: center; }
-.edit-row input {
-  padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
-  font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
-}
-.edit-row input[type='number'] { width: 76px; }
 
 /* 인식 결과 사후 수정 — 이름·수량을 그 자리에서 고친다 */
 .edit-row { display: flex; gap: 8px; align-items: center; }
@@ -1039,7 +1262,9 @@ select:focus-visible, textarea:focus-visible {
   padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
   font: inherit; font-size: 14px; background: var(--surface); color: var(--text);
 }
-.edit-row input[type='number'] { width: 76px; }
+/* 이름칸이 남는 자리를 다 쓴다. 안 그러면 좁은 기둥에서 두 글자만 보인다 */
+.edit-row input:not([type='number']) { flex: 1; min-width: 0; }
+.edit-row input[type='number'] { width: 76px; flex: none; }
 
 /* 내 체크리스트 직접 추가 — 03:271 주요 요소. 목록 아래 한 줄로 늘 열려 있다 */
 .add-row {
@@ -1090,15 +1315,38 @@ select:focus-visible, textarea:focus-visible {
 
 .cell { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .cell label { font-size: 13.5px; font-weight: 700; color: var(--text-2); }
-.cell input {
+/*
+ * <b>input 과 select 를 같이 잡는다.</b> 공항은 고르는 값이라 select 인데,
+ * input 만 스타일이 있으면 같은 줄에 놓인 항공사 칸과 높이·테두리가 달라져
+ * 한 줄이 어긋나 보인다.
+ */
+.cell input,
+.cell select {
   padding: 11px 13px;
   border: 1px solid var(--line-strong); border-radius: var(--r-sm);
   background: var(--surface); color: var(--text);
   font: inherit; font-size: 15px;
 }
-.cell input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/*
+ * 고칠 수 없는 칸. 출발지·도착지가 공항에서 나온 값이라 읽기 전용이다.
+ *
+ * <b>보통 입력칸처럼 보이면 안 된다.</b> 눌러도 아무 일이 없는 칸이 옆칸과
+ * 똑같이 생기면 고장으로 읽힌다. 배경을 눌러 두고 커서를 기본으로 바꿔
+ * 만지는 곳이 아님을 먼저 알린다.
+ */
+.cell input[readonly] {
+  background: var(--line);
+  color: var(--text-2);
+  cursor: default;
+  border-style: dashed;
+}
 
-/* 고르는 값은 select 대신 칩으로 — 선택지가 넷뿐이라 다 보이는 편이 빠르다 */
+/* 브라우저 기본 화살표를 남긴다 — 고르는 칸임을 알리는 유일한 표시다 */
+.cell select { cursor: pointer; }
+.cell input:focus-visible,
+.cell select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 고르는 값은 select 대신 칩으로 — 선택지가 적어 다 보이는 편이 빠르다 */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .pick {
   padding: 9px 15px; border-radius: 999px;
@@ -1111,13 +1359,121 @@ select:focus-visible, textarea:focus-visible {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 
-.form-foot { display: flex; justify-content: flex-end; padding-top: 4px; }
+/*
+ * 아직 안 여는 선택지.
+ *
+ * <b>숨기지 않고 눌리지 않게만 둔다.</b> 목록에서 빼면 "이 서비스는 항공만
+ * 다루는구나" 로 끝나지만, 흐리게 남겨 두면 "다음에 기차가 온다" 가 읽힌다.
+ * 스키마가 이미 넷을 갖고 있다는 사실과도 맞는다.
+ *
+ * <b>흐리게만 두지 않는다.</b> 회색조는 색각 이상이나 밝은 화면에서 구분이
+ * 약하므로 `준비 중` 글자를 함께 붙인다 — 03-wireframe 접근성 규칙과 같다.
+ */
+.pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  border-style: dashed;
+  background: var(--surface);
+}
+.pick:disabled:hover { border-color: var(--line-strong); color: var(--text-2); }
+
+.pick-soon {
+  margin-left: 6px; padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--line); color: var(--text-2);
+  font-size: 11px; font-weight: 700;
+}
+
+/*
+ * 흐름을 지나는 버튼이 놓이는 자리. S-02·S-03·S-06 이 같은 것을 쓴다.
+ *
+ * <b>화면마다 다른 자리에 두지 않는다.</b> 3단계를 지나는 동안 "다음" 이
+ * 위였다 아래였다 하면 매 화면에서 눈으로 찾아야 한다.
+ *
+ * `gap` 은 보조 버튼(건너뛰기 같은)이 함께 올 때를 위한 것이다. 예전에는
+ * 하나만 전제해서 둘을 두면 서로 붙었다.
+ */
+.form-foot { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
 .form-foot .btn { padding: 12px 22px; font-size: 15px; }
 
 /* ── 검수 결과 (S-06) ────────────────────────────────────
  * 준비 상태를 네 묶음으로 나눈다. 묶음 제목이 곧 그 물품의 상태다.
  * ────────────────────────────────────────────────────── */
 .group + .group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/*
+ * 준비 상태의 두 묶음(챙김 완료 · 아직 안 챙김)을 <b>좌우로</b> 나눈다.
+ *
+ * 쌓아 두면 챙긴 것이 길어질수록 안 챙긴 것이 화면 밖으로 밀린다. 이 화면에서
+ * 정작 볼 것은 뒤엣것이라, 볼 때마다 끝까지 스크롤해야 했다.
+ *
+ * 반반이다 — 두 묶음은 같은 자격이고 한쪽이 더 중요해서 넓어질 이유가 없다.
+ */
+.split-cols {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  /*
+   * <b>늘린다(stretch). `start` 가 아니다.</b> `start` 면 각 묶음이 제 내용
+   * 높이에서 끝나고, 사이의 세로줄도 짧은 쪽에서 <b>끊긴다.</b> 늘려 두면 두
+   * 칸이 같은 키가 되어 줄이 바닥까지 내려간다.
+   *
+   * 남는 자리는 `다 챙기셨습니다` 가 세로 가운데에서 차지한다.
+   */
+  align-items: stretch;
+}
+
+/*
+ * 나란히 놓이면 <b>위아래로 잇는 선</b>이 틀린 말이 된다. 두 번째 묶음 위에
+ * 가로줄이 그이면 첫 번째의 계속처럼 보인다. 가로줄을 걷고 사이에 세로줄을 둔다.
+ */
+.split-cols .group + .group {
+  margin-top: 0; padding-top: 0; border-top: 0;
+  padding-left: 24px; border-left: 1px solid var(--line);
+}
+
+/*
+ * 안 챙긴 것이 없을 때.
+ *
+ * 이 화면에서 가장 좋은 소식인데 예전에는 회색 한 줄이라 빈칸처럼 읽혔다.
+ * 확인하러 온 사람이 정작 "없다" 를 못 보고 지나갔다.
+ *
+ * 옆 기둥이 아무리 길어도 가운데에 선다 — `flex: 1` 로 남는 높이를 다 차지하고
+ * 그 안에서 가운데 정렬한다.
+ */
+.all-done {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+  gap: 8px; padding: 32px 12px; min-height: 200px;
+}
+.all-done-mark {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-strong);
+  font-size: 28px; font-weight: 700; line-height: 1;
+}
+.all-done-title { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+.all-done-sub { font-size: 13.5px; color: var(--text-2); max-width: 30ch; line-height: 1.6; }
+
+/* 가운데 정렬이 먹으려면 묶음 자체가 세로로 늘어나 있어야 한다 */
+.split-cols .group { display: flex; flex-direction: column; }
+
+@media (max-width: 900px) {
+  .split-cols { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .all-done { min-height: 0; padding: 24px 12px; }
+  .split-cols .group + .group {
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
+    padding-left: 0; border-left: 0;
+  }
+}
+
+/*
+ * 카드를 여럿 쌓는 화면의 세로 간격.
+ *
+ * `.card` 에는 바깥 여백이 없다. 카드 하나만 놓는 화면이 대부분이라 그게 맞는데,
+ * S-06 검수처럼 서너 장을 쌓으면 서로 붙어 <b>한 덩어리</b>로 읽힌다. 감싸는
+ * 쪽에서 한 번에 벌린다 — 카드를 더 넣거나 순서를 바꿔도 여백이 따라온다.
+ */
+.stack { display: flex; flex-direction: column; gap: 24px; }
 .group-head {
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
   font-size: 13.5px; font-weight: 700; color: var(--text-2);

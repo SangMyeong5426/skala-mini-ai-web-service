@@ -62,12 +62,12 @@ export const SCREENS: ScreenRoute[] = [
   { id: 'S-04', name: '인식 결과 · 사후 수정', path: '/trips/:tripId/detections', tier: 1, ai: true },
   { id: 'S-05', name: '내 체크리스트 · AI 추천', path: '/trips/:tripId/items', tier: 1, ai: true },
   { id: 'S-06', name: '검수 결과', path: '/trips/:tripId/inspection', tier: 1, ai: true },
-  { id: 'S-07', name: '무게 상세', path: '/trips/:tripId/weight', tier: 2, todo: true },
-  { id: 'S-08', name: '반입 규정 상세', path: '/trips/:tripId/rules', tier: 2, todo: true },
+  { id: 'S-07', name: '무게 상세', path: '/trips/:tripId/weight', tier: 2 },
+  { id: 'S-08', name: '반입 규정 상세', path: '/trips/:tripId/rules', tier: 2 },
   { id: 'S-09', name: '챗봇', path: null, tier: 3, ai: true },
-  { id: 'S-10', name: '여행 기록 상세', path: '/trips/:tripId', tier: 3, todo: true },
-  { id: 'S-11', name: '여행 일정 · 캘린더', path: '/trips/:tripId/itinerary', tier: 2, todo: true },
-  { id: 'S-12', name: '3D 가방 정리', path: '/trips/:tripId/layout', tier: 3, todo: true },
+  { id: 'S-10', name: '여행 기록 상세', path: '/trips/:tripId', tier: 3 },
+  { id: 'S-11', name: '여행 일정 · 캘린더', path: '/trips/:tripId/itinerary', tier: 2 },
+  { id: 'S-12', name: '3D 가방 정리', path: '/trips/:tripId/layout', tier: 3 },
 ]
 
 /** 여행 준비 3단계. 단계 표시줄에 쓴다. */
@@ -79,7 +79,12 @@ export interface Step {
 }
 
 export const STEPS: Step[] = [
-  { no: '1', name: '여행 정보', path: '/trips/new' },
+  /*
+   * 여행을 만든 뒤에는 <b>그 여행의 고치기</b>로 간다. `/trips/new` 로 두면
+   * 돌아갔을 때 빈 폼이 떠서 입력한 것이 사라진 것처럼 보이고, 저장하면
+   * 여행이 하나 더 생긴다. `stepPath` 가 :tripId 를 채운다.
+   */
+  { no: '1', name: '여행 정보', path: '/trips/:tripId/edit' },
   { no: '2', name: '짐 사진 · 분석', path: '/trips/:tripId/photos' },
   { no: '3', name: '체크리스트 · 검수', path: '/trips/:tripId/items' },
 ]
