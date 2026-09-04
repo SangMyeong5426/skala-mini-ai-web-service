@@ -20,13 +20,12 @@ Security가 모든 업무 API·사진 요청을 인증한다. 공개 진입은 �
 │  - 쿠키·폴링     │         │  - 소유권/Repository  │         │  - 관계        │
 └─────────────────┘         └──────────┬───────────┘         └───────────────┘
                                        │
-                                       │ ◀─── AI 확장 지점 (데모는 Mock)
+                                       │ ◀─── AI 확장 지점 (작업별 실제/Mock)
                                        ▼
                             ┌──────────────────────┐
-                            │   Mock AI Service    │   지금: 입력에 맞춘 후보·범위
+                            │   AiClient           │   실제: 사진·추천·여행 검수
                             │   ─────────────────  │
-                            │   나중: OpenAI /     │   나중: 같은 스키마로
-                            │        Claude API    │        LLM 응답 반환
+                            │   OpenAI + Mock      │   Mock: 챗봇·무게
                             └──────────────────────┘
                                  이 상자 안만 교체된다
 ```
@@ -54,7 +53,7 @@ Security가 모든 업무 API·사진 요청을 인증한다. 공개 진입은 �
 | Backend | **Java 21 · Spring Boot 4.1.1 · Gradle 9.7**<br>Spring Data JPA · Validation · Lombok | Controller-Service-Repository 계층이 강제돼 5명이 짜도 구조가 흩어지지 않는다. JPA 엔터티가 ERD와 1:1로 대응한다. [ADR 0001](adr/0001-backend-stack.md) |
 | Database | **PostgreSQL 17 (Supabase)**<br>로컬 개발용 Docker | 로컬 설치 없이 클라우드에서 즉시 생성, 팀원 전원이 같은 DB 공유. 스키마 시험용 로컬 DB는 [`database/README.md`](../database/README.md) |
 | API 문서 | **springdoc-openapi (Swagger UI)** | `/swagger-ui.html`이 자동 생성된다. **2일차 산출물인 REST API 명세를 손으로 쓰지 않아도 된다** |
-| AI 확장 지점 | **`AiClient` 인터페이스 + `MockAiClient`** | 인터넷이 끊겨도 데모가 돌아야 해서 Mock을 백엔드 안에 둔다. 인터페이스 하나에 구현 둘을 두면 **교체 지점이 코드로 드러난다.** 엔드포인트는 `POST /api/ai-jobs` 하나이고 `job_type`으로 구분한다 [ADR 0003](adr/0003-ai-job-endpoint.md) |
+| AI 확장 지점 | **`AiClient` + `OpenAiClient` + `MockAiClient`** | `openai` 모드에서도 작업별로 실제/Mock을 분기한다. 사진·추천·여행 검수는 OpenAI, 여행 없는 챗봇·무게는 Mock이다. 엔드포인트는 `POST /api/ai-jobs` 하나이고 `job_type`으로 구분한다 [ADR 0003](adr/0003-ai-job-endpoint.md) |
 | 외부 API | **Open-Meteo** (16일 예보 + 계절 예보 7개월) | **API 키가 필요 없다.** 팀원 5명이 각자 발급받고 활성화를 기다릴 필요가 없다. AI가 아닌 일반 외부 연동이라 AI 확장 지점과 구분한다 |
 | 형상관리 | GitHub (모노레포) | FE·BE·문서를 한 저장소에서 관리, 초대·클론 1회 |
 | 설계 도구 | **PlantUML** (Use-Case · User Flow · 아키텍처)<br>Figma (와이어프레임) | `.puml` 원본이 저장소에 남아 다이어그램도 버전 관리된다 |
@@ -80,8 +79,8 @@ JWT·외부 인증·세션 DB를 추가하지 않는다.
 | 서버 세션 | 단일 서버 메모리에 인증 상태 저장. 재시작·유휴 만료 시 재로그인. 별도 DB 테이블 없음 |
 
 AI 호출은 인증·소유권 검증 후에만 접수한다. 비밀번호·이메일·세션 토큰을 AI 입력에 넣지 않는다.
-챗봇은 여행 등록 없이도 쓸 수 있지만 로그인은 필수다. 현재 `UploadConfig`의 공개 정적 핸들러,
-FE Mock·라우트·쿠키 처리에는 후속 구현이 필요하다. 이 다이어그램은 목표 구조다.
+챗봇은 여행 등록 없이도 쓸 수 있지만 로그인은 필수다. 사진 파일 소유권 확인과
+FE 라우트·쿠키·CSRF·401 처리는 구현됐고 계정 간 격리 E2E를 통과했다.
 프레임워크 세션·CSRF 동작은 [Spring Security 공식 문서](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)를 따른다.
 
 ## AI-Ready 설계 적용 지점
@@ -90,9 +89,9 @@ FE Mock·라우트·쿠키 처리에는 후속 구현이 필요하다. 이 다�
 
 | 주체 | 처리 | 저장 위치 |
 | --- | --- | --- |
-| 이미지 AI (현재 Mock) | 사진에서 물품명·수량·신뢰도를 반환 | BAG_CHECK 출력 JSON |
+| 이미지 AI (`openai`면 실제) | 사진에서 물품명·수량·신뢰도를 반환 | BAG_CHECK 출력 JSON |
 | 서버 Service | BAG_CHECK 완료 처리에서 승인 없이 내 목록 생성·연결·완료 등록. 저장 성공 후 COMPLETED | `detected_objects` + `checklist_items` + `item_detections` + `ai_jobs`, 한 트랜잭션 |
-| 추천 AI (현재 Mock) | 여행 조건과 현재 내 목록을 고려해 후보·이유 제시 | `ai_jobs.output_payload` |
+| 추천 AI (`openai`면 실제) | 여행 조건과 현재 내 목록을 고려해 후보·이유 제시 | `ai_jobs.output_payload` |
 | 서버 Service | 선택·승인한 후보만 미완료로 등록, 반복 승인 방지 | `checklist_items`, 후보의 서버 필드 `acceptedItemId` |
 | 서버 Service | 내 목록 기준 완료율, 실제 완료 항목 기준 무게 합산 | 내 목록에서 집계, 무게 결과는 `ai_jobs.output_payload` |
 

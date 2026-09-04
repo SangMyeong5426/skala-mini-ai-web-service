@@ -1,6 +1,7 @@
 package com.skala.miniai.domain.trip;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,7 +80,7 @@ public class TripService {
             throw ApiException.badRequest("귀국일이 출발일보다 빠릅니다.", "endDate");
         }
         Trip t = new Trip(currentUser.id(), req.origin().trim(), req.destination().trim());
-        t.setCountryCode(req.countryCode());
+        t.setCountryCode(req.countryCode().toUpperCase(Locale.ROOT));
         t.setStartDate(req.startDate());
         t.setEndDate(req.endDate());
         t.setPurpose(req.purpose());
@@ -107,7 +108,7 @@ public class TripService {
 
         if (req.origin() != null) t.setOrigin(req.origin().trim());
         if (req.destination() != null) t.setDestination(req.destination().trim());
-        if (req.countryCode() != null) t.setCountryCode(req.countryCode());
+        if (req.countryCode() != null) t.setCountryCode(req.countryCode().toUpperCase(Locale.ROOT));
         if (req.startDate() != null) t.setStartDate(req.startDate());
         if (req.endDate() != null) t.setEndDate(req.endDate());
         if (req.purpose() != null) t.setPurpose(req.purpose());

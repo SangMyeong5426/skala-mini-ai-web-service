@@ -279,7 +279,8 @@ export default function Photos() {
                 <li>보조배터리·화장품은 <b>라벨이 보이게</b> 한 장 더 찍으면 좋습니다</li>
               </ul>
               <p className="disclaimer">
-                사진은 이 서비스 안에서만 씁니다. 여권·항공권이 함께 찍히지 않게 해 주세요.
+                사진은 짐 물품 분석에만 사용하며, 실제 AI 모드에서는 OpenAI로 전송됩니다.
+                여권·항공권이 함께 찍히지 않게 해 주세요.
               </p>
             </div>
           </aside>

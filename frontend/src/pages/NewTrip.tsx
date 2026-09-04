@@ -11,7 +11,7 @@ import type { BagType, Purpose, Transport, TripCreated } from '../types/api'
  * `PACKING_LIST` 의 input(07:513-521)과 `RULE_CHECK` 의 `transport`·`airline`
  * 로 그대로 흘러간다 — <b>이 화면이 비면 AI 입력이 빈다.</b>
  *
- * 필수는 여섯이다(03) — 출발일·귀국일·출발지·도착지·목적·이동수단.
+ * 필수는 일곱이다(03) — 출발일·귀국일·출발지·도착지·목적지 국가 코드·목적·이동수단.
  * 항공사·공항은 선택이지만 <b>비우면 정확도가 낮아진다고 미리 알려 준다.</b>
  * 저장하고 나서 알려 주면 늦다.
  */
@@ -41,6 +41,7 @@ export default function NewTrip() {
 
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+  const [countryCode, setCountryCode] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [purpose, setPurpose] = useState<Purpose>('TOUR')
@@ -67,11 +68,15 @@ export default function NewTrip() {
     const required: [string, string, string][] = [
       ['origin', origin, '출발지를 입력해 주세요.'],
       ['destination', destination, '도착지를 입력해 주세요.'],
+      ['countryCode', countryCode, '목적지 국가 코드를 입력해 주세요.'],
       ['startDate', startDate, '출발일을 골라 주세요.'],
       ['endDate', endDate, '귀국일을 골라 주세요.'],
     ]
     const miss = required.find(([, v]) => !v.trim())
     if (miss) { setField(miss[0]); setError(miss[2]); return }
+    if (!/^[A-Za-z]{2}$/.test(countryCode.trim())) {
+      setField('countryCode'); setError('국가 코드는 영문 2자로 입력해 주세요.'); return
+    }
     if (badRange) { setField('endDate'); setError('귀국일이 출발일보다 빠릅니다.'); return }
 
     setBusy(true)
@@ -80,6 +85,7 @@ export default function NewTrip() {
       const created = await api.post<TripCreated>('/trips', {
         origin: origin.trim(),
         destination: destination.trim(),
+        countryCode: countryCode.trim().toUpperCase(),
         startDate,
         endDate,
         purpose,
@@ -111,7 +117,7 @@ export default function NewTrip() {
    * 저장만 조용히 실패한다. 그때는 아래 일반 오류로 떨어뜨린다.
    */
   const INLINE = new Set([
-    'origin', 'destination', 'startDate', 'endDate', 'purpose', 'transport',
+    'origin', 'destination', 'countryCode', 'startDate', 'endDate', 'purpose', 'transport',
     'airline', 'departureAirport', 'arrivalAirport', 'note',
     'bagType', 'bagEmptyG', 'weightLimitG',
   ])
@@ -132,6 +138,11 @@ export default function NewTrip() {
               <input id="destination" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="도쿄" />
             </Cell>
           </div>
+
+          <Cell label="목적지 국가 코드" name="countryCode" hint="ISO 영문 2자리 · 예: 일본 JP, 한국 KR" error={err('countryCode')}>
+            <input id="countryCode" value={countryCode} maxLength={2}
+              onChange={(e) => setCountryCode(e.target.value.toUpperCase())} placeholder="JP" />
+          </Cell>
 
           <div className="form-row">
             <Cell label="출발일" name="startDate" error={err('startDate')}>

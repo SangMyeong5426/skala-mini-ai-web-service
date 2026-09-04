@@ -142,7 +142,7 @@ entity "detected_objects" as detected {
   * approved : boolean
   * created_at : timestamptz
   ..
-  approved: 이전 호환 컬럼 · 등록 조건 아님
+  approved: 사후 수정 표식 · 등록 조건 아님
   인식 완료: 내 목록 자동 생성·연결·완료
 }
 

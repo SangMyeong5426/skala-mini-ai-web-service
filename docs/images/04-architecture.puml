@@ -54,9 +54,9 @@ node "Backend  :8080" as BE {
   component "AiClient (인터페이스)" as IFACE
 }
 
-package "AI 확장 지점 — 이 상자 안만 교체된다" as AIBOX #FEFEFE {
-  component "**MockAiClient**\n입력에 맞춘 Mock 후보·중량 범위" as MOCK <<AI>>
-  component "RealAiClient\nOpenAI / Claude / 비전 모델" as REAL <<future>>
+package "AI 확장 지점 — 작업별 실제/Mock" as AIBOX #FEFEFE {
+  component "**MockAiClient**\n챗봇 · 품목별 중량 범위" as MOCK <<AI>>
+  component "**OpenAiClient**\n사진 · 추천 · 여행 검수" as REAL <<future>>
 }
 
 database "PostgreSQL\n(Supabase)" as DB {
@@ -89,16 +89,16 @@ SVC --> IFACE
 REPO -right-> TABLES : SQL
 SVC --> UP : 소유권 확인 후 사진 저장·조회
 
-IFACE ..> MOCK : **데모 설계**
-IFACE ..> REAL : 나중\n<size:10>AI_PROVIDER 만 바꾼다</size>
+IFACE ..> MOCK : 챗봇 · 무게
+IFACE ..> REAL : 사진 · 추천 · 여행 검수\n<size:10>AI_PROVIDER=openai</size>
 
 SVC --> WEATHER
 RULE --> RULES
 
 note bottom of AIBOX
-  **개정 계약 구현 후 AI 구현체만 교체한다.**
+  **작업별 실제/Mock이 같은 계약을 쓴다.**
   같은 스키마를 유지해 프런트엔드 수정 없이 연동한다.
-  실제 구현체 준비 후 .env 의 AI_PROVIDER 로 선택한다.
+  ai_jobs.model_name에는 실제 실행 모델을 기록한다.
 end note
 
 note left of SVC
@@ -125,8 +125,8 @@ note right of RULE
 end note
 
 legend bottom
-  |<#D9EAE6>| 데모에서 사용할 Mock · 실제 AI 호출 없음 |
-  |<#FBF3E4>| 나중에 들어올 실제 AI |
+  |<#D9EAE6>| Mock — 여행 없는 챗봇 · 무게 범위 |
+  |<#FBF3E4>| OpenAI — 사진 · 추천 · 여행 검수 |
   |<#F5F7F6>| 일반 구성요소 |
 endlegend
 

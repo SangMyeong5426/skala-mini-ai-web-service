@@ -82,18 +82,18 @@ com.skala.miniai
     ├── calendar/     캘린더 (테이블 없음 — 여행 기간 + 일정 조합)
     ├── checklist/    내 목록 · 추천 채택 · 사진 상태 계산
     ├── packing/      3D 가방 정리 배치
-    ├── photo/        사진 업로드 · 인식 결과 승인
+    ├── photo/        사진 업로드 · 인식 결과 자동 등록/사후 수정
     ├── master/       무게·규정 마스터
     ├── inspection/   검수 결과 (준비 상태 + 무게 + 반입 판정)
-    └── ai/           AI 작업 접수·폴링 · Mock 클라이언트
+    └── ai/           AI 작업 접수·폴링 · OpenAI/Mock 클라이언트
 ```
 
-**AI 는 전부 Mock 이다.** `MockAiClient` 가 `resources/mock/<jobType>.json` 을 돌려주고,
+`AI_PROVIDER=openai`이면 사진 인식·준비물 추천·여행 검수는 실제 OpenAI를 호출하고,
+여행 없는 S-09 챗봇과 무게는 `MockAiClient`가 처리한다.
 `RULE_CHECK` 챗봇은 S-09의 대표 질문 12개에 맞는 별도 fixture를 고른다. 출력 구조는
 `docs/07-ai-ready.md`의 Schema를 그대로 지키며 `RuleCheckContract`가 RULE_CHECK 입출력을
 실행 시점에 검증한다. 보조배터리·화장품·가위는 각각 `100Wh`·`50ml`·`5cm` 후속 답변까지
-이어진다. 실제 LLM 을 붙일 때
-바꾸는 것은 `AiClient` 구현 하나뿐이다.
+이어진다. 각 작업의 `modelName`에는 실제 모델명 또는 `mock`이 기록된다.
 
 ## 이 스택에서 밟기 쉬운 함정
 
@@ -132,7 +132,7 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
 
 ### AI 확장 지점
 
-`docs/07-ai-ready.md`의 규격대로 **Mock을 먼저 만든다.** 실제 LLM은 부르지 않는다.
+`docs/07-ai-ready.md`의 규격대로 실제/Mock이 같은 비동기 계약과 출력 스키마를 쓴다.
 
 - 응답 JSON은 `07-ai-ready.md`의 출력 스키마를 **정확히** 지킨다.
   Mock이 스키마를 어기면 나중에 실제 AI를 붙일 때 프런트엔드를 고쳐야 하고,
@@ -143,8 +143,8 @@ Controller → Service → Repository. **이 스택을 고른 이유가 여기�
 - `AI_PROVIDER=mock`이면 Mock 응답을, `openai`면 실제 API를 호출하도록
   인터페이스 하나에 구현 둘(`MockAiClient`, `OpenAiClient`)을 둔다.
   **이 인터페이스가 아키텍처 다이어그램의 "교체되는 상자"다.**
-  `BAG_CHECK`(사진 인식)와 `PACKING_LIST`(준비물 추천)에 실제로 갈아 끼워 봤고
-  부르는 쪽은 한 줄도 바뀌지 않았다. **기본값은 `mock`이다** — 발표 데모는 네트워크에 묶이면 안 된다.
+  `BAG_CHECK`·`PACKING_LIST`·여행 연결 `RULE_CHECK`는 실제 호출하고,
+  여행 없는 `RULE_CHECK`와 `WEIGHT_ESTIMATE`는 Mock으로 분기한다. 미설정 기본값은 `mock`이다.
 
 > 가상 스레드는 `spring.threads.virtual.enabled=true`로 이미 켜져 있다.
 > 실제 LLM을 붙였을 때 느린 요청이 스레드를 오래 잡아도 비용이 낮게 유지된다.

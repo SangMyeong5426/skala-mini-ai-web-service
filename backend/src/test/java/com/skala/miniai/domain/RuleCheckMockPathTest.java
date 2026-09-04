@@ -29,8 +29,8 @@ import com.skala.miniai.domain.ai.AiJobService;
  * 남아 계약 검증이 막았다 — <b>202 로 접수된 정상 요청이 폴링 끝에 {@code FAILED} 로 끝났다.</b>
  *
  * <p>{@code AiClient} 를 갈아 끼우지 않는다. 실제 {@code MockAiClient} 와 규칙 엔진을 그대로
- * 태워야 두 경로가 어긋나는 지점을 잡을 수 있다. 발표 데모가 {@code AI_PROVIDER=mock} 이라
- * 이 경로가 기본이다.
+ * 태워야 두 경로가 어긋나는 지점을 잡을 수 있다. 혼합 모드에서도 여행 없는 챗봇은
+ * {@code AI_PROVIDER}와 무관하게 이 Mock 경로를 쓴다.
  */
 @SpringBootTest
 @ActiveProfiles("test")

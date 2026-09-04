@@ -2,7 +2,11 @@ package com.skala.miniai.domain.ai;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,14 +24,14 @@ import com.skala.miniai.common.Codes;
 import com.skala.miniai.common.Json;
 
 /**
- * Mock AI. <b>실제 LLM 을 호출하지 않는다</b> (AGENTS.md: 3일차 데모까지 AI 는 전부 Mock).
+ * Mock AI. <b>실제 LLM 을 호출하지 않는다.</b> 전체 mock 모드와 혼합 모드의 S-09 챗봇·무게에 쓴다.
  *
  * <p>기본 fixture는 {@code src/main/resources/mock/&lt;jobType&gt;.json}, 대표 챗봇 질문은
  * {@code RULE_CHECK_*.json} 이다. 모두 {@code docs/07-ai-ready.md}의 output 스키마를 지킨다.
  *
  * <p>07 "Mock이 돌려주는 것" 규약대로 대표 챗봇 질문은 질문별 고정 응답을 고르고,
- * 나머지는 <b>id 만 입력에 맞춘다</b> —
- * {@code BAG_CHECK} 의 {@code photoId}, {@code WEIGHT_ESTIMATE} 의 {@code limitG}·{@code bagEmptyG},
+ * 나머지는 <b>입력에 맞춘다</b> —
+ * {@code BAG_CHECK} 의 {@code photoId}, {@code WEIGHT_ESTIMATE} 의 현재 물품·수량·가방 정보,
  * {@code RULE_CHECK} 의 {@code itemId}. 새 여행에서도 Mock 이 깨지지 않는다.
  *
  * <p><b>{@code RULE_CHECK_*.json} 의 {@code verdict}·{@code ruleId}·{@code conditionNote}·
@@ -41,18 +45,25 @@ import com.skala.miniai.common.Json;
 public class MockAiClient implements AiClient {
 
     private final Json json;
-    private final String modelName;
     /** 가상 스레드에서 동시에 들어온다. HashMap 의 computeIfAbsent 는 스레드 안전하지 않다. */
     private final Map<String, JsonNode> fixtures = new ConcurrentHashMap<>();
 
-    public MockAiClient(Json json, @Value("${app.ai.model:mock}") String modelName) {
+    public MockAiClient(Json json) {
         this.json = json;
-        this.modelName = modelName;
+    }
+
+    /** 제공자 오타가 실제 AI 시연을 조용히 Mock으로 바꾸지 않게 기동 시점에 막는다. */
+    @Value("${app.ai.provider:mock}")
+    void validateProvider(String provider) {
+        if (!"mock".equals(provider) && !"openai".equals(provider)) {
+            throw new IllegalStateException(
+                    "AI_PROVIDER는 mock 또는 openai만 가능합니다: " + provider);
+        }
     }
 
     @Override
     public String modelName() {
-        return modelName;
+        return "mock";
     }
 
     @Override
@@ -65,10 +76,29 @@ public class MockAiClient implements AiClient {
         JsonNode output = load(jobType.name()).deepCopy();
         return switch (jobType) {
             case BAG_CHECK -> alignPhotoIds(output, input);
-            case WEIGHT_ESTIMATE -> alignBag(output, input);
+            case WEIGHT_ESTIMATE -> weightEstimate(output, input);
             case RULE_CHECK -> alignRuleCheckItems(output, input);
-            case PACKING_LIST -> output;
+            case PACKING_LIST -> packingList(output, input);
         };
+    }
+
+    /** 실제 AI와 같은 중복 계약: 이미 준비한 이름은 고정 Mock 추천에서도 제외한다. */
+    private JsonNode packingList(JsonNode output, JsonNode input) {
+        var taken = new HashSet<String>();
+        input.path("alreadyPacked").forEach(item -> taken.add(
+                RecommendationStore.normalize(item.path("name").asText(""))));
+
+        if (output.path("items") instanceof ArrayNode candidates) {
+            List<JsonNode> kept = new ArrayList<>();
+            candidates.forEach(candidate -> {
+                if (taken.add(RecommendationStore.normalize(candidate.path("name").asText("")))) {
+                    kept.add(candidate);
+                }
+            });
+            candidates.removeAll();
+            kept.forEach(candidates::add);
+        }
+        return output;
     }
 
     /** S-09 대표 질문 12개와 그 밖의 안전한 기본 답변. */
@@ -103,7 +133,12 @@ public class MockAiClient implements AiClient {
     private boolean containsMeasurement(String text, String measurement) {
         for (int index = text.indexOf(measurement); index >= 0;
                 index = text.indexOf(measurement, index + 1)) {
-            if (index == 0 || !Character.isDigit(text.charAt(index - 1))) return true;
+            if (index == 0) return true;
+            char previous = text.charAt(index - 1);
+            if (Character.isDigit(previous)) continue;
+            if ((previous == ',' || previous == '.')
+                    && index > 1 && Character.isDigit(text.charAt(index - 2))) continue;
+            return true;
         }
         return false;
     }
@@ -130,15 +165,68 @@ public class MockAiClient implements AiClient {
         return output;
     }
 
-    /** 07: 가방 정보는 입력 값을 그대로 쓴다. 고정 값을 돌려주면 다른 여행에서 말이 안 된다. */
-    private JsonNode alignBag(JsonNode output, JsonNode input) {
-        if (output instanceof ObjectNode node) {
-            if (input.hasNonNull("weightLimitG")) node.put("limitG", input.get("weightLimitG").asInt());
-            else node.putNull("limitG");
-            if (input.hasNonNull("bagEmptyG")) node.put("bagEmptyG", input.get("bagEmptyG").asInt());
-            else node.putNull("bagEmptyG");
+    /** 07: fixture의 품목별 Mock 범위를 현재 입력의 물품·수량에 적용하고 합계는 서버가 계산한다. */
+    private JsonNode weightEstimate(JsonNode output, JsonNode input) {
+        ObjectNode root = (ObjectNode) output;
+        Integer bagEmptyG = input.hasNonNull("bagEmptyG") ? input.get("bagEmptyG").asInt() : null;
+        Integer limitG = input.hasNonNull("weightLimitG") ? input.get("weightLimitG").asInt() : null;
+
+        Map<String, JsonNode> known = new HashMap<>();
+        output.path("contributions").forEach(value -> known.put(
+                RecommendationStore.normalize(value.path("name").asText("")), value));
+
+        List<ObjectNode> calculated = new ArrayList<>();
+        List<String> noWeight = new ArrayList<>();
+        for (JsonNode item : input.path("items")) {
+            String name = item.path("name").asText("");
+            int qty = item.path("qty").asInt(1);
+            JsonNode base = known.get(RecommendationStore.normalize(name));
+            if (base == null) {
+                noWeight.add(name);
+                continue;
+            }
+            ObjectNode contribution = (ObjectNode) base.deepCopy();
+            contribution.put("name", name);
+            contribution.put("qty", qty);
+            contribution.put("subtotalG", contribution.path("typicalG").asInt() * qty);
+            calculated.add(contribution);
         }
-        return output;
+        calculated.sort(Comparator.comparingInt((ObjectNode value) -> value.path("subtotalG").asInt()).reversed());
+
+        ArrayNode contributions = root.putArray("contributions");
+        calculated.forEach(contributions::add);
+        int minG = bagEmptyG == null ? 0 : bagEmptyG;
+        int typicalG = minG;
+        int maxG = minG;
+        for (ObjectNode value : calculated) {
+            int qty = value.path("qty").asInt();
+            minG += value.path("minG").asInt() * qty;
+            typicalG += value.path("typicalG").asInt() * qty;
+            maxG += value.path("maxG").asInt() * qty;
+        }
+
+        ArrayNode excluded = root.putArray("excluded");
+        input.path("excluded").forEach(value -> excluded.add(value.deepCopy()));
+        noWeight.forEach(name -> excluded.addObject().put("name", name).put("reason", "NO_WEIGHT_INFO"));
+
+        String confidence = calculated.isEmpty() || noWeight.size() > calculated.size() ? "LOW"
+                : noWeight.isEmpty() ? "HIGH" : "MEDIUM";
+        String verdict = limitG == null ? "UNKNOWN"
+                : maxG > limitG ? "OVER_RISK"
+                : bagEmptyG == null || "LOW".equals(confidence) ? "UNKNOWN"
+                : typicalG >= limitG * 0.8 ? "NEAR" : "ROOM";
+
+        root.put("minG", minG);
+        root.put("typicalG", typicalG);
+        root.put("maxG", maxG);
+        if (limitG == null) root.putNull("limitG"); else root.put("limitG", limitG);
+        if (bagEmptyG == null) root.putNull("bagEmptyG"); else root.put("bagEmptyG", bagEmptyG);
+        root.put("verdict", verdict);
+        root.put("confidence", confidence);
+        root.put("confidenceReason", "준비 완료 " + calculated.size() + "개 계산 · 미완료 "
+                + input.path("excluded").size() + "개 · 무게 정보 없음 " + noWeight.size() + "개");
+        root.put("excludedCount", excluded.size());
+        return root;
     }
 
     /** 07: 입력 물품이 있으면 결과를 같은 개수·순서로 만들고 식별값을 그대로 돌려준다. */

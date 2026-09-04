@@ -29,7 +29,7 @@ class AiProviderSwitchTest {
 
         @Autowired AiClient aiClient;
 
-        /** 기본은 mock 이다. 발표 데모가 네트워크에 묶이지 않아야 한다 (AGENTS.md). */
+        /** 미설정 기본은 mock 이고 실제 시연만 .env 에서 openai 로 켠다 (AGENTS.md). */
         @Test
         void AI_PROVIDER_를_주지_않으면_Mock_이_온다() {
             assertThat(aiClient).isInstanceOf(MockAiClient.class);
