@@ -24,7 +24,7 @@
  * 끄는 법: frontend/.env 의 VITE_USE_MOCK 를 false 로.
  */
 import * as fx from './fixtures'
-import { LOGIN_ID_RE, PASSWORD_MAX_BYTES, PASSWORD_MIN } from '../types/api'
+import { EMAIL_RE, LOGIN_ID_RE, PASSWORD_MAX_BYTES, PASSWORD_MIN } from '../types/api'
 import type {
   BagCheckOutput, ChecklistItem, Detection, JobType, TripDetail, TripPhoto, User,
 } from '../types/api'
@@ -97,7 +97,28 @@ const publicUser = (u: MockUser): User => ({
 })
 
 /** 06 의 입력 규칙. 서버가 최종 판정하는 자리라 Mock 도 같이 지킨다. */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// ── 여행 일정 · 가방 배치 (S-11 · S-12) ───────────────────
+interface MockItinerary {
+  itineraryId: number
+  tripId: number
+  kind: string
+  title: string
+  place: string | null
+  code: string | null
+  startAt: string
+  endAt: string | null
+  note: string | null
+}
+
+interface MockPlacement {
+  itemId: number
+  compartment: string
+  posX: number
+  posY: number
+  posZ: number
+  rotated: boolean | null
+}
 
 // ── 여행별 상태 ───────────────────────────────────────────
 interface TripState {
@@ -142,6 +163,18 @@ function unacceptedRequired(t: TripState): number | null {
 }
 
 const trips = new Map<number, TripState>()
+
+/**
+ * S-11 여행 일정. 여행별로 따로 담는다.
+ *
+ * TripState 에 넣지 않은 것은 <b>여행 준비(짐)와 일정이 서로를 필요로 하지
+ * 않기 때문</b>이다. 06 도 `/trips/{id}/itineraries` 로 자원을 나눠 뒀다.
+ */
+const itineraries = new Map<number, MockItinerary[]>()
+let nextItineraryId = 1
+
+/** S-12 가방 배치. 저장은 PUT 전체 교체라 배열을 통째로 갈아 끼운다. */
+const layouts = new Map<number, MockPlacement[]>()
 
 // 1번은 시드(도쿄). 2·3번은 지난 여행이라 하위 자원을 두지 않는다 —
 // S-10 여행 기록 상세는 3차라 데모에서 열지 않는다.
@@ -1035,6 +1068,132 @@ export function mockRequest(
       customs: fresh('RULE_CHECK') ? fx.INSPECTION.customs : null,
       notice: fx.INSPECTION.notice,
     })
+  }
+
+  // ── 반입 규정 (S-08) ───────────────────────────────────
+  //
+  // transport 는 필수다. 없으면 400 — 06 이 "서버가 어느 기준인지 추측하지
+  // 않는다" 로 정했다. keyword 는 부분 일치로 거른다.
+  if (method === 'GET' && p === '/rules') {
+    const q = new URLSearchParams(path.split('?')[1] ?? '')
+    const transport = q.get('transport')
+    if (!transport) {
+      return delay(new MockError(400, 'VALIDATION_FAILED', '이동수단은 필수입니다.', 'transport'))
+    }
+    const kw = (q.get('keyword') ?? '').trim()
+    const all = fx.RULES ?? []
+    return delay({ rules: kw ? all.filter((r) => r.keyword.includes(kw)) : all })
+  }
+
+  // ── 여행 일정 (S-11) ───────────────────────────────────
+  if (method === 'GET' && /^\/trips\/\d+\/itineraries$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const list = [...(itineraries.get(t.detail.tripId) ?? [])]
+    // 06 "시간순". 서버가 정렬해서 주므로 화면이 다시 정렬하지 않아도 된다.
+    list.sort((a, b2) => a.startAt.localeCompare(b2.startAt))
+    return delay({ itineraries: list })
+  }
+
+  if (method === 'POST' && /^\/trips\/\d+\/itineraries$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const title = String(b.title ?? '').trim()
+    if (!title) return delay(new MockError(400, 'VALIDATION_FAILED', '일정 제목은 필수입니다.', 'title'))
+    if (!b.startAt) return delay(new MockError(400, 'VALIDATION_FAILED', '시작 시각은 필수입니다.', 'startAt'))
+    // 06 "시각 역전" — 끝이 시작보다 앞이면 400.
+    if (b.endAt && String(b.endAt) < String(b.startAt)) {
+      return delay(new MockError(400, 'VALIDATION_FAILED', '종료 시각이 시작보다 빠릅니다.', 'endAt'))
+    }
+    const row: MockItinerary = {
+      itineraryId: nextItineraryId++,
+      tripId: t.detail.tripId,
+      kind: String(b.kind ?? 'OTHER'),
+      title,
+      place: b.place ? String(b.place) : null,
+      code: b.code ? String(b.code) : null,
+      startAt: String(b.startAt),
+      endAt: b.endAt ? String(b.endAt) : null,
+      note: b.note ? String(b.note) : null,
+    }
+    itineraries.set(t.detail.tripId, [...(itineraries.get(t.detail.tripId) ?? []), row])
+    return delay(row)
+  }
+
+  if (method === 'PATCH' && /^\/trips\/\d+\/itineraries\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const id = idsIn(p)[1]
+    const list = itineraries.get(t.detail.tripId) ?? []
+    const row = list.find((x) => x.itineraryId === id)
+    if (!row) return NOT_FOUND
+    // 보낸 필드만 바꾼다. 안 보낸 것은 건드리지 않는다 (06 PATCH 규약).
+    for (const k of ['kind', 'title', 'place', 'code', 'startAt', 'endAt', 'note'] as const) {
+      if (b[k] !== undefined) (row as unknown as Record<string, unknown>)[k] = b[k]
+    }
+    return delay(row)
+  }
+
+  if (method === 'DELETE' && /^\/trips\/\d+\/itineraries\/\d+$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const id = idsIn(p)[1]
+    const list = itineraries.get(t.detail.tripId) ?? []
+    if (!list.some((x) => x.itineraryId === id)) return NOT_FOUND
+    itineraries.set(t.detail.tripId, list.filter((x) => x.itineraryId !== id))
+    return delay(undefined)
+  }
+
+  // ── 3D 가방 정리 (S-12) ────────────────────────────────
+  if (method === 'GET' && /^\/trips\/\d+\/packing-layout$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const placed = layouts.get(t.detail.tripId) ?? []
+    const placedIds = new Set(placed.map((x) => x.itemId))
+    return delay({
+      tripId: t.detail.tripId,
+      placements: placed,
+      // 아직 안 넣은 체크리스트 항목이 정리 대기다.
+      unplaced: itemsOf(t)
+        .filter((i) => !placedIds.has(i.itemId))
+        .map((i) => ({ itemId: i.itemId, name: i.name, category: i.category, qty: i.qty })),
+    })
+  }
+
+  // 06:1049 — PATCH 가 아니라 PUT 이다. "지금 화면의 배치 전부" 를 저장한다.
+  // 이번에 오지 않은 항목은 가방에서 뺀 것으로 처리한다.
+  if (method === 'PUT' && /^\/trips\/\d+\/packing-layout$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    const rows = (b.placements ?? []) as MockPlacement[]
+    if (!Array.isArray(rows) || rows.some((r) => r == null)) {
+      return delay(new MockError(400, 'VALIDATION_FAILED', '배치 항목은 null일 수 없습니다.', 'placements'))
+    }
+    const mine = new Set(itemsOf(t).map((i) => i.itemId))
+    // 06 "남의 항목·중복 배치" 는 400.
+    if (rows.some((r) => !mine.has(r.itemId))) {
+      return delay(new MockError(400, 'VALIDATION_FAILED', '이 여행의 물품이 아닙니다.', 'itemId'))
+    }
+    if (new Set(rows.map((r) => r.itemId)).size !== rows.length) {
+      return delay(new MockError(400, 'VALIDATION_FAILED', '같은 물품을 두 번 배치했습니다.', 'itemId'))
+    }
+    layouts.set(t.detail.tripId, rows.map((r) => ({ ...r })))
+    const placedIds = new Set(rows.map((r) => r.itemId))
+    return delay({
+      tripId: t.detail.tripId,
+      placements: layouts.get(t.detail.tripId),
+      unplaced: itemsOf(t)
+        .filter((i) => !placedIds.has(i.itemId))
+        .map((i) => ({ itemId: i.itemId, name: i.name, category: i.category, qty: i.qty })),
+    })
+  }
+
+  // 배치만 지운다. 체크리스트 항목과 완료 상태는 그대로다 (06).
+  if (method === 'DELETE' && /^\/trips\/\d+\/packing-layout$/.test(p)) {
+    const t = tripOf()
+    if (!t) return NOT_FOUND
+    layouts.delete(t.detail.tripId)
+    return delay(undefined)
   }
 
   return undefined
