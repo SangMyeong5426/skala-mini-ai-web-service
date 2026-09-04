@@ -129,7 +129,20 @@ export function TopBar({
  *
  * 지금 어디인지, 앞뒤로 무엇이 있는지 보여준다. 지나온 단계는 눌러서 돌아간다.
  */
-export function Steps({ current, tripId }: { current: 1 | 2 | 3; tripId?: number | string }) {
+export function Steps({
+  current, tripId, beforeLeave,
+}: {
+  current: 1 | 2 | 3
+  tripId?: number | string
+  /**
+   * 단계를 눌러 <b>떠나기 직전</b>에 묻는다. `false` 를 주면 이동하지 않는다.
+   *
+   * 이 표시줄은 아래 `이전` 버튼과 달리 <b>어느 화면에서나</b> 눌린다. 여행
+   * 정보를 고치던 중에 누르면 입력한 것이 저장되지 않은 채 사라졌다 —
+   * 사라진다는 사실조차 알려 주지 않았다. 떠나도 되는지는 화면이 안다.
+   */
+  beforeLeave?: () => boolean
+}) {
   return (
     <ol className="steps" aria-label="여행 준비 단계">
       {STEPS.map((s, i) => {
@@ -145,7 +158,11 @@ export function Steps({ current, tripId }: { current: 1 | 2 | 3; tripId?: number
         return (
           <li key={s.no} className={`step ${state}`}>
             {n < current && tripId ? (
-              <NavLink to={to} className="step-in">{body}</NavLink>
+              <NavLink
+                to={to}
+                className="step-in"
+                onClick={(e) => { if (beforeLeave && !beforeLeave()) e.preventDefault() }}
+              >{body}</NavLink>
             ) : (
               <span className="step-in">{body}</span>
             )}
