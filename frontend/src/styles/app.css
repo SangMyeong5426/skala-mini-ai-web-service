@@ -783,7 +783,7 @@ select:focus-visible, textarea:focus-visible {
   position: relative; min-height: 294px; margin-bottom: 26px; overflow: hidden;
   display: flex; align-items: center;
   border: 1px solid #ead78b; border-radius: var(--r-lg);
-  background: linear-gradient(110deg, #fff8d9 0%, #fff4c9 55%, #f9efcf 100%);
+  background: linear-gradient(to bottom, #fee2ae 0%, #fdedc5 25%, #feefce 50%, #fcebc8 86%, #fdeccd 100%);
 }
 .trip-banner-copy { position: relative; z-index: 1; width: 52%; padding: 44px 72px; }
 .trip-banner-title {
@@ -794,6 +794,8 @@ select:focus-visible, textarea:focus-visible {
   position: absolute; right: 0; bottom: 0;
   width: auto; height: 100%; max-width: none;
   object-fit: contain;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16%);
+  mask-image: linear-gradient(to right, transparent, #000 16%);
 }
 
 .trip-list { display: grid; gap: 16px; }
