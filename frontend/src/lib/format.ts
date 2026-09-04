@@ -96,8 +96,21 @@ export const PHOTO_STATUS_LABEL: Record<string, string> = {
  * 위탁 여부는 enum 이 아니라 규정 문구에 있다. 그래서 <b>enum 이 실제로
  * 결정하는 둘만</b> 두 축으로 적는다.
  *
- *   CHECKED_OK        위탁 안내 = 기내는 안 된다 → "위탁만 가능"
+ *   CHECKED_OK        기내는 안 되고 위탁만 된다 → "위탁만 가능"
  *   CHECKED_FORBIDDEN 06:415 "기내·위탁 모두 금지" → "기내·위탁 불가"
+ *
+ * <b>`CHECKED_OK` 가 "기내 불가" 까지 뜻한다는 근거는 엄격도 사다리다.</b>
+ * 이름만 보면 *"위탁이 된다"* 일 뿐 *"기내가 안 된다"* 는 아니라고 읽을 수 있다.
+ * 리뷰에서 그 지적이 나왔다. 그런데 07:1805 와 `RuleEngine` 이 규정 충돌 시
+ * 우선순위를 이렇게 못박아 두었다.
+ *
+ *   CHECKED_FORBIDDEN > NEED_MORE_INFO > ASK_AIRLINE > RESTRICTED
+ *                     > CHECKED_OK > CABIN_OK
+ *
+ * `CHECKED_OK` 가 `CABIN_OK` 보다 <b>엄격하다.</b> 기내도 된다면 둘이 같은
+ * 뜻이 되어 사다리에서 위에 설 이유가 없다. 06 의 예 넷도 전부 기내 불가다
+ * (120ml 화장품 · 날 길이 7cm 가위). 이름이 아니라 <b>엔진이 쓰는 순서</b>가
+ * 뜻을 정한다.
  *
  * 나머지 넷은 한 축만 확정되거나(CABIN_OK) 판정 자체가 보류라, 없는 사실을
  * 지어내지 않도록 그대로 둔다. 위탁 여부는 옆의 근거 문장이 말한다.
