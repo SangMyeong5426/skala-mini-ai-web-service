@@ -191,6 +191,15 @@ export default function Detections() {
     void load()
   }
 
+  /*
+   * <b>분석 중</b>인가. 폴링이 도는 동안(`running`)과, 그 전에 분석을 걸기로
+   * 이미 정한 순간(`kicked`)을 함께 본다.
+   *
+   * 뒤엣것이 없으면 화면이 한 번 깜빡인다 — 목록을 먼저 받고 나서 작업을
+   * 걸기 때문에, 그 사이 아주 짧게 <b>지난 결과</b>가 보였다가 사라진다.
+   */
+  const analyzing = job.phase === 'running' || (kicked.current && job.phase === 'idle')
+
   const list = dets ?? []
   // 03-wireframe: "확인 필요" 묶음 = missingInfo 가 있거나 신뢰도가 낮은 것
   const needsCheck = list.filter((d) => d.missingInfo || d.confidenceLevel === 'LOW')
@@ -200,28 +209,12 @@ export default function Detections() {
       <TopBar
         title="인식 결과"
         sub="사진에서 찾아 자동 등록했어요. 틀린 것만 고치시면 됩니다"
+        /* 다시 분석은 이 화면에 머무는 동작이라 위에 남긴다. 다음으로 가는 것만 아래로 */
         right={
           <>
             <button type="button" className="btn btn-ghost" onClick={analyze} disabled={job.phase === 'running'}>
               다시 분석
             </button>
-            {/*
-              * 03:290 — S-06 의 `사진 확인` 으로 들어왔으면 <b>`검수로 돌아가기`</b>
-              * 로 돌아간다. 03:264 도 같다. "복귀 시 준비 상태·무게를 다시
-              * 조회한다" 는 검수 화면이 열릴 때 이미 하는 일이다.
-              *
-              * 이게 없어서 사용자에게 남은 길이 브라우저 뒤로가기뿐이었다 —
-              * 단계 표시줄은 <b>지나온</b> 단계만 링크한다.
-              */}
-            {fromInspection ? (
-              <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/inspection`)}>
-                검수로 돌아가기
-              </button>
-            ) : (
-              <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/items`)}>
-                체크리스트로
-              </button>
-            )}
           </>
         }
       />
@@ -238,7 +231,14 @@ export default function Detections() {
           <AiPending label="부족한 준비물을 추천하는 중" polls={rec.polls} />
         )}
 
-        {job.phase === 'running' && (
+        {/*
+          * <b>분석 중에는 결과를 감춘다.</b> 예전에는 진행 표시 아래에 <b>지난</b>
+          * 인식 목록이 그대로 남아 있었다. 지금 만들어지는 중인 것과 이미 지나간
+          * 것이 한 화면에 겹쳐 보여서, 사용자는 다 된 줄 알고 아래를 읽었다.
+          *
+          * 끝나야 보여준다. 그래야 목록이 <b>이번 분석의 결과</b>라는 뜻이 된다.
+          */}
+        {analyzing && (
           <div className="card">
             <AiPending label="사진을 분석하고 목록에 등록하는 중" polls={job.polls} />
           </div>
@@ -257,9 +257,9 @@ export default function Detections() {
           />
         )}
 
-        {!error && dets === null && <div className="card"><Skeleton rows={3} /></div>}
+        {!error && dets === null && !analyzing && <div className="card"><Skeleton rows={3} /></div>}
 
-        {dets !== null && dets.length === 0 && job.phase !== 'running' && (
+        {!analyzing && dets !== null && dets.length === 0 && (
           <div className="card">
             <Empty
               title="인식된 물품이 없습니다"
@@ -280,7 +280,7 @@ export default function Detections() {
           </div>
         )}
 
-        {list.length > 0 && (
+        {!analyzing && list.length > 0 && (
           <div className="card">
             <div className="card-head">
               <h2 className="card-title">사진에서 찾아 등록했어요</h2>
@@ -299,6 +299,33 @@ export default function Detections() {
                 <DetectionRow key={d.detectionId} d={d} items={items} onEdit={edit} onRemove={removeItem} />
               ))}
             </ul>
+
+            {/*
+              * <b>카드 안쪽 아래 오른쪽.</b> S-02 여행 정보·S-03 짐 사진과 같은
+              * 자리다. 셋이 1→2→3 으로 이어 걷는 화면이라 버튼이 매번 다른 곳에
+              * 있으면 눈이 그때마다 다시 찾아야 한다.
+              *
+              * `다시 분석` 은 이 화면에 <b>머무는</b> 동작이라 위에 남겨 둔다.
+              * 나아가는 것과 제자리에서 하는 것을 위아래로 갈라 놓는다.
+              *
+              * 03:290 — S-06 의 `사진 확인` 으로 들어왔으면 <b>검수로 돌아간다.</b>
+              * 이게 없으면 남는 길이 브라우저 뒤로가기뿐이다 — 단계 표시줄은
+              * <b>지나온</b> 단계만 링크하기 때문이다.
+              */}
+            <div className="form-foot" style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--line)' }}>
+              <button type="button" className="btn btn-ghost" style={{ marginRight: 'auto' }} onClick={() => nav(`/trips/${tripId}/photos`)}>
+                ← 이전: 짐 사진
+              </button>
+              {fromInspection ? (
+                <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/inspection`)}>
+                  검수로 돌아가기
+                </button>
+              ) : (
+                <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/items`)}>
+                  다음 — 체크리스트 →
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

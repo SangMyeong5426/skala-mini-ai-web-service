@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { AiPending, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { Shell, Steps, TopBar } from '../components/Shell'
-import { pct, VERDICT_CLASS, VERDICT_LABEL } from '../lib/format'
+import { headroom, kg, pct, VERDICT_CLASS, VERDICT_LABEL, WEIGHT_BAR_CLASS } from '../lib/format'
 import type { Inspection, PhotoStatus, TripDetail, WeightVerdict } from '../types/api'
 
 /**
@@ -28,8 +28,6 @@ const WEIGHT: Record<WeightVerdict, { label: string; cls: string }> = {
 
 /** 07:1390 — RULE_CHECK `items` 의 maxItems. 서버는 51개부터 400 이다 */
 const RULE_CHECK_MAX_ITEMS = 50
-
-const kg = (g: number) => (g / 1000).toFixed(1)
 
 export default function InspectionPage() {
   const { tripId } = useParams()
@@ -237,6 +235,15 @@ export default function InspectionPage() {
       <div className="content">
         {error && <Failed title="검수 결과를 불러오지 못했습니다" detail={error} onRetry={() => { void load() }} />}
 
+        {/*
+          * <b>섹션 사이를 벌린다.</b> 카드에는 바깥 여백이 없어서, 여기처럼
+          * 카드를 여럿 쌓는 화면에서는 서로 붙어 한 덩어리로 읽혔다. 준비
+          * 상태·무게·판정은 <b>다른 이야기</b>인데 경계가 안 보였다.
+          *
+          * 각 카드에 `marginTop` 을 다는 대신 감싸는 쪽에서 한 번에 준다 —
+          * 카드를 더 넣거나 순서를 바꿔도 여백이 따라온다.
+          */}
+        <div className="stack">
         {/* ── ① 준비 상태 ── */}
         <div className="card">
           <div className="card-head">
@@ -268,6 +275,14 @@ export default function InspectionPage() {
                 </div>
               )}
 
+              {/*
+                * <b>두 묶음을 좌우로 나눈다.</b> 위아래로 쌓으면 챙긴 것이 길어질수록
+                * <b>안 챙긴 것</b>이 화면 밖으로 밀려난다. 이 화면에서 정작 볼 것은
+                * 뒤엣것인데, 그것을 보려면 매번 끝까지 스크롤해야 했다.
+                *
+                * 나란히 두면 완료율 막대 바로 아래에서 둘이 함께 보인다.
+                */}
+              <div className="split-cols">
               <Group title="챙김 완료" count={r.prepared.length} tone="ok"
                 empty="현재 챙김 완료된 물품이 없습니다">
                 {r.prepared.map((i) => (
@@ -296,7 +311,23 @@ export default function InspectionPage() {
               <Group title="아직 안 챙김" count={r.unprepared.length} tone="warn"
                 empty={r.prepared.length === 0
                   ? '내 목록이 비어 있습니다. 사진을 올리거나 체크리스트에서 직접 추가하세요'
-                  : '모두 챙기셨습니다'}>
+                  : (
+                    /*
+                      * <b>다 챙긴 것은 이 화면에서 가장 좋은 소식이다.</b> 한 줄짜리
+                      * 회색 글씨로 적어 두면 빈칸처럼 읽혀서, 정작 확인하러 온
+                      * 사람이 "안 챙긴 게 없다" 는 사실을 못 보고 지나쳤다.
+                      *
+                      * 옆 기둥이 길어도 이 자리는 세로 가운데에 선다 — 두 기둥이
+                      * 같은 키로 늘어나므로 남는 자리를 이 소식이 차지한다.
+                      */
+                    <div className="all-done">
+                      <span className="all-done-mark" aria-hidden="true">✓</span>
+                      <p className="all-done-title">다 챙기셨습니다</p>
+                      <p className="all-done-sub">
+                        빠뜨린 물품이 없습니다. 무게와 반입 규정만 확인하면 끝입니다.
+                      </p>
+                    </div>
+                  )}>
                 {r.unprepared.map((i) => (
                   <li key={i.itemId} className="row">
                     <div className="row-main">
@@ -314,6 +345,7 @@ export default function InspectionPage() {
                   </li>
                 ))}
               </Group>
+              </div>
             </>
           )}
         </div>
@@ -362,7 +394,6 @@ export default function InspectionPage() {
                   <span>{kg(w.minG)}</span>
                   <b>{kg(w.typicalG)}</b>
                   <span>{kg(w.maxG)}</span>
-                  <small>kg</small>
                 </p>
                 {/*
                   * <b>한도가 없으면 막대를 그리지 않는다.</b> `limitG` 는 nullable 이다
@@ -374,11 +405,26 @@ export default function InspectionPage() {
                   */}
                 {w.limitG !== null && (
                   <div className="bar bar-lg" style={{ margin: '12px 0 10px' }}>
-                    <span style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }} />
+                    {/* 색은 서버가 정한 verdict 를 따른다. 화면에서 다시 계산하지 않는다 */}
+                    <span
+                      className={WEIGHT_BAR_CLASS[w.verdict] ?? ''}
+                      style={{ width: `${Math.min(100, Math.round((w.typicalG / w.limitG) * 100))}%` }}
+                    />
                   </div>
                 )}
+                {/*
+                  * <b>한도까지 얼마 남았는지를 숫자로 준다.</b> 막대와 배지는 "괜찮다 /
+                  * 아슬하다" 까지만 말하고, 무엇을 빼야 하는지는 알려 주지 않는다.
+                  * 수하물 계산기들이 headroom 을 따로 적는 이유이고, 이 한 줄이
+                  * S-07 무게 상세로 들어가지 않아도 행동할 수 있게 한다.
+                  */}
+                {headroom(w.typicalG, w.limitG) && (
+                  <p className="stat-value" style={{ fontSize: 18, marginBottom: 2 }}>
+                    한도까지 {headroom(w.typicalG, w.limitG)}
+                  </p>
+                )}
                 <p className="card-sub">
-                  {w.limitG === null ? '한도 정보 없음' : `한도 ${kg(w.limitG)}kg`}
+                  {w.limitG === null ? '한도 정보 없음' : `한도 ${kg(w.limitG)}`}
                   {' · '}신뢰도 {w.confidence === 'HIGH' ? '높음' : w.confidence === 'MEDIUM' ? '보통' : '낮음'}
                   {w.excludedCount > 0 && ` · 계산 제외 ${w.excludedCount}개`}
                 </p>
@@ -389,7 +435,7 @@ export default function InspectionPage() {
                     {w.contributions.map((x) => (
                       <li key={x.name}>
                         <span>{x.name} <em className="card-sub">× {x.qty}</em></span>
-                        <b>{x.subtotalG}g</b>
+                        <b>{kg(x.subtotalG)}</b>
                       </li>
                     ))}
                   </ul>
@@ -397,6 +443,15 @@ export default function InspectionPage() {
                 <p className="disclaimer">
                   예상 무게는 참고용 추정치입니다. 탑승 전 실제 저울로 측정하세요.
                 </p>
+                {/*
+                  * <b>S-07 로 가는 링크를 뺐다(사용자 지시).</b> 규정 검색과 같은
+                  * 판단이다 — 여행 등록을 마치는 자리에서 곁길을 내지 않는다.
+                  *
+                  * 여기 요약으로 충분한지가 관건이다. 지금은 범위·신뢰도·한도까지
+                  * 남은 무게와 기여도 상위 몇 개, 제외 개수와 그 이유 한 줄까지
+                  * 보여준다. 어느 물품이 왜 빠졌는지 <b>이름까지</b> 보려면 S-07 이
+                  * 필요한데, 그 화면은 지금 들어갈 문이 없다(03:55 참고).
+                  */}
               </>
             )}
           </div>
@@ -452,6 +507,19 @@ export default function InspectionPage() {
                 )}
               </div>
             ))}
+            {/*
+              * <b>여기서 규정 검색으로 보내지 않는다.</b> 이 화면은 여행 등록의
+              * 마지막 칸이다. 규정을 뒤지러 가는 것은 준비를 마치는 일과 결이
+              * 다른 볼일이라, 흐름 한가운데에 문을 내면 마무리 직전에 사람을
+              * 옆길로 뺀다.
+              *
+              * 규정 질문은 <b>챗봇</b>이 받는다 — 오른쪽 아래 버튼으로 어느
+              * 화면에서나 열리고, 여행을 등록하지 않아도 답한다. 물어보는 것이
+              * 검색어를 짜 넣는 것보다 빠르기도 하다.
+              *
+              * 판정 자체는 여기서 끝난다. 물품마다 근거 한 줄과 출처 링크가
+              * 붙어 있어서, 더 볼 것이 있는 사람만 챗봇을 열면 된다.
+              */}
           </div>
         </div>
 
@@ -459,14 +527,29 @@ export default function InspectionPage() {
 
         {saveError && <Failed title="저장하지 못했습니다" detail={saveError} />}
 
-        {/* 03:284 — 검수 결과 아래 `최종 저장`. 흐름의 마지막 단추다 */}
+        {/*
+          * 03:284 — 검수 결과 아래 `최종 저장`. 흐름의 마지막 단추다.
+          *
+          * <b>카드 안쪽 아래 오른쪽.</b> S-02·S-03·S-04·S-05 와 같은 자리다.
+          * 이 화면만 카드 밖 맨바닥에 버튼이 떠 있어서, 넷을 거쳐 온 사람의 눈이
+          * 마지막에 와서 다시 헤맸다.
+          */}
         {data && (
-          <div className="form-foot">
-            <button type="button" className="btn" onClick={confirm} disabled={saving}>
-              {saving ? '저장하는 중…' : trip?.status === 'DRAFT' ? '최종 저장' : '저장하고 목록으로'}
-            </button>
+          <div className="card">
+            <div className="form-foot">
+              <button
+                type="button" className="btn btn-ghost" style={{ marginRight: 'auto' }}
+                onClick={() => nav(`/trips/${tripId}/items`)}
+              >
+                ← 이전: 체크리스트
+              </button>
+              <button type="button" className="btn" onClick={confirm} disabled={saving}>
+                {saving ? '저장하는 중…' : trip?.status === 'DRAFT' ? '최종 저장' : '저장하고 목록으로'}
+              </button>
+            </div>
           </div>
         )}
+        </div>
       </div>
     </Shell>
   )
@@ -492,7 +575,8 @@ function Group({
   title: string
   count: number
   tone: 'ok' | 'warn' | ''
-  empty?: string
+  /* 문자열 한 줄일 때도 있고, `다 챙기셨습니다` 처럼 한 덩어리일 때도 있다 */
+  empty?: React.ReactNode
   children: React.ReactNode
 }) {
   if (count === 0 && !empty) return null
@@ -502,7 +586,9 @@ function Group({
         {title}
         <span className={`badge ${tone === 'ok' ? 'badge-ok' : tone === 'warn' ? 'badge-warn' : ''}`}>{count}</span>
       </p>
-      {count === 0 ? <p className="card-sub">{empty}</p> : <ul>{children}</ul>}
+      {count === 0
+        ? (typeof empty === 'string' ? <p className="card-sub">{empty}</p> : empty)
+        : <ul>{children}</ul>}
     </div>
   )
 }

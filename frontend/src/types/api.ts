@@ -113,7 +113,15 @@ export interface TripCreated {
 export interface TripPhoto {
   photoId: number
   fileUrl: string
-  bagKind: BagKind
+  /**
+   * <b>null 일 수 있다.</b> 서버에서 선택값이라(`PhotoController` `required=false`)
+   * 종류를 고르지 않고 올린 사진은 비어 있다. `Codes.BagKind` 가 null 을 그대로
+   * 담고, `BagCheckPrompt` 는 그때 "종류 미상" 으로 프롬프트에 적는다.
+   *
+   * 예전 정의는 non-null 이라 화면이 null 을 `위탁용` 으로 잘못 보여줬다 —
+   * `=== 'CABIN' ? '기내용' : '위탁용'` 의 else 가 null 까지 삼켰다.
+   */
+  bagKind: BagKind | null
   /** 06:1056 · 실서버 `PhotoDtos.Photo`. ISO 8601 UTC. */
   uploadedAt: string
 }
@@ -342,13 +350,84 @@ export interface RuleCheckOutput {
 }
 
 // ── 반입 규정 (S-08) ──────────────────────────────────────
+/**
+ * `GET /api/rules` 의 한 행. <b>백엔드 `RuleDtos.Rule` 과 1:1 이다.</b>
+ *
+ * 예전 정의는 `keyword`·`reason`·`source` 를 들고 있었는데 서버는 그런 이름을
+ * 보내지 않는다(06:1063). 화면이 없어서 아무도 안 불러 봤기에 드러나지 않았다.
+ * 06 이 정본이고 여기를 거기 맞춘다.
+ */
 export interface TransportRule {
   ruleId: number
-  keyword: string
   verdict: RuleVerdict
-  reason: string
-  source: string
-  checkedAt: string
+  /** 규정이 걸리는 조건. 예: `100Wh 이하`. 조건이 없는 규정은 null */
+  conditionNote: string | null
+  /** 사용자에게 보여줄 근거 문장 */
+  description: string
+  /** 규정 최신성 — 출처와 확인 날짜는 항상 함께 */
+  sourceUrl: string | null
+  checkedAt: string | null
+}
+
+// ── 여행 일정 (S-11) ──────────────────────────────────────
+export type ItineraryKind = 'FLIGHT' | 'LODGING' | 'ACTIVITY' | 'TRANSPORT' | 'OTHER'
+
+export interface Itinerary {
+  itineraryId: number
+  tripId: number
+  kind: ItineraryKind
+  title: string
+  place: string | null
+  /** 항공편명·예약번호 같은 식별자 */
+  code: string | null
+  /** ISO-8601. 서버는 UTC 로 준다 */
+  startAt: string
+  endAt: string | null
+  note: string | null
+}
+
+/** 추가·수정 본문. 수정은 보낸 필드만 바뀐다 */
+export interface ItineraryInput {
+  kind: ItineraryKind
+  title: string
+  place?: string | null
+  code?: string | null
+  startAt: string
+  endAt?: string | null
+  note?: string | null
+}
+
+// ── 3D 가방 정리 (S-12) ───────────────────────────────────
+export type Compartment = 'MAIN_LEFT' | 'MAIN_RIGHT' | 'FRONT_POCKET' | 'MESH' | 'TOP'
+
+/**
+ * 물품 하나의 자리. `posX/Y/Z` 는 구역 안의 상대 좌표(0~1)다.
+ *
+ * 저장은 <b>PUT 전체 교체</b>다 — 이번에 안 보낸 항목은 가방에서 뺀 것으로
+ * 처리한다(06:1049). 드래그마다 보내면 순서가 뒤집혔을 때 물건이 엉뚱한
+ * 자리에 남는다.
+ */
+export interface Placement {
+  itemId: number
+  compartment: Compartment
+  posX: number
+  posY: number
+  posZ: number
+  rotated: boolean | null
+}
+
+/** 아직 가방에 넣지 않은 체크리스트 항목 */
+export interface UnplacedItem {
+  itemId: number
+  name: string
+  category: Category
+  qty: number
+}
+
+export interface PackingLayout {
+  tripId: number
+  placements: Placement[]
+  unplaced: UnplacedItem[]
 }
 
 // ── 인증 ──────────────────────────────────────────────────
@@ -399,6 +478,16 @@ export interface SessionResponse {
 
 /** 06 의 입력 규칙. 서버가 최종 판정하지만 화면에서 먼저 걸러 왕복을 줄인다. */
 export const LOGIN_ID_RE = /^[a-z0-9_]{4,30}$/
+/**
+ * 이메일 형식. <b>화면·Mock 이 같은 것을 쓴다.</b>
+ *
+ * 예전에는 mock.ts 안에만 있어서 화면은 브라우저 기본 검사에만 기댔는데,
+ * 폼이 `noValidate` 라 그 기본 검사도 꺼져 있었다. 규칙이 사는 곳을 여기로 옮긴다.
+ *
+ * 서버(정본)보다 느슨하다 — 여기서 막는 것은 오타이고, 최종 판단은 서버가 한다.
+ */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export const PASSWORD_MIN = 8
 /** BCrypt 가 잘리는 지점. 06:190 */
 export const PASSWORD_MAX_BYTES = 72

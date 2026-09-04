@@ -269,6 +269,14 @@ export default function Landing() {
  * 밀기만</b> 하므로 해안선은 그대로다.
  *
  * 도시 좌표도 같은 값만큼 함께 민다. 한쪽만 옮기면 서울이 바다에 찍힌다.
+ *
+ * <b>표시에 붙는 글자는 도시명이 아니라 공항명이다</b> — 인천 · 나리타. 바로
+ * 아래 줄에 IATA 코드(ICN · NRT)가 오므로 도시명을 쓰면 "도쿄 / NRT" 처럼
+ * 층위가 어긋난 짝이 된다. 좌표 상수 이름이 SEOUL · TOKYO 인 것은 그대로 두는데,
+ * 그건 표시를 찍는 <b>지리 좌표</b>라 도시가 맞기 때문이다.
+ *
+ * 아래 목업(.shot-title)의 "서울 → 도쿄" 는 바꾸지 않는다. 그건 공항이 아니라
+ * 시드의 여행 데이터(trips.origin · destination)를 그대로 비추는 자리다.
  */
 const SPREAD = 70
 
@@ -286,10 +294,19 @@ const START = 0.06
 /**
  * 서울에서 도쿄로.
  *
- * <b>출발점이 항로의 가장 높은 지점</b>이 되도록 제어점을 아래에 둔다. 위로
- * 부풀리면 그 볼록한 부분이 글자 쪽으로 올라가 버린다.
+ * <b>위로 부푼 호다.</b> 실제 항공로가 대권 항로라 지도 위에서 곡선으로 보이는
+ * 것과 같은 인상을 준다. 예전에는 제어점이 두 도시를 잇는 직선 위에 거의 얹혀
+ * 있어서(부푼 정도 8.6) 자로 그은 선처럼 보였다.
+ *
+ * 중점이 현(弦)보다 55 단위 위에 오도록 잡았다 — 제어점 y 의 합이
+ * `(475 + 591) + 3(y1 + y2) = 8 × 478` 을 만족한다. 뒤쪽(852)을 앞쪽(600)보다
+ * 낮춰 <b>빠르게 올라 완만하게 내려오는</b> 모양으로 만든다. 이륙 직후 상승이
+ * 가파른 실제 비행과 같고, 도착 지점에서 기수가 눕는다.
+ *
+ * 부푼 꼭대기는 y≈459(t≈0.28)로 출발점보다 16 위다. 지도 묶음이 아래로 내려가
+ * 있고(app.css `.art-map`) viewBox 를 아래 기준으로 자르므로 글자에 닿지 않는다.
  */
-const ROUTE = `M ${SEOUL_PT.x} ${SEOUL_PT.y} C 600 497 852 546 ${TOKYO_PT.x} ${TOKYO_PT.y}`
+const ROUTE = `M ${SEOUL_PT.x} ${SEOUL_PT.y} C 600 430 852 489 ${TOKYO_PT.x} ${TOKYO_PT.y}`
 
 function HeroArt() {
   const trailRef = useRef<SVGPathElement>(null)
@@ -349,18 +366,64 @@ function HeroArt() {
     <svg
       ref={artRef}
       className="hero-art"
-      viewBox="0 0 1440 900"
-      preserveAspectRatio="xMidYMin slice"
+      /*
+       * <b>아래를 기준으로 자른다.</b> `slice` 는 넘치는 쪽을 잘라내는데,
+       * 예전값 `xMidYMin` 은 위를 고정해서 <b>아래가 잘렸다</b> — 1920×950 창에서
+       * 도쿄(y=701)가 잘림 경계(712)에 걸려 도시 표시와 비행기가 반쯤 사라졌다.
+       *
+       * 아래를 고정하면 잘리는 곳이 <b>빈 하늘</b>이 된다. 두 도시와 항로는 어떤
+       * 창 비율에서도 남는다. 세로가 짧아질수록 구름부터 사라질 뿐이다.
+       *
+       * viewBox 높이를 900 → 800 으로 줄인 것도 같은 이유다. 실제 그림은 y≈741
+       * 에서 끝나는데 900 까지 잡아 두면 아래에 빈 띠가 생기고, 그만큼 그림이
+       * 위로 밀려 글자에 가까워진다.
+       */
+      viewBox="0 0 1440 800"
+      preserveAspectRatio="xMidYMax slice"
       aria-hidden="true"
       focusable="false"
     >
-      {/* 구름 — 땅을 가리지 않게 바다 쪽에만 옅게 둔다 */}
+      {/*
+        * 구름 — 땅을 가리지 않게 바다 쪽에만 옅게 둔다.
+        *
+        * <b>흘러간다.</b> 비행기만 움직이면 배경이 사진처럼 굳어 보인다.
+        *
+        * 이어 붙이는 방법이 핵심이다. 한 벌만 밀면 오른쪽으로 나간 뒤 제자리로
+        * <b>튀어 돌아온다.</b> 그래서 같은 구름을 한 벌 더 두되 이동거리만큼
+        * (1760) 왼쪽에 놓는다. 앞의 것이 오른쪽으로 빠질 때 뒤의 것이 정확히
+        * 그 자리에 들어와서 마디가 보이지 않는다.
+        *
+        * 1760 은 viewBox 너비(1440)보다 넓다. 그만큼 구름 사이에 빈 하늘이
+        * 생기는데, 하늘이 늘 구름으로 차 있는 편보다 자연스럽다.
+        *
+        * 속도는 셋 다 다르다. 같으면 한 덩어리가 통째로 미끄러지는 것처럼 보인다.
+        */}
       <g className="art-cloud">
-        <ellipse cx="150" cy="176" rx="72" ry="22" />
-        <ellipse cx="198" cy="162" rx="46" ry="28" />
-        <ellipse cx="1330" cy="700" rx="60" ry="18" />
-        <ellipse cx="1366" cy="688" rx="36" ry="22" />
-        <ellipse cx="266" cy="812" rx="54" ry="16" />
+        <defs>
+          <g id="art-cloud-a">
+            <ellipse cx="150" cy="176" rx="72" ry="22" />
+            <ellipse cx="198" cy="162" rx="46" ry="28" />
+          </g>
+          <g id="art-cloud-b">
+            <ellipse cx="1330" cy="700" rx="60" ry="18" />
+            <ellipse cx="1366" cy="688" rx="36" ry="22" />
+          </g>
+          <g id="art-cloud-c">
+            <ellipse cx="266" cy="812" rx="54" ry="16" />
+          </g>
+        </defs>
+        <g className="art-drift" style={{ animationDuration: '164s' }}>
+          <use href="#art-cloud-a" />
+          <use href="#art-cloud-a" x="-1760" />
+        </g>
+        <g className="art-drift" style={{ animationDuration: '212s' }}>
+          <use href="#art-cloud-b" />
+          <use href="#art-cloud-b" x="-1760" />
+        </g>
+        <g className="art-drift" style={{ animationDuration: '132s' }}>
+          <use href="#art-cloud-c" />
+          <use href="#art-cloud-c" x="-1760" />
+        </g>
       </g>
 
       <g className="art-map">
@@ -385,7 +448,7 @@ function HeroArt() {
       <g className="art-node">
         <circle cx={SEOUL_PT.x} cy={SEOUL_PT.y} r="19" className="art-halo" />
         <circle cx={SEOUL_PT.x} cy={SEOUL_PT.y} r="7" />
-        <text x={SEOUL_PT.x} y={SEOUL_PT.y + 48}>서울</text>
+        <text x={SEOUL_PT.x} y={SEOUL_PT.y + 48}>인천</text>
         <text x={SEOUL_PT.x} y={SEOUL_PT.y + 70} className="art-code">ICN</text>
       </g>
 
@@ -393,7 +456,7 @@ function HeroArt() {
       <g className="art-node">
         <circle cx={TOKYO_PT.x} cy={TOKYO_PT.y} r="19" className="art-halo" />
         <circle cx={TOKYO_PT.x} cy={TOKYO_PT.y} r="7" />
-        <text x={TOKYO_PT.x} y={TOKYO_PT.y + 48}>도쿄</text>
+        <text x={TOKYO_PT.x} y={TOKYO_PT.y + 48}>나리타</text>
         <text x={TOKYO_PT.x} y={TOKYO_PT.y + 70} className="art-code">NRT</text>
       </g>
 

@@ -11,8 +11,8 @@
  */
 import type {
   AiJob, AiJobCreated, BagCheckOutput, ChecklistItem, Detection, Inspection,
-  JobType, PackingListOutput, RuleCheckOutput, TripDetail, TripPhoto, TripSummary,
-  WeightEstimateOutput,
+  JobType, PackingListOutput, RuleCheckOutput, TransportRule, TripDetail, TripPhoto,
+  TripSummary, WeightEstimateOutput,
 } from '../types/api'
 
 // ── 여행 (S-01) ───────────────────────────────────────────
@@ -915,6 +915,55 @@ export function RULE_CHECK_CHAT(question: string, itemNames: string[] = []): Rul
   if (q.includes('노트북')) return CHAT_LAPTOP
   return CHAT_UNKNOWN
 }
+
+/**
+ * S-08 규정 검색. `database/seed.sql` 의 `transport_rules` 8행과 같다.
+ *
+ * `keyword` 는 서버 응답에 없다 — 검색으로만 쓰이고 화면에 안 나온다.
+ * Mock 이 걸러 내려면 필요해서 여기만 들고 있다가 응답에서 함께 보낸다.
+ */
+export const RULES: (TransportRule & { keyword: string })[] = [
+  {
+    ruleId: 1, keyword: '보조배터리', verdict: 'CABIN_OK', conditionNote: '100Wh 이하',
+    description: '보조배터리는 기내 반입만 가능합니다. 위탁수하물로 부칠 수 없습니다.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 2, keyword: '보조배터리', verdict: 'ASK_AIRLINE', conditionNote: '100Wh 초과 160Wh 이하',
+    description: '100Wh를 넘으면 항공사 사전 승인이 필요합니다.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 3, keyword: '보조배터리', verdict: 'CHECKED_FORBIDDEN', conditionNote: '160Wh 초과',
+    description: '160Wh를 넘는 보조배터리는 기내·위탁 모두 반입할 수 없습니다.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 4, keyword: '액체', verdict: 'CABIN_OK', conditionNote: '용기당 100ml 이하, 총 1L 이하',
+    description: '액체류는 100ml 이하 용기에 담아 1L 지퍼백 하나에 넣어야 기내 반입됩니다.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 5, keyword: '액체', verdict: 'CHECKED_OK', conditionNote: '100ml 초과',
+    description: '100ml를 넘는 액체는 위탁수하물로 부치세요.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/905/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 6, keyword: '가위', verdict: 'CHECKED_OK', conditionNote: '날 길이 6cm 초과',
+    description: '날 길이 6cm를 넘는 가위는 기내 반입이 제한됩니다. 위탁수하물로 부치세요.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/907/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 7, keyword: '가위', verdict: 'CABIN_OK', conditionNote: '날 길이 6cm 이하',
+    description: '날 길이 6cm 이하의 가위는 기내 반입이 가능합니다.',
+    sourceUrl: 'https://www.airport.kr/ap_ko/907/subview.do', checkedAt: '2026-09-02',
+  },
+  {
+    ruleId: 8, keyword: '노트북', verdict: 'CABIN_OK', conditionNote: null,
+    description: '노트북은 기내 반입이 가능하며 보안검색 시 가방에서 꺼내야 합니다.',
+    sourceUrl: 'https://www.airportal.go.kr/library/security.do', checkedAt: '2026-09-02',
+  },
+]
 
 export const AI_JOB_CREATED = (jobType: JobType, jobId: number): AiJobCreated => ({
   jobId, jobType, status: 'PENDING',

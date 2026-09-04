@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
+import { confirmLeave } from '../lib/unsaved'
 import { NAV, NAV_CTA, STEPS, stepPath } from '../routes'
 import { ChatModal } from './ChatModal'
 
@@ -41,6 +42,13 @@ export function SiteHeader() {
   // 06:263 — "서버 실패 시 로그아웃 완료로 표시하지 않고 재시도한다".
   // 예외를 삼키면 아무 일도 안 일어난 것처럼 보인다.
   const signOut = async () => {
+    /*
+     * <b>로그아웃도 이탈이다.</b> 로고·내 여행·여행 등록에는 가드를 걸어 뒀는데
+     * 바로 옆 로그아웃만 빠져 있었다 — 폼을 고치다 누르면 확인 없이 세션이
+     * 사라지고 입력도 함께 사라진다(리뷰 지적). 같은 문을 두 개 내고 하나만
+     * 잠근 셈이다.
+     */
+    if (!confirmLeave()) return
     setSigningOut(true)
     setSignOutError(false)
     try {
@@ -57,7 +65,13 @@ export function SiteHeader() {
   return (
     <header className="site-head">
       <div className="site-head-in">
-        <NavLink to="/" className="site-brand">짐싸조</NavLink>
+        {/*
+          * <b>여기가 실제 이탈 경로다.</b> 여행 정보를 채우다 로고를 누르면
+          * 입력한 것이 말없이 사라졌다. 단계 표시줄에만 가드를 걸어 두었는데,
+          * 그 표시줄은 지나온 단계만 링크로 만들어서 1단계에서는 링크가 하나도
+          * 없다 — 걸어 둔 가드가 호출될 수조차 없었다.
+          */}
+        <NavLink to="/" className="site-brand" onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}>짐싸조</NavLink>
 
         {/*
           * 확인이 끝나기 전에는 아무것도 그리지 않는다. 로그인한 사람에게
@@ -75,6 +89,7 @@ export function SiteHeader() {
                   to={n.path}
                   end
                   className={({ isActive }) => (isActive ? 'is-active' : undefined)}
+                  onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}
                 >
                   {n.name}
                 </NavLink>
@@ -85,7 +100,11 @@ export function SiteHeader() {
                 {signingOut ? '로그아웃 중…' : signOutError ? '다시 시도' : '로그아웃'}
               </button>
             </nav>
-            <Link to={NAV_CTA.path} className="btn-head">＋ {NAV_CTA.name}</Link>
+            <Link
+              to={NAV_CTA.path}
+              className="btn-head"
+              onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}
+            >＋ {NAV_CTA.name}</Link>
           </>
         ) : (
           <>
@@ -129,7 +148,12 @@ export function TopBar({
  *
  * 지금 어디인지, 앞뒤로 무엇이 있는지 보여준다. 지나온 단계는 눌러서 돌아간다.
  */
-export function Steps({ current, tripId }: { current: 1 | 2 | 3; tripId?: number | string }) {
+export function Steps({
+  current, tripId,
+}: {
+  current: 1 | 2 | 3
+  tripId?: number | string
+}) {
   return (
     <ol className="steps" aria-label="여행 준비 단계">
       {STEPS.map((s, i) => {
@@ -144,8 +168,13 @@ export function Steps({ current, tripId }: { current: 1 | 2 | 3; tripId?: number
         )
         return (
           <li key={s.no} className={`step ${state}`}>
+            {/* 2단계 이상에서만 링크가 생긴다. 그때도 상단 링크와 같은 가드를 쓴다 */}
             {n < current && tripId ? (
-              <NavLink to={to} className="step-in">{body}</NavLink>
+              <NavLink
+                to={to}
+                className="step-in"
+                onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}
+              >{body}</NavLink>
             ) : (
               <span className="step-in">{body}</span>
             )}

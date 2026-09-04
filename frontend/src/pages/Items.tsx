@@ -5,14 +5,18 @@ import { Shell, Steps, TopBar } from '../components/Shell'
 import { AiPending, Empty, Failed, Skeleton } from '../components/States'
 import { useAiJob } from '../hooks/useAiJob'
 import { CATEGORY_LABEL, pct, PHOTO_STATUS_LABEL, SOURCE_LABEL } from '../lib/format'
-import type { ItemsResponse, PackingListOutput, TripDetail } from '../types/api'
+import type { ChecklistItem, ItemsResponse, PackingListOutput, TripDetail } from '../types/api'
 
 /**
  * S-05 내 체크리스트 · AI 추천.
  *
  * <b>두 목록은 다른 것이다</b> (Notion 개정안 1절).
- *   위 — 내 체크리스트: 챙긴 것 + 챙기기로 한 것. 완료율에 <b>들어간다</b>
- *   아래 — AI 추천: 검토할 후보. 채택 전에는 완료율에 <b>안 들어간다</b>
+ *   왼쪽 — 내 체크리스트: 챙긴 것 + 챙기기로 한 것. 완료율에 <b>들어간다</b>
+ *   오른쪽 — AI 추천: 검토할 후보. 채택 전에는 완료율에 <b>안 들어간다</b>
+ *
+ * <b>위아래가 아니라 좌우다.</b> 쌓아 두면 추천이 화면 밖으로 밀려서, 내 목록을
+ * 보며 무엇이 빠졌는지 견주는 일이 스크롤 왕복이 된다. 두 목록은 <b>견주라고</b>
+ * 있는 것이라 나란히 놓는다.
  *
  * "추천 승인" 은 챙길 목록에 넣겠다는 뜻이지 실제로 챙겼다는 뜻이 아니다.
  * 그래서 채택한 항목의 초기 상태는 미완료(UNCHECKED)다.
@@ -24,15 +28,17 @@ export default function Items() {
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cands, setCands] = useState<PackingListOutput | null>(null)
-  const [picked, setPicked] = useState<Set<number>>(new Set())
   /** 조회 실패(error)와 구분한다. 수정·삭제·추가가 거절당한 것은 다른 사건이다 */
   const [actionError, setActionError] = useState<string | null>(null)
   /** 직접 추가 폼 (03:271) */
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState(1)
   const [adding, setAdding] = useState(false)
-  /** 채택 연타 방지 — 같은 후보가 두 번 들어간다 */
-  const [adopting, setAdopting] = useState(false)
+  /**
+   * 지금 담고 있는 후보의 위치. 연타로 같은 것이 두 번 들어가는 것을 막고,
+   * 누른 버튼에만 `담는 중` 을 띄운다. `'all'` 은 전체 추가다.
+   */
+  const [adopting, setAdopting] = useState<number | 'all' | null>(null)
   const job = useAiJob<PackingListOutput>()
 
   const load = () => {
@@ -42,11 +48,7 @@ export default function Items() {
     api
       .get<ItemsResponse>(`/trips/${tripId}/items`)
       .then(async (r) => {
-        // 추천 작업이 바뀌었으면 옛 배열에서 고른 위치는 의미가 없다
-        setData((prev) => {
-          if (prev && prev.recommendationJobId !== r.recommendationJobId) setPicked(new Set())
-          return r
-        })
+        setData(r)
         // 추천 후보는 완료된 PACKING_LIST 작업에서 읽는다.
         // 여기서 실패해도 내 목록은 이미 받았으므로 화면 전체를 오류로 만들지 않는다.
         if (r.recommendationJobId) {
@@ -72,12 +74,6 @@ export default function Items() {
   }, [data])
 
   const recommend = async () => {
-    /*
-     * <b>고른 것을 먼저 비운다.</b> picked 는 후보 배열의 <b>위치</b>다
-     * (06 의 candidateIndex). 새 추천이 오면 같은 위치에 다른 물건이 온다.
-     * 비우지 않으면 사용자가 고르지 않은 후보가 새 jobId 와 옛 위치로 채택된다.
-     */
-    setPicked(new Set())
     // 07:470 — alreadyPacked 는 <b>PREPARED 만</b>이다. 전체를 보내면 아직 안 챙긴
     // 것까지 "이미 챙겼다" 로 넘어가 추천이 줄어든다.
     const alreadyPacked = (data?.items ?? [])
@@ -169,34 +165,76 @@ export default function Items() {
   }
 
   /**
+   * 내 목록의 <b>이름·수량을 고친다.</b> 06:97 의 PATCH 다.
+   *
+   * 예전에는 이 화면에 수정이 아예 없었다. 사진에서 "생수 1" 로 잡힌 것을
+   * 2 로 고치려면 지우고 다시 넣어야 했고, 그러면 인식과의 연결과 출처가
+   * 함께 사라졌다. 수량 하나 고치자고 잃을 것이 아니다.
+   */
+  const editItem = async (itemId: number, patch: { name?: string; qty?: number }) => {
+    try {
+      await api.patch(`/trips/${tripId}/items/${itemId}`, patch)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : '수정하지 못했습니다.')
+    }
+    void load()
+  }
+
+  /**
+   * 후보 하나를 채택한다. 06:991 의 <b>단건 POST</b> 가 원래 규약이고,
+   * 전체 추가도 이것을 돌려 쓴다.
+   *
+   * <b>고르기 단계를 없앴다.</b> 예전에는 왼쪽 체크박스로 표시해 두고 위쪽
+   * `선택한 n개 추가` 를 눌러야 들어갔다 — 한 개를 담는 데도 두 번을 눌러야
+   * 했고, 담는 버튼은 고른 것이 하나라도 있어야 나타나서 처음 온 사용자에게는
+   * 채택하는 길이 아예 안 보였다.
+   *
+   * 지금은 각 줄 오른쪽의 `추가` 가 곧 채택이다. 왼쪽 체크박스는 내 목록의
+   * <b>챙김 완료</b> 하나만 쓴다 — 03:353 이 두 종류의 체크를 구분하라고 한
+   * 것이 이 뜻이다.
+   */
+  const adoptOne = async (idx: number): Promise<boolean> => {
+    if (!cands || !data?.recommendationJobId) return false
+    const c = cands.items[idx]
+    try {
+      await api.post(`/trips/${tripId}/items`, {
+        name: c.name, category: c.category, qty: c.qty, priority: c.priority,
+        recommendation: { jobId: data.recommendationJobId, candidateIndex: idx },
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const adoptSingle = async (idx: number) => {
+    if (adopting !== null) return
+    setAdopting(idx)
+    const ok = await adoptOne(idx)
+    setActionError(ok ? null : '담지 못했습니다. 다시 눌러 주세요.')
+    setAdopting(null)
+    void load()
+  }
+
+  /**
    * 06:991 — "여러 후보를 선택하면 기존 단건 POST 를 후보별로 호출한다.
    * <b>일부 실패 시 성공한 항목은 유지하고 실패 후보만 재시도한다.</b>"
    *
-   * 예전에는 try/catch 가 없어서 중간에 하나가 거절당하면 루프가 그 자리에서
-   * 끊겼다. 남은 후보는 보내지지도 않고, 이미 등록된 것도 재조회를 안 해
-   * "추가됨" 으로 바뀌지 않았다. 오류는 콘솔에만 남았다.
+   * 그래서 실패해도 중간에 끊지 않고 끝까지 돌린 뒤, 몇 개가 남았는지만 알린다.
+   * 남은 것은 그 줄의 `추가` 로 다시 담으면 된다.
    */
-  const adopt = async () => {
-    if (!cands || !data?.recommendationJobId || adopting) return
-    setAdopting(true)
-    const failed = new Set<number>()
-    for (const idx of picked) {
-      const c = cands.items[idx]
-      try {
-        await api.post(`/trips/${tripId}/items`, {
-          name: c.name, category: c.category, qty: c.qty, priority: c.priority,
-          recommendation: { jobId: data.recommendationJobId, candidateIndex: idx },
-        })
-      } catch {
-        failed.add(idx)
-      }
+  const adoptAll = async () => {
+    if (!cands || !data?.recommendationJobId || adopting !== null) return
+    const targets = openCands.filter((o) => !o.added).map((o) => o.i)
+    if (targets.length === 0) return
+    setAdopting('all')
+    let failed = 0
+    for (const idx of targets) {
+      if (!(await adoptOne(idx))) failed += 1
     }
-    // 실패한 후보만 선택으로 남긴다 — 그대로 다시 누르면 재시도가 된다
-    setPicked(failed)
-    setActionError(
-      failed.size === 0 ? null : `${failed.size}개를 담지 못했습니다. 다시 눌러 주세요.`,
-    )
-    setAdopting(false)
+    setActionError(failed === 0 ? null : `${failed}개를 담지 못했습니다. 다시 눌러 주세요.`)
+    setAdopting(null)
     void load()
   }
 
@@ -208,25 +246,23 @@ export default function Items() {
   // 채택 여부는 서버가 준 acceptedItemId 로 본다. 이름으로만 맞추면 사용자가
   // 이름을 고친 순간 "추가됨" 이 풀린다 — 05-erd 226행이 경고하는 그 문제다.
   // 이름 비교는 서버가 아직 연결을 못 준 후보를 위한 보조 수단으로만 남긴다.
-  const open = (cands?.items ?? []).map((c, i) => ({
+  const openCands = (cands?.items ?? []).map((c, i) => ({
     c, i, added: c.acceptedItemId != null || mine.has(c.name.trim()),
   }))
+  /** 아직 안 담은 후보 수. `전체 추가` 가 몇 개를 담는지 버튼에 적는다 */
+  const remaining = openCands.filter((o) => !o.added).length
   const warn = data?.unacceptedRequiredCount
 
   return (
     <Shell>
       <TopBar
         title="내 체크리스트"
-        sub="챙긴 물품을 관리하고, 아래 추천에서 필요한 것만 고르세요"
+        sub="왼쪽에서 내 목록을 손보고, 오른쪽 추천에서 필요한 것만 담으세요"
+        /* 추천 받기는 이 화면에 머무는 동작이라 위에 남긴다 */
         right={
-          <>
-            <button type="button" className="btn btn-ghost" onClick={recommend} disabled={job.phase === 'running'}>
-              추천 받기
-            </button>
-            <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/inspection`)}>
-              검수하기
-            </button>
-          </>
+          <button type="button" className="btn btn-ghost" onClick={recommend} disabled={job.phase === 'running'}>
+            추천 받기
+          </button>
         }
       />
       <Steps current={3} tripId={tripId} />
@@ -240,21 +276,28 @@ export default function Items() {
         {!error && data === null && <div className="card"><Skeleton rows={4} /></div>}
 
         {data && (
-          <>
-            {/* ── 위쪽: 내 체크리스트 ── */}
+          <div className="stack">
+            {/*
+              * <b>완료율은 두 기둥 위로 뺀다.</b>
+              *
+              * 왼쪽 카드 안에 두었더니 왼쪽만 머리 아래에 막대가 한 줄 더 붙어서,
+              * 두 목록의 첫 줄이 다른 높이에서 시작했다. 경고 줄까지 뜨는 날에는
+              * 더 벌어졌다 — 나란히 놓은 뜻이 무색해진다.
+              *
+              * 자리를 옮기고 보니 원래 여기가 맞다. 완료율은 왼쪽 목록만의 값이
+              * 아니라 <b>이 여행의 준비 상태</b>다. S-06 도 같은 자리에서 같은
+              * 막대로 보여준다.
+              */}
             <div className="card">
-              <div className="card-head">
-                <h2 className="card-title">내 체크리스트</h2>
-                <span className="card-sub">{items.length}개</span>
+              <div className="card-head" style={{ marginBottom: 12 }}>
+                <h2 className="card-title">준비 상태</h2>
                 <span className="spacer" />
-                <div style={{ textAlign: 'right' }}>
-                  <span className="stat-label">준비 완료 </span>
-                  <b style={{ fontSize: 16 }}>{doneCount} / {items.length}</b>
-                  <span className="stat-label"> · {pct(data.completionRate)}</span>
-                </div>
+                <span className="stat-label">준비 완료 </span>
+                <b style={{ fontSize: 16 }}>{doneCount} / {items.length}</b>
+                <span className="stat-label">· {pct(data.completionRate)}</span>
               </div>
 
-              <div className="bar bar-lg" style={{ marginBottom: 14 }}>
+              <div className="bar bar-lg">
                 <span style={{ width: `${Math.round(data.completionRate * 100)}%` }} />
               </div>
 
@@ -268,6 +311,15 @@ export default function Items() {
                   <a href="#recommend" className="btn btn-ghost btn-sm">확인하기</a>
                 </div>
               )}
+            </div>
+
+            <div className="items-cols">
+            {/* ── 왼쪽: 내 체크리스트 ── */}
+            <div className="card">
+              <div className="card-head">
+                <h2 className="card-title">내 체크리스트</h2>
+                <span className="card-sub">{items.length}개</span>
+              </div>
 
               {items.length === 0 ? (
                 <Empty
@@ -289,36 +341,13 @@ export default function Items() {
               ) : (
                 <ul>
                   {items.map((i) => (
-                    <li key={i.itemId} className="row">
-                      <input
-                        type="checkbox"
-                        checked={i.checkStatus === 'PREPARED'}
-                        onChange={(e) => toggleDone(i.itemId, e.target.checked)}
-                        aria-label={`${i.name} 챙김 완료`}
-                      />
-                      <div className="row-main">
-                        <p className="row-name">
-                          {i.name} <span className="card-sub">× {i.qty}</span>
-                          {i.priority === 'REQUIRED' && <span className="badge badge-warn" style={{ marginLeft: 6 }}>필수</span>}
-                        </p>
-                        <p className="row-sub">
-                          {CATEGORY_LABEL[i.category]} · {SOURCE_LABEL[i.source]}
-                        </p>
-                      </div>
-                      <div className="row-right">
-                        <span className={`badge${i.photoStatus === 'CONFIRMED' ? ' badge-ok' : i.photoStatus === 'NEEDS_CHECK' ? ' badge-warn' : ''}`}>
-                          {PHOTO_STATUS_LABEL[i.photoStatus]}
-                        </span>
-                        {/* 03:272 가 이 화면의 호출 API 로 DELETE 를 적어 뒀다 */}
-                        <button
-                          type="button" className="btn btn-ghost btn-sm"
-                          onClick={() => removeItem(i.itemId)}
-                          aria-label={`${i.name} 삭제`}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </li>
+                    <ItemRow
+                      key={i.itemId}
+                      item={i}
+                      onToggle={toggleDone}
+                      onEdit={editItem}
+                      onRemove={removeItem}
+                    />
                   ))}
                 </ul>
               )}
@@ -353,15 +382,25 @@ export default function Items() {
               </form>
             </div>
 
-            {/* ── 아래쪽: AI 추천 ── */}
+            {/* ── 오른쪽: AI 추천 ── */}
             <div className="card" id="recommend">
               <div className="card-head">
                 <h2 className="card-title">AI 추천</h2>
-                <span className="card-sub">채택해야 내 목록에 들어갑니다</span>
+                <span className="card-sub">{openCands.length}개</span>
                 <span className="spacer" />
-                {picked.size > 0 && (
-                  <button type="button" className="btn btn-sm" onClick={adopt} disabled={adopting}>
-                    {adopting ? '담는 중…' : `선택한 ${picked.size}개 추가`}
+                {/*
+                  * <b>전체 추가는 여기 하나뿐이다.</b> 줄마다 있는 `추가` 와 같은
+                  * 쪽(오른쪽)에 두어 "담는 일은 오른쪽" 이라는 규칙을 지킨다.
+                  *
+                  * 담을 것이 없으면 감춘다 — 눌러도 아무 일이 없는 버튼을
+                  * 남겨 두면 사용자는 고장으로 읽는다.
+                  */}
+                {remaining > 0 && (
+                  <button
+                    type="button" className="btn btn-sm"
+                    onClick={adoptAll} disabled={adopting !== null}
+                  >
+                    {adopting === 'all' ? '담는 중…' : `전체 추가 ${remaining}개`}
                   </button>
                 )}
               </div>
@@ -376,29 +415,18 @@ export default function Items() {
                 <Failed title="시간이 오래 걸립니다" detail="작업은 서버에 남아 있습니다" onRetry={recommend} />
               )}
 
-              {job.phase !== 'running' && open.length === 0 && (
+              {job.phase !== 'running' && openCands.length === 0 && (
                 <Empty
                   title="추가 추천이 없습니다"
                   action={<button type="button" className="btn btn-ghost" onClick={recommend}>추천 받기</button>}
                 />
               )}
 
-              {open.length > 0 && (
+              {openCands.length > 0 && (
                 <>
                   <ul>
-                    {open.map(({ c, i, added }) => (
+                    {openCands.map(({ c, i, added }) => (
                       <li key={i} className="row">
-                        <input
-                          type="checkbox"
-                          disabled={added}
-                          checked={picked.has(i)}
-                          onChange={(e) => {
-                            const n = new Set(picked)
-                            e.target.checked ? n.add(i) : n.delete(i)
-                            setPicked(n)
-                          }}
-                          aria-label={`${c.name} 선택`}
-                        />
                         <div className="row-main">
                           <p className="row-name">
                             {c.name} <span className="card-sub">× {c.qty}</span>
@@ -406,8 +434,20 @@ export default function Items() {
                           </p>
                           {c.reason && <p className="row-sub">{c.reason}</p>}
                         </div>
+                        {/* 담는 것도 오른쪽이다. 왼쪽 체크박스는 내 목록의 챙김 완료 하나만 쓴다 */}
                         <div className="row-right">
-                          {added && <span className="badge badge-ok">추가됨</span>}
+                          {added ? (
+                            <span className="badge badge-ok">추가됨</span>
+                          ) : (
+                            <button
+                              type="button" className="btn btn-sm"
+                              onClick={() => adoptSingle(i)}
+                              disabled={adopting !== null}
+                              aria-label={`${c.name} 내 목록에 추가`}
+                            >
+                              {adopting === i ? '담는 중…' : '추가'}
+                            </button>
+                          )}
                         </div>
                       </li>
                     ))}
@@ -431,9 +471,144 @@ export default function Items() {
                 </>
               )}
             </div>
-          </>
+            </div>
+
+            {/*
+              * 다음으로 가는 버튼은 S-02·S-03·S-04 와 같은 <b>아래 오른쪽</b>이다.
+              * 다만 여기서는 두 기둥 <b>바깥</b>에 둔다 — 검수는 왼쪽 목록만의 일도,
+              * 오른쪽 추천만의 일도 아니라 둘을 다 마쳤다는 뜻이기 때문이다.
+              */}
+          <div className="card">
+            <div className="form-foot">
+              <button
+                type="button" className="btn btn-ghost" style={{ marginRight: 'auto' }}
+                onClick={() => nav(`/trips/${tripId}/detections`)}
+              >
+                ← 이전: 인식 결과
+              </button>
+              <button type="button" className="btn" onClick={() => nav(`/trips/${tripId}/inspection`)}>
+                다음 — 검수하기 →
+              </button>
+            </div>
+          </div>
+          </div>
         )}
       </div>
     </Shell>
+  )
+}
+/**
+ * 내 체크리스트 한 줄.
+ *
+ * <b>체크박스와 수정은 다른 일이다.</b> 왼쪽 체크는 "실제로 챙겼다"(03:353),
+ * 오른쪽 `수정` 은 이름·수량을 고치는 것이다. 03 이 두 종류의 체크를 구분하라고
+ * 한 자리라 한쪽이 다른 쪽을 겸하게 두지 않는다.
+ *
+ * 고치는 동안에는 체크박스를 잠근다 — 저장하기 전에 완료로 바꾸면 어느 값이
+ * 저장된 것인지 사용자가 알 수 없다.
+ */
+function ItemRow({
+  item, onToggle, onEdit, onRemove,
+}: {
+  item: ChecklistItem
+  onToggle: (itemId: number, done: boolean) => void
+  onEdit: (itemId: number, patch: { name?: string; qty?: number }) => void
+  onRemove: (itemId: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(item.name)
+  const [qty, setQty] = useState(item.qty)
+
+  const start = () => { setName(item.name); setQty(item.qty); setEditing(true) }
+
+  /**
+   * 06 의 item 검증 그대로다 — 이름 1~100자 · 수량 1~99.
+   * <b>서버가 거절할 값은 보내지 않는다.</b> 이름을 통째로 지우고 저장하면
+   * `name: ''` 이 그대로 나가 400 을 받는다. 그때는 원래 값으로 되돌린다.
+   */
+  const save = () => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 100) { setName(item.name); setEditing(false); return }
+    setEditing(false)
+    if (trimmed !== item.name || qty !== item.qty) onEdit(item.itemId, { name: trimmed, qty })
+  }
+
+  return (
+    <li className="row">
+      <input
+        type="checkbox"
+        checked={item.checkStatus === 'PREPARED'}
+        disabled={editing}
+        onChange={(e) => onToggle(item.itemId, e.target.checked)}
+        aria-label={`${item.name} 챙김 완료`}
+      />
+      <div className="row-main">
+        {editing ? (
+          <div className="edit-row">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              aria-label="물품 이름"
+              /* 엔터로 저장하고 Esc 로 물린다 — 마우스로 버튼을 찾아가지 않아도 된다 */
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); save() }
+                if (e.key === 'Escape') { setName(item.name); setQty(item.qty); setEditing(false) }
+              }}
+            />
+            <input
+              type="number" min={1} max={99} value={qty}
+              onChange={(e) => setQty(Math.min(99, Math.max(1, Number(e.target.value))))}
+              aria-label="수량"
+            />
+          </div>
+        ) : (
+          <>
+            <p className="row-name">
+              {item.name} <span className="card-sub">× {item.qty}</span>
+              {item.priority === 'REQUIRED' && <span className="badge badge-warn" style={{ marginLeft: 6 }}>필수</span>}
+            </p>
+            <p className="row-sub">
+              {CATEGORY_LABEL[item.category]} · {SOURCE_LABEL[item.source]}
+            </p>
+          </>
+        )}
+      </div>
+      <div className="row-right">
+        {editing ? (
+          <>
+            <button type="button" className="btn btn-sm" onClick={save}>저장</button>
+            <button
+              type="button" className="btn btn-ghost btn-sm"
+              onClick={() => { setName(item.name); setQty(item.qty); setEditing(false) }}
+            >
+              취소
+            </button>
+          </>
+        ) : (
+          <>
+            <span className={`badge${item.photoStatus === 'CONFIRMED' ? ' badge-ok' : item.photoStatus === 'NEEDS_CHECK' ? ' badge-warn' : ''}`}>
+              {PHOTO_STATUS_LABEL[item.photoStatus]}
+            </span>
+            {/*
+              * <b>수정이 없어서 지우고 다시 넣어야 했다.</b> 그러면 인식과의
+              * 연결과 출처(PHOTO)가 함께 사라진다. 수량 하나 고치자고 잃을
+              * 것이 아니다. 06:97 의 PATCH 가 이미 이름·수량을 받는다.
+              */}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={start} aria-label={`${item.name} 수정`}>
+              수정
+            </button>
+            {/* 03:272 가 이 화면의 호출 API 로 DELETE 를 적어 뒀다 */}
+            <button
+              type="button" className="btn btn-ghost btn-sm"
+              onClick={() => onRemove(item.itemId)}
+              aria-label={`${item.name} 삭제`}
+            >
+              삭제
+            </button>
+          </>
+        )}
+      </div>
+    </li>
   )
 }
