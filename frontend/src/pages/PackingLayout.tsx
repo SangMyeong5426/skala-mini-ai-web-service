@@ -176,7 +176,7 @@ export default function PackingLayoutPage() {
                       </button>
                     ))}
                     {placed.filter((p) => p.compartment === z.id).length === 0 && (
-                      <span className="card-sub">여기로 끌어 놓으세요</span>
+                      <span className="card-sub">아직 비어 있습니다</span>
                     )}
                   </div>
                 </div>
@@ -190,25 +190,54 @@ export default function PackingLayoutPage() {
                 <span className="card-sub">{unplaced.length}개</span>
               </div>
               {unplaced.length === 0 && <Empty title="모두 가방에 넣었습니다" />}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {/*
+                * <b>끌어 놓기만으로는 못 쓴다.</b> 예전에는 이 줄이 포커스를 받지
+                * 못하는 `span` 이고 배치가 HTML5 drag 이벤트뿐이었다. 키보드
+                * 사용자는 아예 조작할 수 없고, 모바일 터치에서는 drag 이벤트가
+                * 안 떠서 S-12 의 핵심 기능이 통째로 막혔다.
+                *
+                * 라이브러리를 들이지 않고 <b>같은 일을 하는 두 번째 길</b>을 낸다 —
+                * 줄마다 `select` 로 구역을 고르면 그 자리에서 들어간다. 끌어 놓기는
+                * 그대로 두되, 그것 없이도 끝까지 갈 수 있게 한다.
+                */}
+              <ul className="list">
                 {unplaced.map((u) => (
-                  <span
+                  <li
                     key={u.itemId}
-                    className="badge"
+                    className="row"
                     draggable
                     onDragStart={(e) => e.dataTransfer.setData('text/plain', String(u.itemId))}
                     style={{ cursor: 'grab' }}
                   >
-                    {u.name}{u.qty > 1 ? ` ×${u.qty}` : ''}
-                    <span className="card-sub" style={{ marginLeft: 6 }}>
-                      {CATEGORY_LABEL[u.category] ?? u.category}
-                    </span>
-                  </span>
+                    <div className="row-main">
+                      <p className="row-name">
+                        {u.name}{u.qty > 1 ? <span className="card-sub"> ×{u.qty}</span> : null}
+                      </p>
+                      <p className="row-sub">{CATEGORY_LABEL[u.category] ?? u.category}</p>
+                    </div>
+                    <div className="row-right">
+                      <label className="sr-only" htmlFor={`zone-${u.itemId}`}>
+                        {u.name} 넣을 구역
+                      </label>
+                      <select
+                        id={`zone-${u.itemId}`}
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) drop(e.target.value as Compartment, u.itemId)
+                        }}
+                      >
+                        <option value="">구역 선택…</option>
+                        {ZONES.map((z) => (
+                          <option key={z.id} value={z.id}>{z.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
               <p className="card-sub" style={{ marginTop: 12 }}>
-                구역에 놓은 물품을 누르면 다시 여기로 돌아옵니다. 저장하기 전까지는
-                서버에 반영되지 않습니다.
+                구역을 고르거나 끌어다 놓으면 들어갑니다. 구역에 놓은 물품을 누르면
+                다시 여기로 돌아옵니다. 저장하기 전까지는 서버에 반영되지 않습니다.
               </p>
             </section>
           </div>

@@ -23,7 +23,16 @@ export default function Rules() {
   const { tripId } = useParams()
   const nav = useNavigate()
   const [trip, setTrip] = useState<TripDetail | null>(null)
+  /*
+   * <b>`null` 과 `[]` 는 다른 뜻이다.</b> 전자는 아직 못 받았다는 것이고 후자는
+   * 판정이 없다는 <b>사실</b>이다. 예전에는 빈 상태를 `null` 에만 걸어 둬서,
+   * 실서버가 `customs: []` 를 주면 제목의 `0개` 아래가 통째로 빈칸이 됐다 —
+   * 검수로 가는 안내도 함께 사라졌다.
+   *
+   * 그래서 `loaded` 를 따로 둔다. 값 하나로 두 가지를 말하게 하지 않는다.
+   */
   const [customs, setCustoms] = useState<Inspection['customs']>(null)
+  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [keyword, setKeyword] = useState('')
@@ -32,12 +41,12 @@ export default function Rules() {
   const [searchError, setSearchError] = useState<string | null>(null)
 
   const load = () => {
-    setError(null); setTrip(null); setCustoms(null)
+    setError(null); setTrip(null); setCustoms(null); setLoaded(false)
     Promise.all([
       api.get<TripDetail>(`/trips/${tripId}`),
       api.get<Inspection>(`/trips/${tripId}/inspection`),
     ])
-      .then(([t, i]) => { setTrip(t); setCustoms(i.customs) })
+      .then(([t, i]) => { setTrip(t); setCustoms(i.customs); setLoaded(true) })
       .catch((e) => setError(e instanceof Error ? e.message : '알 수 없는 오류'))
   }
   useEffect(load, [tripId])
@@ -85,7 +94,9 @@ export default function Rules() {
                 <span className="card-sub">{customs ? `${customs.length}개` : '아직 없음'}</span>
               </div>
 
-              {customs === null && (
+              {!loaded && <Skeleton rows={2} />}
+
+              {loaded && !customs?.length && (
                 <Empty
                   title="아직 반입 판정을 받지 않았습니다"
                   action={
@@ -108,10 +119,20 @@ export default function Rules() {
                         </span>
                       </div>
                       <p className="card-sub" style={{ marginTop: 6 }}>{c.reason}</p>
+                      {/*
+                        * <b>"다시 판정합니다" 라고 말하지 않는다.</b> 챗봇의 RULE_CHECK 은
+                        * `tripId`·`itemId` 를 일부러 안 보낸다 — 대화 이력을 남기지 않기로
+                        * 했기 때문이다(02:154). 그래서 답은 대화창에만 나오고 이 여행의
+                        * `item_rule_checks` 도 검수 결과도 <b>바뀌지 않는다.</b>
+                        *
+                        * 예전 문구는 사용자가 보완했다고 믿게 만들었다. 확인하러 온
+                        * 화면에서 가장 나쁜 거짓말이다. 재판정 연결은 03 에 보류로 적었다.
+                        */}
                       {c.missingInfo && (
                         <p className="card-sub" style={{ marginTop: 4 }}>
-                          <strong>필요한 정보:</strong> {c.missingInfo} — 오른쪽 아래 챗봇에 알려주면
-                          다시 판정합니다.
+                          <strong>필요한 정보:</strong> {c.missingInfo} — 오른쪽 아래 챗봇에
+                          물어볼 수 있습니다. 다만 <b>이 판정은 바뀌지 않습니다</b> —
+                          답을 보고 직접 확인해 주세요.
                         </p>
                       )}
                       {c.sourceUrl && (

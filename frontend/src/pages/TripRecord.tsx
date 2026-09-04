@@ -47,8 +47,20 @@ export default function TripRecord() {
         title={trip ? `${trip.origin} → ${trip.destination}` : '여행 기록'}
         sub={trip ? period(trip.startDate, trip.endDate) : undefined}
         right={
+          /*
+           * <b>`이 여행처럼` 이라고 말하지 않는다.</b> 눌러 봐야 빈 폼이 열린다 —
+           * 여행 정보도 체크리스트도 옮겨 가지 않는다.
+           *
+           * 옮기지 않는 것이 <b>맞는 설계</b>다(팀 결정). 지난 여행을 베끼면 날짜도
+           * 목적지도 다른 여행에 옛 목록이 통째로 딸려 온다. 대신 <b>추천이</b> 지난
+           * 이력을 보고 그때 챙겼던 것을 다시 권하는 쪽으로 간다 — 사용자가 지우는
+           * 일이 아니라 서비스가 고르는 일이 된다.
+           *
+           * 그 입력은 `07-ai-ready.md` 의 PACKING_LIST 에 아직 없다. 02·03 에
+           * 보류로 적어 두었고, 여기서는 <b>하는 일 그대로</b> 이름을 단다.
+           */
           <button type="button" className="btn" onClick={() => nav('/trips/new')}>
-            이 여행처럼 새로 만들기
+            새 여행 만들기
           </button>
         }
       />

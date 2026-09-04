@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiFailure } from '../api/client'
 import { Shell, Steps, TopBar } from '../components/Shell'
 import { ARRIVAL_AIRPORT_GROUPS, DEPARTURE_AIRPORTS, cityOf, countryOf } from '../lib/airports'
+import { useUnsavedGuard } from '../lib/unsaved'
 import type { BagType, Purpose, Transport, TripCreated, TripDetail } from '../types/api'
 
 /**
@@ -116,6 +117,20 @@ export default function NewTrip() {
    */
   const clean = useRef('')
 
+  /**
+   * 고치기로 들어왔을 때 <b>서버에 이미 있던</b> 값. 파생값이 비었을 때의 바닥이다.
+   *
+   * 파생만 믿으면 기존 여행이 깨진다. 기차·자차 여행에는 공항이 없고, 항공이어도
+   * 목록에 없는 공항 코드를 쓰는 여행이 있다. 그때 `cityOf`·`countryOf` 가 빈 값을
+   * 주는데 그대로 PATCH 하면 `origin: ""` 이 나가고 서버의 `@NotBlank` 가 400 을
+   * 준다 — 사용자는 손대지도 않은 칸 때문에 저장이 막힌다.
+   *
+   * 그래서 <b>공항에서 값이 나올 때만 덮어쓴다.</b>
+   */
+  const loaded = useRef<{ origin: string; destination: string; countryCode: string }>({
+    origin: '', destination: '', countryCode: '',
+  })
+
   /* 수정이면 지금 값을 먼저 채운다. 못 불러오면 빈 폼으로 덮지 않고 오류를 말한다 */
   useEffect(() => {
     if (!editing) return
@@ -130,6 +145,11 @@ export default function NewTrip() {
         setEndDate(t.endDate ?? '')
         setBagType(t.bagType ?? 'CARRY_ON')
         setNote(t.note ?? '')
+        loaded.current = {
+          origin: t.origin ?? '',
+          destination: t.destination ?? '',
+          countryCode: t.countryCode ?? '',
+        }
         clean.current = JSON.stringify({
           startDate: t.startDate ?? '', endDate: t.endDate ?? '',
           purpose: t.purpose ?? 'TOUR', transport: t.transport ?? 'FLIGHT',
@@ -153,10 +173,18 @@ export default function NewTrip() {
     departureAirport, arrivalAirport, bagType, note,
   })
   const dirty = !loading && snapshot !== clean.current
+  /*
+   * 손댄 것이 있다고 알린다. 실제로 묻는 것은 상단 헤더의 링크들과 브라우저다 —
+   * 이 화면은 1단계라 단계 표시줄에 링크가 없어서, 거기에만 걸어 두면 가드가
+   * 호출될 수조차 없다(리뷰 지적).
+   */
+  useUnsavedGuard(dirty)
 
   const isFlight = transport === 'FLIGHT'
-  const origin = cityOf(departureAirport) ?? ''
-  const destination = cityOf(arrivalAirport) ?? ''
+  /* 공항에서 나오면 그 값, 아니면 서버에 있던 값. 빈 문자열을 보내지 않는다 */
+  const origin = cityOf(departureAirport) ?? loaded.current.origin
+  const destination = cityOf(arrivalAirport) ?? loaded.current.destination
+  const countryCode = countryOf(arrivalAirport) ?? loaded.current.countryCode
 
   const bag = BAGS.find((b) => b.v === bagType)!
   // 03: "귀국일 < 출발일 시 날짜칸 강조". 저장을 눌러야 알려 주면 늦다
@@ -191,12 +219,17 @@ export default function NewTrip() {
     if (miss) { setField(miss[0]); setError(miss[2]); return }
     if (pastStart) { setField('startDate'); setError('출발일은 오늘 이후로 골라 주세요.'); return }
     /*
-     * #52 의 `국가 코드는 영문 2자` 검사를 대신한다. 목록에서 고른 공항이면
-     * 나라는 반드시 나오므로, 안 나왔다는 것은 <b>목록에 없는 코드</b>라는 뜻이다.
-     * 그대로 보내면 서버가 countryCode 없이 받아 추천 프롬프트가 빈다.
+     * #52 의 `국가 코드는 영문 2자` 검사를 대신한다. 서버가 `@NotBlank` 라
+     * 비면 400 인데, 그 메시지는 공항 칸만 본 사용자에게 뜻이 안 통한다.
+     * 여기서 <b>공항 칸을 가리켜</b> 막는다.
+     *
+     * `countryCode` 는 공항에서 나온 값이거나 서버에 있던 값이다. 둘 다 비었다는
+     * 것은 목록에 없는 공항이라는 뜻이다.
      */
-    if (isFlight && !countryOf(arrivalAirport)) {
-      setField('arrivalAirport'); setError('도착 공항을 목록에서 다시 골라 주세요.'); return
+    if (!origin.trim() || !destination.trim() || !countryCode.trim()) {
+      setField(isFlight ? 'arrivalAirport' : 'transport')
+      setError('도착 공항을 목록에서 다시 골라 주세요.')
+      return
     }
     if (badRange) { setField('endDate'); setError('귀국일이 출발일보다 빠릅니다.'); return }
 
@@ -222,11 +255,21 @@ export default function NewTrip() {
          * 이 값이 `PACKING_LIST` 프롬프트의 `{{server:trip.countryCode}}` 로 간다.
          * 예전에는 폼이 아예 안 보내서 새 여행은 늘 비어 있었다.
          */
-        countryCode: (isFlight && countryOf(arrivalAirport)) || undefined,
+        countryCode,
         bagType,
         bagEmptyG: bag.emptyG,
         weightLimitG: bag.limitG,
-        note: note.trim() || undefined,
+        /*
+         * <b>빈 문자열로 보낸다. `undefined` 가 아니다.</b>
+         *
+         * `undefined` 면 JSON 본문에서 필드가 통째로 빠지는데, 서버의 PATCH 는
+         * `req.note() != null` 일 때만 갱신한다(TripService:122). 그래서 메모를
+         * 다 지우고 저장해도 지워지지 않고 <b>옛 메모가 다시 나타났다.</b>
+         *
+         * 빈 문자열은 null 이 아니므로 그대로 지워진다. 서버·문서를 고치지 않고
+         * 화면만으로 끝나는 길이다.
+         */
+        note: note.trim(),
       }
       // 등록하면 곧바로 사진으로. 03 의 주 경로다.
       /*
@@ -282,20 +325,7 @@ export default function NewTrip() {
         title="여행 정보"
         sub={editing ? '값을 고치면 그대로 저장됩니다' : '추천과 반입 판단에 쓸 조건을 알려 주세요'}
       />
-      {/*
-        * 고치던 중에 단계 표시줄을 누르면 입력한 것이 <b>말없이</b> 사라졌다.
-        * 아래 `다음` 은 저장하고 가는데 위쪽 표시줄은 그냥 나갔다 — 같은 화면에서
-        * 나가는 길 둘이 서로 다르게 굴었다.
-        *
-        * 여기서 자동 저장은 못 한다. 채우다 만 폼은 서버가 400 으로 거절하고,
-        * 그러면 "왜 저장이 안 되지" 만 남는다. 대신 <b>사실을 알리고 고르게</b> 한다.
-        */}
-      <Steps
-        current={1}
-        tripId={tripId}
-        beforeLeave={() =>
-          !dirty || window.confirm('저장하지 않은 변경이 있습니다. 그대로 나가시겠습니까?')}
-      />
+      <Steps current={1} tripId={tripId} />
 
       <div className="content">
         <form className="card form" onSubmit={submit} noValidate>
