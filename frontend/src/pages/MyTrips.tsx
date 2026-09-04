@@ -46,7 +46,7 @@ export default function MyTrips() {
               {user?.nickname}님, 여행 가시기 전에<br />놓치신 것은 없으신가요?
             </p>
           </div>
-          <TravelBannerArt />
+          <img className="trip-banner-art" src="/trips-banner-3d.webp" alt="" />
         </section>
 
         {error && <Failed title="목록을 불러오지 못했습니다" detail={error} onRetry={load} />}
@@ -165,47 +165,5 @@ function TripAction({
       <span>{children}</span>
       <span className="trip-action-arrow" aria-hidden="true">›</span>
     </Link>
-  )
-}
-
-/** 데모 배너의 여행 소품을 외부 이미지 없이 그린 장식용 SVG. */
-function TravelBannerArt() {
-  return (
-    <svg className="trip-banner-art" viewBox="0 0 660 280" aria-hidden="true" focusable="false">
-      <g className="trip-banner-clouds" fill="#fff">
-        <g transform="translate(36 70)"><ellipse cx="28" cy="13" rx="28" ry="10" /><ellipse cx="49" cy="9" rx="20" ry="14" /></g>
-        <g transform="translate(470 42)"><ellipse cx="30" cy="14" rx="31" ry="11" /><ellipse cx="53" cy="9" rx="21" ry="15" /></g>
-      </g>
-      <path className="trip-banner-route" d="M54 155 C78 80 164 50 266 64 S442 96 506 72" />
-      <g transform="translate(254 53) rotate(8)">
-        <path className="trip-banner-plane" d="M0 9L42 1c5-1 8 2 4 5L30 14l8 9-7 2-13-8-10 4-6-3 8-7z" />
-      </g>
-
-      <g className="trip-banner-city" opacity=".72">
-        <path d="M385 202h23v-45h19v45h29v-68h20v68h25v-53h23v53h25v-79h18v79h30v23H385z" fill="#a8c0c7" />
-        <path d="M329 202l36-75 38 75z" fill="#dbe3db" />
-        <path d="M347 164l18-37 18 37z" fill="#fff" />
-        <path d="M430 205l21-112 21 112M440 158h22M435 181h32M445 124h12" fill="none" stroke="#c65d3d" strokeWidth="5" />
-        <path d="M552 203h35M569 203V79M560 113h18M563 96h12" fill="none" stroke="#86a7b3" strokeWidth="4" />
-      </g>
-
-      <g className="trip-banner-passport">
-        <rect x="168" y="169" width="54" height="78" rx="4" />
-        <circle cx="195" cy="207" r="13" />
-        <path d="M182 207h26M195 194c8 8 8 18 0 26M195 194c-8 8-8 18 0 26" />
-      </g>
-      <g className="trip-banner-suitcase">
-        <path d="M244 157v-14c0-7 5-11 11-11h24c6 0 11 4 11 11v14" />
-        <rect x="228" y="153" width="83" height="99" rx="13" />
-        <path d="M247 166v73M270 166v73M292 166v73" />
-        <circle cx="246" cy="258" r="7" /><circle cx="294" cy="258" r="7" />
-      </g>
-      <g className="trip-banner-map">
-        <path d="M357 194l54-20 54 15 54-21v67l-54 20-54-15-54 21z" />
-        <path d="M411 174v66M465 189v66" />
-        <path d="M447 213c0 10-12 23-12 23s-12-13-12-23a12 12 0 1 1 24 0z" />
-        <circle cx="435" cy="213" r="4" />
-      </g>
-    </svg>
   )
 }

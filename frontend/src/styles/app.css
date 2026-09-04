@@ -722,28 +722,10 @@ select:focus-visible, textarea:focus-visible {
   line-height: 1.45; letter-spacing: -0.045em;
 }
 .trip-banner-art {
-  position: absolute; right: 18px; bottom: 0;
-  width: min(56%, 720px); height: 100%;
+  position: absolute; right: 0; bottom: 0;
+  width: auto; height: 100%; max-width: none;
+  object-fit: contain;
 }
-.trip-banner-route {
-  fill: none; stroke: #5c8b77; stroke-width: 2;
-  stroke-linecap: round; stroke-dasharray: 5 6;
-}
-.trip-banner-plane { fill: var(--plane); animation: trip-plane 3.4s ease-in-out infinite; }
-.trip-banner-clouds { opacity: .72; animation: trip-cloud 7s ease-in-out infinite alternate; }
-.trip-banner-passport rect { fill: #174d39; }
-.trip-banner-passport circle, .trip-banner-passport path { fill: none; stroke: #e9cf61; stroke-width: 2; }
-.trip-banner-suitcase rect { fill: #e8c985; stroke: #b7934f; stroke-width: 2; }
-.trip-banner-suitcase path { fill: none; stroke: #153d2c; stroke-width: 5; stroke-linecap: round; }
-.trip-banner-suitcase rect + path { stroke: #c1a35d; stroke-width: 2; }
-.trip-banner-suitcase circle { fill: #173c2d; }
-.trip-banner-map > path:first-child { fill: #dbe2b3; stroke: #fff; stroke-width: 4; stroke-linejoin: round; }
-.trip-banner-map > path:nth-child(2) { fill: none; stroke: #fff; stroke-width: 3; }
-.trip-banner-map > path:nth-child(3) { fill: #cc6044; }
-.trip-banner-map circle { fill: #fff; }
-
-@keyframes trip-plane { 50% { transform: translate(5px, -5px); } }
-@keyframes trip-cloud { to { transform: translateX(10px); } }
 
 .trip-list { display: grid; gap: 16px; }
 .trip-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(520px, .95fr); padding: 0; overflow: hidden; }
@@ -772,12 +754,11 @@ select:focus-visible, textarea:focus-visible {
   .trip-banner { min-height: 230px; }
   .trip-banner-copy { width: 100%; padding: 32px 24px; }
   .trip-banner-title { font-size: 25px; }
-  .trip-banner-art { right: -120px; width: 100%; opacity: .28; }
+  .trip-banner-art { right: -120px; width: auto; opacity: .28; }
   .trip-actions { grid-template-columns: 1fr; }
   .trip-action { min-height: 76px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .trip-banner-plane, .trip-banner-clouds { animation: none; }
   .trip-action { transition: none; }
 }
 
