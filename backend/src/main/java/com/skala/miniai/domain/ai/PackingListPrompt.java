@@ -27,20 +27,23 @@ import com.skala.miniai.domain.weather.WeatherSnapshot;
 @Component
 public class PackingListPrompt {
 
+    /** AI-02 출력 계약의 후보 상한. 모델 보정과 서버 RULE 후보 보강이 함께 쓴다. */
+    static final int MAX_CANDIDATES = 40;
+
     /** 07 「AI-02 System Prompt」 그대로. */
     private static final String SYSTEM = """
             너는 여행 준비물을 추천하는 보조자다. 사용자가 이미 챙긴 것은 다시 추천하지 않는다.
 
             규칙
             1. alreadyPacked와 현재 내 목록에 있는 물품은 이름이 같거나 명백히 같은 종류면 items에 넣지 않는다("상의"가 있으면 "티셔츠"를 또 내지 않는다). 아직 미완료인 채택 항목도 제외한다. 같은 물품의 부족 수량은 추천하지 않는다.
-            2. 여행지·기간·목적·이동수단·날씨에 맞는 추가 후보만 낸다. 최대 40개. 후보별 reason에 이 여행에서 검토할 이유를 1~200자 한국어로 쓴다. 사용자를 대신해 후보를 채택하거나 챙김 완료라고 하지 않는다.
+            2. 여행지·기간·목적·이동수단·날씨에 맞는 추가 후보만 낸다. 최대 %d개. 후보별 reason에 이 여행에서 검토할 이유를 1~200자 한국어로 쓴다. 사용자를 대신해 후보를 채택하거나 챙김 완료라고 하지 않는다.
             3. priority: 준비가 특히 중요한 것은 REQUIRED, 나머지는 RECOMMENDED. 고정 필수 규칙 항목은 서버가 RULE 후보로 보강하므로 중복으로 내지 않는다. 어떤 후보든 내 목록 추가는 사용자가 선택한다.
             4. category 는 DOCUMENT · CLOTHING · ELECTRONIC · TOILETRY · MEDICINE · ETC 중 하나만.
             5. qty 는 기간에 맞춘 1~99 정수. 정하기 어려우면 1.
             6. tips 는 최대 5개, 각 1~120자. 챙길 물건은 tips 가 아니라 items 에 넣는다 — tips 에는 날씨·콘센트·현지 사정 같은 사실만 쓴다. 날씨 근거가 있으면 수치를 그대로 인용한다(예: "낮 24도").
             7. 액체·배터리 같은 반입 규정 판정은 하지 않는다. 그건 다른 단계가 한다.
             8. 출력은 아래 JSON Schema 를 따르는 JSON 객체 하나뿐이다. 설명·마크다운·코드펜스를 붙이지 않는다. 스키마의 필드는 전부 낸다 — 값이 없으면 null 로 낸다. 빈 문자열은 쓰지 않는다. source·acceptedItemId·weatherSource·weatherAsOf는 서버 필드다. 모델용 파생 스키마에서는 제외한다.
-            """;
+            """.formatted(MAX_CANDIDATES);
 
     private final Json json;
 
@@ -142,7 +145,8 @@ public class PackingListPrompt {
         ObjectNode root = schema.putObject("properties");
         ObjectNode items = root.putObject("items");
         items.put("type", "array");
-        items.put("description", "추가 준비물 후보. 최대 40개. 이미 챙긴 것·내 목록에 있는 것은 넣지 않는다");
+        items.put("description", "추가 준비물 후보. 최대 %d개. 이미 챙긴 것·내 목록에 있는 것은 넣지 않는다"
+                .formatted(MAX_CANDIDATES));
         items.set("items", candidate);
         ObjectNode tips = root.putObject("tips");
         tips.put("type", "array");

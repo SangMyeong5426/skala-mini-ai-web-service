@@ -54,7 +54,6 @@ import com.skala.miniai.domain.trip.TripRepository;
 public class AiJobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AiJobRunner.class);
-    private static final int MAX_PACKING_CANDIDATES = 40;
 
     private final AiJobRepository jobs;
     private final AiJobService jobService;
@@ -180,7 +179,7 @@ public class AiJobRunner {
             passport.put("source", Codes.ItemSource.RULE.name());
             passport.putNull("acceptedItemId");
         }
-        kept.stream().limit(MAX_PACKING_CANDIDATES - candidates.size()).forEach(candidates::add);
+        kept.stream().limit(PackingListPrompt.MAX_CANDIDATES - candidates.size()).forEach(candidates::add);
     }
 
     /** 07: 재분석은 사후 수정한 인식 결과만 보존하고 같은 사진의 나머지는 새 결과로 바꾼다. */
@@ -216,11 +215,6 @@ public class AiJobRunner {
 
             for (DetectedObject edited : previous.stream().filter(DetectedObject::isApproved).toList()) {
                 int matched = matchingProposal(edited, next, consumed);
-                if (matched < 0) {
-                    // ponytail: 모델은 안정 ID를 주지 않는다. 이름이 바뀐 행은 기존 순서로 대응한다.
-                    int ordinal = previous.indexOf(edited);
-                    if (ordinal < next.size() && !consumed.contains(ordinal)) matched = ordinal;
-                }
                 if (matched >= 0) consumed.add(matched);
                 saved.add(edited);
             }

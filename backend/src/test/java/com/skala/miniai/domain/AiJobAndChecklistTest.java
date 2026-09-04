@@ -232,14 +232,13 @@ class AiJobAndChecklistTest {
     }
 
     /**
-     * 같은 작업을 다시 돌려도 항목이 늘지 않고, 사용자가 되돌린 준비 상태를 덮어쓰지 않는다.
+     * 새 분석은 사용자가 고친 행을 보존하되 이름이 다른 새 인식을 순서만으로 버리지 않는다.
      *
-     * <p>06 4·5번: "같은 완료 처리 재시도는 항목을 다시 생성하거나 사용자의 수정·삭제를
-     * 되돌리지 않는다", "이미 반영된 연결을 다시 읽는 것만으로 사용자가 바꾼 UNCHECKED 를
-     * 되돌리지 않는다."
+     * <p>모델 출력에는 안정 ID가 없으므로 이름이 다르면 같은 물품이라는 근거가 없다.
+     * 추가 행을 사용자가 지울 수는 있지만 조용히 누락된 결과는 복구할 수 없다.
      */
     @Test
-    void reanalysisDoesNotDuplicateOrOverwriteUserEdits() {
+    void reanalysisPreservesEditsWithoutDroppingNewDetections() {
         jdbc.update("insert into trip_photos (trip_id, file_path, bag_kind, uploaded_at) "
                 + "values (?, 'demo/x.jpg', 'CABIN', current_timestamp)", tripId);
         Long photoId = jdbc.queryForObject(
@@ -249,9 +248,9 @@ class AiJobAndChecklistTest {
                 + "\"confidence\":0.93,\"confidenceLevel\":\"HIGH\","
                 + "\"missingInfo\":null,\"labelText\":null}],\"failedPhotoIds\":[]}";
         String reanalysis = "{\"detections\":["
-                + "{\"photoId\":" + photoId + ",\"name\":\"충전기\",\"qty\":1,\"confidence\":0.91,"
+                + "{\"photoId\":" + photoId + ",\"name\":\"우산\",\"qty\":1,\"confidence\":0.91,"
                 + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null},"
-                + "{\"photoId\":" + photoId + ",\"name\":\"우산\",\"qty\":1,\"confidence\":0.88,"
+                + "{\"photoId\":" + photoId + ",\"name\":\"모자\",\"qty\":1,\"confidence\":0.88,"
                 + "\"confidenceLevel\":\"HIGH\",\"missingInfo\":null,\"labelText\":null}],"
                 + "\"failedPhotoIds\":[]}";
         given(aiClient.run(any(), any(), any())).willReturn(json.read(output), json.read(reanalysis));
@@ -261,7 +260,9 @@ class AiJobAndChecklistTest {
         awaitSettled(first);
 
         Long itemId = checklist.list(tripId).items().get(0).itemId();
-        Long detectionId = jdbc.queryForObject("select id from detected_objects", Long.class);
+        Long detectionId = jdbc.queryForObject(
+                "select id from detected_objects where photo_id = ? and name = '충전기'",
+                Long.class, photoId);
         detectionService.patch(tripId, detectionId,
                 new PhotoDtos.PatchRequest(null, "USB 충전기", null, null, null));
         // 사용자가 "아직 안 챙겼다" 로 되돌린다.
@@ -273,17 +274,19 @@ class AiJobAndChecklistTest {
         awaitSettled(second);
 
         var items = checklist.list(tripId).items();
-        assertThat(items).as("수정한 인식은 보존하고 새 인식은 추가한다").hasSize(2);
+        assertThat(items).as("수정한 인식은 보존하고 근거 없이 새 인식을 버리지 않는다").hasSize(3);
         var edited = items.stream().filter(item -> item.name().equals("USB 충전기")).findFirst().orElseThrow();
         assertThat(edited.checkStatus())
                 .as("사용자가 되돌린 UNCHECKED 를 재분석이 뒤집으면 안 된다")
                 .isEqualTo(Codes.CheckStatus.UNCHECKED);
-        assertThat(items).extracting(ChecklistDtos.Item::name).contains("우산");
-        assertThat(jdbc.queryForObject("select count(*) from detected_objects", Integer.class))
-                .as("수정한 행만 보존하고 같은 사진의 새 인식은 저장한다")
-                .isEqualTo(2);
-        assertThat(jdbc.queryForList("select name from detected_objects order by id", String.class))
-                .containsExactly("USB 충전기", "우산");
+        assertThat(items).extracting(ChecklistDtos.Item::name).contains("우산", "모자");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from detected_objects where photo_id = ?", Integer.class, photoId))
+                .as("수정한 행과 이름이 다른 새 인식을 모두 저장한다")
+                .isEqualTo(3);
+        assertThat(jdbc.queryForList(
+                "select name from detected_objects where photo_id = ? order by id", String.class, photoId))
+                .containsExactly("USB 충전기", "우산", "모자");
     }
 
     /**

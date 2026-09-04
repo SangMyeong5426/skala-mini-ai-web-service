@@ -75,8 +75,6 @@ public class OpenAiClient implements AiClient {
     private static final int MAX_MISSING_INFO_LENGTH = 100;
     private static final int MAX_LABEL_TEXT_LENGTH = 200;
 
-    /** 07 PACKING_LIST 출력 스키마의 {@code maxItems}. */
-    private static final int MAX_CANDIDATES = 40;
     private static final int MAX_TIPS = 5;
     private static final int MAX_TIP_LENGTH = 120;
     private static final int MAX_REASON_LENGTH = 200;
@@ -720,7 +718,7 @@ public class OpenAiClient implements AiClient {
         ArrayNode candidates = output.putArray("items");
 
         for (JsonNode node : raw.path("items")) {
-            if (candidates.size() >= MAX_CANDIDATES) break;
+            if (candidates.size() >= PackingListPrompt.MAX_CANDIDATES) break;
 
             String name = text(node.path("name"), MAX_NAME_LENGTH);
             String reason = text(node.path("reason"), MAX_REASON_LENGTH);
