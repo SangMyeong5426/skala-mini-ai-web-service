@@ -78,7 +78,7 @@ class RealOpenAiSmokeTest {
         api = new OpenAiChatApi(json,
                 env.getOrDefault("AI_BASE_URL", "https://api.openai.com/v1"),
                 env.get("AI_API_KEY"),
-                env.getOrDefault("AI_MODEL", "gpt-4o"),
+                env.getOrDefault("AI_MODEL", "gpt-4o-mini"),
                 Double.parseDouble(env.getOrDefault("AI_TEMPERATURE", "0.2")),
                 Integer.parseInt(env.getOrDefault("AI_MAX_TOKENS", "4096")),
                 Long.parseLong(env.getOrDefault("AI_TIMEOUT_MS", "60000")));
@@ -164,7 +164,7 @@ class RealOpenAiSmokeTest {
     @Test
     void 자연어_질문을_구조화하고_규칙_엔진_판정을_설명한다() {
         JsonNode output = client(mock(TripPhotoRepository.class), mock(ChecklistItemRepository.class))
-                .run(Codes.JobType.RULE_CHECK, null, json.read("""
+                .run(Codes.JobType.RULE_CHECK, 1L, json.read("""
                         {"transport":"FLIGHT","airline":"대한항공",
                          "question":"20000mAh 보조배터리랑 120ml 클렌징오일 기내 되나요?","items":[]}
                         """));

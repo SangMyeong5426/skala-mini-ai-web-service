@@ -162,8 +162,10 @@
 
 ```bash
 # backend/.env
-AI_PROVIDER=mock     # ← 이 한 줄
 AI_PROVIDER=openai
+AI_API_KEY=          # 로컬에서만 실제 키 입력
+AI_MODEL=gpt-4o-mini
+AI_BASE_URL=https://api.openai.com/v1
 ```
 
 | 계층 | 실제 AI를 붙이면 |
@@ -184,14 +186,15 @@ AI_PROVIDER=openai
 | `BagCheckPrompt` | 프롬프트 원문 + 모델용 파생 스키마 |
 | `VisionImageLoader` | 사진을 줄여 `data:` URL 로. 못 읽으면 `failedPhotoIds` |
 
-> **정확히 말하면 — 준비물 추천까지 붙일 때는 기존 파일 두 곳이 바뀌었다.**
+> **정확히 말하면 — 준비물 추천과 작업별 모델명 기록까지 붙일 때는 기존 파일 두 곳이 바뀌었다.**
 > `AiClient` 에 `run(jobType, **tripId**, input)` 오버로드를 더하고 `AiJobRunner` 가 그쪽을
-> 부르도록 한 줄을 고쳤다. 07의 input에는 `tripId` 가 없는데(서버가 아는 값이라 스키마에
+> 부르도록 고쳤다. 혼합 모드 사용 이력을 위해 `modelName(jobType, tripId)`도 추가했다.
+> 07의 input에는 `tripId` 가 없는데(서버가 아는 값이라 스키마에
 > 넣지 않았다), 중복 제거를 하려면 **미완료 항목까지 포함한 내 목록**을 읽어야 해서다.
 > **기본 구현이 `tripId` 를 버리고 기존 메서드로 넘기므로 `MockAiClient` 는 그대로다.**
 > 질문이 나오면 이렇게 답하는 편이 낫다 — 커밋을 열면 보이는 사실이다.
 
-### 덤 — 제공자도 한 줄로 갈린다
+### 제공자 주소
 
 `AI_BASE_URL` 이 어디로 나갈지 정한다. **`openai` 는 회사 이름이 아니라 프로토콜 이름이다.**
 
@@ -200,7 +203,7 @@ AI_BASE_URL=https://api.openai.com/v1                            # OpenAI
 AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai   # Gemini (무료 티어)
 ```
 
-우리가 실제로 돌린 것은 **Gemini의 OpenAI 호환 엔드포인트**다. 코드는 그대로였다.
+현재 OpenAI 키 시연 설정은 첫 번째 주소를 쓴다. 아래 Gemini 결과는 2026-09-03의 과거 검증 기록이다.
 
 ### Mock ↔ 실제, 무엇이 다른가
 

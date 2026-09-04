@@ -28,7 +28,8 @@ public final class TripDtos {
     public record CreateRequest(
             @NotBlank(message = "출발지는 필수입니다.") @Size(max = 100) String origin,
             @NotBlank(message = "도착지는 필수입니다.") @Size(max = 100) String destination,
-            @Size(min = 2, max = 2, message = "국가 코드는 2자입니다.") String countryCode,
+            @NotBlank(message = "목적지 국가 코드는 필수입니다.")
+            @Pattern(regexp = "[A-Za-z]{2}", message = "국가 코드는 영문 2자입니다.") String countryCode,
             @NotNull(message = "출발일은 필수입니다.") LocalDate startDate,
             @NotNull(message = "귀국일은 필수입니다.") LocalDate endDate,
             @NotNull(message = "여행 목적은 필수입니다.") Codes.Purpose purpose,
@@ -48,7 +49,7 @@ public final class TripDtos {
     public record UpdateRequest(
             @Size(max = 100) @Pattern(regexp = "(?s).*\\S.*", message = "출발지는 공백일 수 없습니다.") String origin,
             @Size(max = 100) @Pattern(regexp = "(?s).*\\S.*", message = "도착지는 공백일 수 없습니다.") String destination,
-            @Size(min = 2, max = 2, message = "국가 코드는 2자입니다.") String countryCode,
+            @Pattern(regexp = "[A-Za-z]{2}", message = "국가 코드는 영문 2자입니다.") String countryCode,
             LocalDate startDate, LocalDate endDate,
             Codes.Purpose purpose, Codes.Transport transport,
             @Size(max = 50) String airline,

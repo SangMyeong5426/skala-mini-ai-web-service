@@ -28,7 +28,7 @@ import com.skala.miniai.domain.trip.TripService;
  * <p>개정된 계약(06)의 핵심은 <b>추천 생성과 내 목록 등록이 분리</b>됐다는 것이다.
  * 추천은 {@code ai_jobs.output_payload} 에만 남고, 사용자가 고른 것만 여기 INSERT 된다.
  *
- * <p>같은 여행의 항목 추가·수정·삭제·사진 승인·추천 채택은 <b>여행 단위로 직렬화</b>한다.
+ * <p>같은 여행의 항목 추가·수정·삭제·사진 사후 수정·추천 채택은 <b>여행 단위로 직렬화</b>한다.
  * 동시 클릭에도 같은 후보가 두 항목을 만들지 않아야 하기 때문이다.
  */
 @Service
@@ -186,11 +186,17 @@ public class ChecklistService {
         if (req.priority() != null) item.setPriority(req.priority());
         if (req.checkStatus() != null) item.setCheckStatus(req.checkStatus());
 
+        // 사진으로 등록된 항목을 사용자가 고쳤다는 사실을 남겨 재분석이 되돌리지 않게 한다.
+        for (ItemDetection link : links.findByChecklistItemIdIn(List.of(itemId))) {
+            link.setConfirmedByUser(true);
+            detections.findById(link.getDetectedObjectId()).ifPresent(d -> d.setApproved(true));
+        }
+
         return toDto(item, photoStatusOf(item));
     }
 
     /**
-     * 06: 삭제는 같은 트랜잭션에서 <b>추천 연결 해제</b>와 <b>사진 승인 해제</b>까지 한다.
+     * 06: 삭제는 같은 트랜잭션에서 <b>추천 연결 해제</b>와 <b>사진 수정 표식 정리</b>까지 한다.
      * 그래야 S-04 에서 그 인식 결과를 다시 확인할 수 있다.
      */
     @Transactional
@@ -257,7 +263,7 @@ public class ChecklistService {
         return count;
     }
 
-    /** 사진 승인이 내 목록에 항목을 만들 때 쓴다 (DetectionService). */
+    /** 사진 자동 등록이 내 목록에 항목을 만들 때 쓴다. */
     @Transactional
     public ChecklistItem createFromPhoto(Long tripId, String name, Codes.Category category, int qty) {
         ChecklistItem item = persist(tripId, name,
@@ -292,7 +298,7 @@ public class ChecklistService {
         return weights.findByKeyword(name).map(w -> w.getId()).orElse(null);
     }
 
-    /** 승인 취소 등으로 다른 서비스가 인식 결과를 만졌을 때 최신 상태를 다시 읽기 위해. */
+    /** 사후 수정 표식을 조회해야 할 때 최신 상태를 다시 읽기 위해. */
     @Transactional(readOnly = true)
     public List<DetectedObject> approvedDetectionsOf(List<Long> photoIds) {
         return detections.findByPhotoIdInOrderById(photoIds).stream()

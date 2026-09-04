@@ -6,27 +6,24 @@
 ## 1. 기획을 백엔드 작업으로 연결하기
 
 서비스는 여행자가 가방 사진으로 준비 상태·예상 무게·항공 반입 여부를 확인하는 도구다.
-주 경로는 **여행 등록 → 사진 등록 → 인식 결과 승인 → 체크리스트 → 검수 결과**다.
-사진에서 찾지 못한 항목은 “사진에서 미확인”으로 표시하고, 승인 전 인식 결과는
-체크리스트·무게·반입 판정에 최종 반영하지 않는다.
+주 경로는 **여행 등록 → 사진 등록 → OpenAI 인식 → 체크리스트 자동 등록 → 추가 추천 → 검수 결과**다.
+사진 인식 물품은 승인 없이 `PHOTO / PREPARED`로 등록하고, 추가 추천만 사용자가 선택하면
+`AI / UNCHECKED`로 등록한다. 사진에서 찾지 못한 항목은 누락으로 확정하지 않는다.
 
 | 읽을 문서 | 백엔드에서 확인할 내용 |
 | --- | --- |
-| [서비스 기획](../docs/01-service-plan.md) | 페르소나, **로그인 필수**, 실제 AI 호출 제외 |
-| [Use-Case](../docs/02-use-case.md) · [화면 흐름](../docs/03-wireframe.md) | 사용자 승인과 사진 우선 흐름. 구현은 1차 S-01~S-06부터 |
+| [서비스 기획](../docs/01-service-plan.md) | 페르소나, **로그인 필수**, 사진 인식 실제 AI·챗봇 Mock 경계 |
+| [Use-Case](../docs/02-use-case.md) · [화면 흐름](../docs/03-wireframe.md) | 사진 자동 등록과 추천 선택 흐름. S-00~S-10 구현 상태 |
 | [아키텍처](../docs/04-architecture.md) · [ADR 0001](../docs/adr/0001-backend-stack.md) | Java·Spring 선택 이유, 계층별 책임 |
-| [ERD](../docs/05-erd.md) · [DDL](../database/schema.sql) | 10개 테이블, 속성을 가진 N:M 연결 테이블 2개 |
-| [API 명세](../docs/06-api-spec.md) | 18개 설계 엔드포인트, camelCase JSON, 상태 코드·오류 규격 |
+| [ERD](../docs/05-erd.md) · [DDL](../database/schema.sql) | 12개 테이블, 속성을 가진 N:M 연결 테이블 2개 |
+| [API 명세](../docs/06-api-spec.md) | 구현된 30개 엔드포인트, camelCase JSON, 상태 코드·오류 규격 |
 | [AI-Ready](../docs/07-ai-ready.md) · [ADR 0003](../docs/adr/0003-ai-job-endpoint.md) | AI 4종의 확정된 입출력 Schema·Mock 예시·작업 완료 후 저장 규칙 |
 | [협업 규칙](../CONTRIBUTING.md) · [일정](../docs/checklist.md) | 브랜치·PR 규칙, 3일 범위와 개발 순서 |
 
-**현재 구현된 것은 실행 환경이다.** Entity·Repository·도메인 Controller·AI 인터페이스와
-Mock 구현은 아직 없다. Swagger에 API 목록이 비어 있는 것은 정상이다.
-설계 문서에 나오는 기능을 이번 환경 설정 작업에서 구현 완료한 것으로 보지 않는다.
-
-평가 근거: `docs/checklist.md`의 **개발환경 세팅·Scaffolding**과 발표 4번의
-**폴더 구조·연동 상태 설명**을 이 문서와 재현 가능한 실행 명령으로 확인한다.
-Mock 데이터 바인딩과 AI Schema 타당성은 후속 기능 구현·설계 작업에서 검증한다.
+Entity·Repository·도메인 Controller와 AI 비동기 작업·Mock/실제 OpenAI 구현이 모두 들어 있다.
+`VITE_USE_MOCK=false`에서 프런트 로그인, 여행 조회, 사진 업로드, AI 폴링, 체크리스트 자동 등록까지
+E2E로 검증했다. 구현 현황의 정본은 [API 명세](../docs/06-api-spec.md)와
+[AI-Ready 문서](../docs/07-ai-ready.md)다.
 
 ## 2. 필요한 도구
 
@@ -96,7 +93,7 @@ cd backend
 | Swagger UI | [localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) → UI로 이동 |
 | OpenAPI JSON | [localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs) → `200` |
 | Swagger 설정 | [localhost:8080/v3/api-docs/swagger-config](http://localhost:8080/v3/api-docs/swagger-config) → `200` |
-| 도메인 API | 아직 미구현. 문서에 경로가 있어도 호출 시 `404`가 날 수 있음 |
+| 도메인 API | `/v3/api-docs`에 30개 엔드포인트 노출. 인증 후 전체 흐름 사용 가능 |
 
 포트가 이미 사용 중이면 실행 인자에 `--server.port=18080`을 추가하고 위 URL의 포트를 바꾼다.
 
@@ -135,12 +132,12 @@ DB 비밀번호와 API 키는 커밋하지 않는다. `.env.example`의 DB 정�
 | `DATABASE_USERNAME` | 필수, Session pooler의 사용자 이름 | DB 계정 |
 | `DATABASE_PASSWORD` | 필수, 저장소 밖에서 전달받은 값 | DB 비밀번호 |
 | `DB_POOL_SIZE` | `5` | 서버 하나의 최대 연결 수. 최소 유휴 연결은 1개 |
-| `UPLOAD_DIR` | `./uploads` | 파일 제공 경로. 업로드 API 자체는 후속 구현 |
+| `UPLOAD_DIR` | `./uploads` | 사진 업로드·소유권 확인 파일 제공 경로 |
 | `MAX_UPLOAD_SIZE` | `10MB` | 파일 하나의 한도. 전체 요청 한도는 별도로 고정된 `30MB` |
 | `WEATHER_PROVIDER` · `WEATHER_TIMEOUT_MS` | `openmeteo` · `10000` | `PACKING_LIST` 프롬프트에 넣을 날씨. **API 키가 없다.** `mock` 이면 조회하지 않고 날씨 없이 추천한다. 실패해도 추천은 나간다 |
-| `AI_PROVIDER` | `mock` | `openai` 로 바꿔야만 실제 호출이 나간다. 그때도 `BAG_CHECK`(사진 인식)·`PACKING_LIST`(준비물 추천) 둘뿐이고 `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 Mock 이다. 구현이 없는 값은 조용히 mock 으로 떨어진다 |
-| `AI_MODEL` | `mock` | `AI_PROVIDER=openai` 면 **이미지를 읽는 모델** 이름. `mock` 이면 기동이 막힌다 |
-| `AI_BASE_URL` | `https://api.openai.com/v1` | 실제로 어디로 나갈지를 정한다. `openai` 는 회사가 아니라 **프로토콜** 이름이라, Gemini 처럼 호환 엔드포인트를 주는 곳으로 갈아 끼울 수 있다 |
+| `AI_PROVIDER` | `mock` | `openai`면 사진·추천·여행 검수를 실제 호출한다. 여행 없는 S-09 챗봇과 무게는 Mock이다 |
+| `AI_MODEL` | `gpt-4o-mini` (실제 시연) | 이미지 입력·Chat Completions·Structured Outputs 지원 모델. `mock`이면 openai 기동을 막는다 |
+| `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI 키의 호출 주소. 끝에 `/`를 붙이지 않는다 |
 | `AI_API_KEY` | 비워 둠 | `AI_PROVIDER=openai` 일 때만 필요하다. 비어 있으면 기동이 막힌다 — 첫 분석에서 401을 만나는 것보다 낫다 |
 | `AI_TEMPERATURE` · `AI_MAX_TOKENS` | [환경 변수 양식](.env.example)과 [AI 명세](../docs/07-ai-ready.md)의 값 사용 | 실제 호출의 파라미터. 온도를 받지 않는 모델이면 `AI_TEMPERATURE=-1` 로 두어 보내지 않는다 |
 | `AI_TIMEOUT_MS` | `60000` | 호출 제한 시간. 사진 여러 장은 느리다 |
@@ -198,7 +195,7 @@ Supabase 대시보드 **Connect → Session pooler**의 정보를 사용한다.
 - 앱의 `ddl-auto=validate`는 **이미 존재하는 테이블과 Entity를 비교**한다.
   `create`·`update`로 바꿔 팀 공용 DB를 수정하지 않는다.
 - `spring.sql.init.mode=never`라 서버가 SQL 파일을 자동 실행하지 않는다.
-- 현재 Entity가 없으므로 서버 기동 성공만으로 10개 테이블의 정합성을 검증했다고 할 수 없다.
+- 12개 테이블의 Entity가 있으며 일반 실행의 `ddl-auto=validate`로 실제 PostgreSQL 스키마와 대조한다.
 
 DB가 이미 준비되어 있으면 **초기화하지 않고** 연결만 확인한다.
 저장소 루트의 `./scripts/check-db`는 Docker 안의 `psql`로 테이블·시드 현황을 조회한다.
@@ -254,10 +251,12 @@ backend/
     ├── main/
     │   ├── java/com/skala/miniai/
     │   │   ├── MiniAiWebServiceApplication.java
-    │   │   └── config/          CORS, 로컬 사진 파일 제공
+    │   │   ├── config/          CORS · Security · 비동기 · 업로드
+    │   │   ├── common/          오류 · 인증 사용자 · 공통 코드값
+    │   │   └── domain/          인증 · 여행 · 사진 · 체크리스트 · AI 등
     │   └── resources/application.properties
     └── test/
-        ├── java/com/skala/miniai/MiniAiWebServiceApplicationTests.java
+        ├── java/com/skala/miniai/ 도메인·전체 API·실제 OpenAI 수동 테스트
         └── resources/application-test.properties
 ```
 
@@ -283,30 +282,29 @@ DB 스키마를 수정하면 `docs/05-erd.md`, API를 바꾸면 `docs/06-api-spe
 
 ### AI 작업 구현 기준
 
-`docs/07-ai-ready.md`에 AI 4종의 입력·출력 Schema와 Mock 예시가 확정되어 있다.
-후속 기능 작업에서 이 명세대로 `AiClient`·`MockAiClient`와 작업 저장·조회를 구현한다.
-이번 PR은 환경 설정 범위이므로 AI 구현이나 실제 API 호출을 추가하지 않는다.
+`docs/07-ai-ready.md`에 AI 4종의 입력·출력 Schema와 Mock 예시가 확정되어 있고,
+`AiClient`·작업 저장·조회와 실제 OpenAI 호출이 구현되어 있다.
 
 구현할 때 다음 경계를 유지한다.
 
 - `POST /api/ai-jobs` → **202 + jobId**, `GET /api/ai-jobs/{jobId}` → 상태·결과 조회.
 - Mock도 DB에 작업을 기록하고 FE는 폴링한다. 가상 스레드 설정만으로 비동기 작업이 구현되지는 않는다.
 - `BAG_CHECK`·`PACKING_LIST`·`WEIGHT_ESTIMATE`·`RULE_CHECK` 네 종류의 규격을 지킨다.
-- `BAG_CHECK` 와 `PACKING_LIST` 는 `AI_PROVIDER=openai` 에서 실제 모델을 부른다(`OpenAiClient`).
+- `BAG_CHECK`·`PACKING_LIST`·여행 연결 `RULE_CHECK`는 `AI_PROVIDER=openai`에서 실제 모델을 부른다(`OpenAiClient`).
   **SDK 는 넣지 않았고** `RestClient` 로 직접 부른다. 큐는 아직 없다.
-  `WEIGHT_ESTIMATE`·`RULE_CHECK` 는 07 이 AI 를 두지 않기로 한 자리라 그때도 Mock 이다.
+  여행 없는 `RULE_CHECK` 챗봇과 `WEIGHT_ESTIMATE`는 그때도 Mock이다.
 - 기본값은 `mock` 이다. **기동 로그에 `OpenAI 연동을 켰습니다` 가 없으면 Mock 으로 돌고 있는 것이다.**
-- 반입 규정의 최종 판단은 규칙 엔진, 인식 결과의 최종 승인은 사용자 책임으로 둔다.
+- 반입 규정의 최종 판단은 규칙 엔진이다. 인식 결과는 자동 등록 후 사용자가 사후 수정한다.
 
-### 후속 작업에서 확정할 사항
+### 현재 확정 상태와 운영 확장 항목
 
 | 항목 | 상태·담당 |
 | --- | --- |
-| AI 4종 입출력 Schema·Mock 예시 | **확정** — `docs/07-ai-ready.md`. 리소스 파일과 Mock 구현은 후속 작업 |
-| 체크리스트 출처 표시 | **확정** — API·DB `source`는 `RULE/PHOTO/AI/USER`. `PHOTO`는 사진에서 승인된 물품, `AI`는 AI가 추천한 부족분 ([API 명세](../docs/06-api-spec.md)) |
-| 대응 체크리스트 항목이 없는 승인 물품의 자동 등록 | **TBD** — 현재 S-04는 기존 항목과 연결하고, 대응 항목이 없으면 S-06의 `추가 물품`으로 표시한다. 이를 체크리스트로 자동 등록하는 흐름은 `docs/07-ai-ready.md`의 알려진 한계에 남아 있다 |
-| Supabase 접속 정보·스키마 적용 현황 | **확인 완료** — 사용자가 지정한 별도 로컬 체크아웃의 `.env`로 연결, 설계된 테이블 10개 존재 확인 |
-| 도메인별 구현 담당 | **TBD** — BE 담당자끼리 엔드포인트·파일 단위로 분담 |
+| AI 4종 입출력 Schema·Mock 예시 | **확정·구현** — `docs/07-ai-ready.md`, `src/main/resources/mock/` |
+| 체크리스트 출처 표시 | **확정·구현** — `RULE/PHOTO/AI/USER`. 사진은 자동 등록, 추천은 선택 등록 |
+| 사진 인식 신규 물품 자동 등록 | **확정·구현·E2E 통과** — `PHOTO / PREPARED`, 재분석 시 사용자 수정 보존 |
+| 실제 AI 경계 | **확정·검증** — 사진·추천·여행 검수는 OpenAI, 여행 없는 챗봇·무게는 Mock |
+| 운영 확장 | **데모 제외** — 영속 작업 큐, 재시작 PENDING 복구, AI 호출과 DB 트랜잭션 분리 |
 
 위 미확정 사항을 환경 설정 과정에서 임의로 변경하지 않았다.
 
@@ -348,17 +346,12 @@ API 계약 변경은 상대 FE 담당자 확인을 받고, 문서와 코드를 �
 | `bootTestRun` 서버 HTTP 확인 | 18080에서 OpenAPI JSON·Swagger 설정·UI 모두 `200` 확인 |
 | Supabase 실접속·테이블 존재 확인 | PostgreSQL 17.6 연결, 설계된 테이블 10개 모두 존재 |
 | Supabase 연결 상태의 백엔드 실행 | Hikari 연결·서버 기동 성공, OpenAPI JSON·Swagger 설정·UI 모두 `200` |
-| 도메인 API·AI Mock·FE 데이터 바인딩 | 미구현 — 이번 작업은 환경 설정 범위 |
+| 도메인 API·AI Mock·FE 데이터 바인딩 | 전체 API 테스트 및 브라우저 로그인·여행·사진 화면 연결 통과 |
+| 실제 OpenAI 사진 분석 | `gpt-4o-mini`, 데모 사진 인식·스키마 검증 통과 |
+| 실제 OpenAI HTTP E2E | 사진 업로드 → `202` → 폴링 → 감지 4개 저장 → `PHOTO / PREPARED` 4개 자동 등록 통과 |
 
-Supabase 검증에는 사용자가 지정한 **별도 로컬 체크아웃의 `.env`**를 읽어
-이 작업에서 빌드한 JAR의 프로세스 환경 변수로 전달했다. 접속 정보를 이 체크아웃의
-`.env`에 복사하지 않았으므로, 여기서 `bootRun`을 실행하려면 이 폴더의 환경 변수도
-설정해야 한다. 두 체크아웃의 코드와 설정 파일은 자동으로 동기화되지 않는다.
-
-조회 당시 사용자 1명·여행 3개·체크리스트 항목 10개·사진 2개·인식 물품 8개를
-확인했다. 테이블에는 CHECK 21개·외래 키 11개·기본 키 10개·UNIQUE 2개가 있다.
-기존 데이터를 조회했으며 DDL·시드 재적용은 하지 않았다.
-이 확인은 연결과 테이블·데이터 현황 확인이며, 아직 없는 Entity의 매핑 검증은 아니다.
+실제 접속 정보와 키는 `backend/.env`에만 두며 문서·로그·Git에 남기지 않는다.
+일반 `bootRun`은 PostgreSQL 17.6 연결, JPA 스키마 검증과 서버 기동까지 확인했다.
 
 ## 9. 자주 막히는 지점
 
@@ -369,10 +362,12 @@ Supabase 검증에는 사용자가 지정한 **별도 로컬 체크아웃의 `.e
 | `'url' must start with "jdbc"` / DB 설정 누락 | `.env`의 DB 세 값과 `jdbc:postgresql://` 접두사. DB 없이 확인하려면 `bootTestRun` |
 | 인증 실패 | Session pooler 사용자와 DB 비밀번호 확인. 키·토큰과 혼동하지 않기 |
 | 연결 시간 초과 | 프로젝트 실행 상태·pooler 호스트·포트·네트워크 확인 |
+| 예상하지 않은 DEBUG 로그 | 셸의 전역 `DEBUG` 환경 변수도 Spring의 `debug` 설정으로 읽힌다. `unset DEBUG` 후 다시 실행 |
+| `AI_PROVIDER` 오타 | `mock` 또는 `openai`만 허용한다. 다른 값은 실제 AI가 필요한 화면이 Mock으로 조용히 바뀌지 않도록 기동을 실패시킨다 |
 | 테이블 없음 / Schema validation 오류 | DDL·Entity 매핑을 비교. 공용 DB에서 `ddl-auto=update`로 회피하지 않기 |
 | 브라우저 CORS 오류 | FE의 실제 origin과 `CORS_ALLOWED_ORIGINS` 일치 여부. 변경 후 서버 재시작 |
 | `Location`을 못 읽음 | `/api/**` 요청인지, 현재 빌드에 CORS 헤더 노출 설정이 있는지 확인 |
-| Swagger 목록이 비어 있음 | 현재는 정상. Controller 구현 후 해당 경로가 나타남 |
+| Swagger 목록이 비어 있음 | 비정상. 현재 구현된 30개 엔드포인트가 `/v3/api-docs`에 보여야 하므로 서버 로그와 활성 프로필을 확인 |
 | IDE 실행에서만 DB 환경 변수가 없음 | Gradle `bootRun`을 쓰거나 Java 실행 구성에 환경 변수 직접 전달 |
 | 포트 사용 중 | 기존 서버 종료 또는 `--server.port=18080`으로 실행 |
 
