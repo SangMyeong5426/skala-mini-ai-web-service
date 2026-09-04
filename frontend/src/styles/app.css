@@ -709,6 +709,78 @@ select:focus-visible, textarea:focus-visible {
 /* ── 앱 화면 본문 ────────────────────────────────────────── */
 .site .page { padding-bottom: 88px; }
 
+/* ── 내 여행 (S-01) ─────────────────────────────────────── */
+.trip-banner {
+  position: relative; min-height: 294px; margin-bottom: 26px; overflow: hidden;
+  display: flex; align-items: center;
+  border: 1px solid #ead78b; border-radius: var(--r-lg);
+  background: linear-gradient(110deg, #fff8d9 0%, #fff4c9 55%, #f9efcf 100%);
+}
+.trip-banner-copy { position: relative; z-index: 1; width: 52%; padding: 44px 72px; }
+.trip-banner-title {
+  font-size: clamp(28px, 2.4vw, 38px); font-weight: 800;
+  line-height: 1.45; letter-spacing: -0.045em;
+}
+.trip-banner-art {
+  position: absolute; right: 18px; bottom: 0;
+  width: min(56%, 720px); height: 100%;
+}
+.trip-banner-route {
+  fill: none; stroke: #5c8b77; stroke-width: 2;
+  stroke-linecap: round; stroke-dasharray: 5 6;
+}
+.trip-banner-plane { fill: var(--plane); animation: trip-plane 3.4s ease-in-out infinite; }
+.trip-banner-clouds { opacity: .72; animation: trip-cloud 7s ease-in-out infinite alternate; }
+.trip-banner-passport rect { fill: #174d39; }
+.trip-banner-passport circle, .trip-banner-passport path { fill: none; stroke: #e9cf61; stroke-width: 2; }
+.trip-banner-suitcase rect { fill: #e8c985; stroke: #b7934f; stroke-width: 2; }
+.trip-banner-suitcase path { fill: none; stroke: #153d2c; stroke-width: 5; stroke-linecap: round; }
+.trip-banner-suitcase rect + path { stroke: #c1a35d; stroke-width: 2; }
+.trip-banner-suitcase circle { fill: #173c2d; }
+.trip-banner-map > path:first-child { fill: #dbe2b3; stroke: #fff; stroke-width: 4; stroke-linejoin: round; }
+.trip-banner-map > path:nth-child(2) { fill: none; stroke: #fff; stroke-width: 3; }
+.trip-banner-map > path:nth-child(3) { fill: #cc6044; }
+.trip-banner-map circle { fill: #fff; }
+
+@keyframes trip-plane { 50% { transform: translate(5px, -5px); } }
+@keyframes trip-cloud { to { transform: translateX(10px); } }
+
+.trip-list { display: grid; gap: 16px; }
+.trip-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(520px, .95fr); padding: 0; overflow: hidden; }
+.trip-card-main { padding: 26px 28px; color: inherit; text-decoration: none; }
+.trip-actions {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  padding: 24px; border-left: 1px solid var(--line);
+}
+.trip-action {
+  position: relative; min-height: 124px; padding: 20px 18px;
+  display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  color: var(--text); text-decoration: none; font-size: 14px; font-weight: 700;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.trip-action:hover { border-color: var(--accent-line); background: #fffdf5; transform: translateY(-2px); }
+.trip-action svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.trip-action-arrow { position: absolute; right: 15px; bottom: 16px; font-size: 24px; font-weight: 400; }
+
+@media (max-width: 1100px) {
+  .trip-banner-copy { padding-inline: 44px; }
+  .trip-card { grid-template-columns: 1fr; }
+  .trip-actions { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 700px) {
+  .trip-banner { min-height: 230px; }
+  .trip-banner-copy { width: 100%; padding: 32px 24px; }
+  .trip-banner-title { font-size: 25px; }
+  .trip-banner-art { right: -120px; width: 100%; opacity: .28; }
+  .trip-actions { grid-template-columns: 1fr; }
+  .trip-action { min-height: 76px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trip-banner-plane, .trip-banner-clouds { animation: none; }
+  .trip-action { transition: none; }
+}
+
 /* ── 섹션 리듬 ───────────────────────────────────────────
  *
  * 색이 깔린 섹션은 화면 끝까지 채우지 않고 좌우를 --edge 만큼 띄운 뒤

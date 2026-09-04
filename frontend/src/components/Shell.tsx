@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 import { confirmLeave } from '../lib/unsaved'
 import { NAV, NAV_CTA, STEPS, stepPath } from '../routes'
@@ -35,6 +35,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 export function SiteHeader() {
   const { user, loading, logout } = useAuth()
   const nav = useNavigate()
+  const { pathname } = useLocation()
 
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState(false)
@@ -100,11 +101,13 @@ export function SiteHeader() {
                 {signingOut ? '로그아웃 중…' : signOutError ? '다시 시도' : '로그아웃'}
               </button>
             </nav>
-            <Link
-              to={NAV_CTA.path}
-              className="btn-head"
-              onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}
-            >＋ {NAV_CTA.name}</Link>
+            {pathname !== '/trips' && (
+              <Link
+                to={NAV_CTA.path}
+                className="btn-head"
+                onClick={(e) => { if (!confirmLeave()) e.preventDefault() }}
+              >＋ {NAV_CTA.name}</Link>
+            )}
           </>
         ) : (
           <>
