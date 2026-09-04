@@ -281,7 +281,7 @@ export default function Detections() {
         )}
 
         {!analyzing && list.length > 0 && (
-          <div className="card">
+          <div className="card detections-card">
             <div className="card-head">
               <h2 className="card-title">사진에서 찾아 등록했어요</h2>
               <span className="card-sub">{list.length}개</span>
@@ -294,7 +294,7 @@ export default function Detections() {
               인식한 물품은 <b>승인 없이 체크리스트에 등록</b>됩니다.
               잘못 인식한 이름이나 수량은 여기서 고치세요.
             </p>
-            <ul>
+            <ul className="detection-grid">
               {list.map((d) => (
                 <DetectionRow key={d.detectionId} d={d} items={items} onEdit={edit} onRemove={removeItem} />
               ))}
@@ -334,7 +334,7 @@ export default function Detections() {
 }
 
 /**
- * 인식 결과 한 줄.
+ * 인식 결과 한 카드.
  *
  * 승인 버튼이 없다. 06:732 가 <i>"approved 전송 → 400. FE 에 승인 버튼·요청을
  * 두지 않는다"</i> 로 못박았다. 이미 등록된 것이라 남는 일은 <b>고치는 것</b>뿐이다.
@@ -374,7 +374,7 @@ function DetectionRow({
   }
 
   return (
-    <li className="row" style={{ alignItems: 'flex-start' }}>
+    <li className={`detection-item${d.missingInfo ? ' is-needs-check' : ''}`}>
       <div className="row-main">
         {editing ? (
           <div className="edit-row">
@@ -387,7 +387,7 @@ function DetectionRow({
           </div>
         ) : (
           <p className="row-name">
-            {d.name} <span className="card-sub">× {d.qty}</span>{' '}
+            {d.name} <span className="detection-qty">× {d.qty}</span>{' '}
             <span className={`badge ${lv.cls}`}>{lv.label}</span>
           </p>
         )}
@@ -417,8 +417,8 @@ function DetectionRow({
           <p className="row-sub">내 목록에 없습니다</p>
         )}
       </div>
-      <div className="row-right">
-        {linked && <span className="badge badge-ok">자동 등록됨</span>}
+      <div className="row-right detection-actions">
+        {linked && <span className="badge badge-ok detection-auto">자동 등록됨</span>}
         {editing ? (
           <button type="button" className="btn btn-sm" onClick={save}>저장</button>
         ) : (
@@ -429,7 +429,7 @@ function DetectionRow({
         {/* 03:257 — 오인식은 목록에서 지운다. 인식 행 자체는 남는다 */}
         {linked && !editing && (
           <button
-            type="button" className="btn btn-ghost btn-sm"
+            type="button" className="btn btn-ghost btn-sm detection-delete"
             onClick={() => onRemove(linked.itemId)}
           >
             목록에서 삭제
