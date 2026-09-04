@@ -114,8 +114,16 @@ export default function NewTrip() {
    *
    * 새 여행이면 빈 폼이 기준이고, 고치기면 서버에서 받은 값이 기준이 된다.
    * 저장에 성공하면 곧바로 다음 화면으로 가므로 여기서 다시 갱신하지 않는다.
+   *
+   * <b>`null` 은 "아직 기준이 없다" 는 뜻이다.</b> 빈 문자열로 두었더니 새 여행
+   * 화면이 <b>열자마자</b> 손댄 것으로 잡혔다 — 지문은 초기값을 직렬화한 JSON
+   * 이라 빈 문자열과 절대 같지 않다. 아무것도 안 적고 로고를 눌러도 확인창이
+   * 떴고 `beforeunload` 까지 걸렸다(리뷰 지적).
+   *
+   * 기준이 없는 동안에는 <b>손대지 않은 것으로 본다.</b> 새 여행은 첫 렌더에서
+   * 지금 지문을 기준으로 삼고, 고치기는 서버 값을 받은 뒤에 삼는다.
    */
-  const clean = useRef('')
+  const clean = useRef<string | null>(null)
 
   /**
    * 고치기로 들어왔을 때 <b>서버에 이미 있던</b> 값. 파생값이 비었을 때의 바닥이다.
@@ -172,7 +180,16 @@ export default function NewTrip() {
     startDate, endDate, purpose, transport, airline,
     departureAirport, arrivalAirport, bagType, note,
   })
-  const dirty = !loading && snapshot !== clean.current
+  /*
+   * 새 여행이면 첫 렌더의 지문이 곧 기준이다. 초기값을 여기 또 적지 않는다 —
+   * 기본값(TOUR·FLIGHT·CARRY_ON)이 바뀌면 두 곳이 어긋난다.
+   *
+   * 렌더 중에 ref 를 건드리는 것은 <b>이 한 번의 초기화</b>뿐이다. 값을 읽는
+   * 쪽에서 보면 처음부터 그 값이 있었던 것과 같다.
+   */
+  if (clean.current === null && !editing) clean.current = snapshot
+
+  const dirty = clean.current !== null && !loading && snapshot !== clean.current
   /*
    * 손댄 것이 있다고 알린다. 실제로 묻는 것은 상단 헤더의 링크들과 브라우저다 —
    * 이 화면은 1단계라 단계 표시줄에 링크가 없어서, 거기에만 걸어 두면 가드가

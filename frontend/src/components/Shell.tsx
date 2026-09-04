@@ -42,6 +42,13 @@ export function SiteHeader() {
   // 06:263 — "서버 실패 시 로그아웃 완료로 표시하지 않고 재시도한다".
   // 예외를 삼키면 아무 일도 안 일어난 것처럼 보인다.
   const signOut = async () => {
+    /*
+     * <b>로그아웃도 이탈이다.</b> 로고·내 여행·여행 등록에는 가드를 걸어 뒀는데
+     * 바로 옆 로그아웃만 빠져 있었다 — 폼을 고치다 누르면 확인 없이 세션이
+     * 사라지고 입력도 함께 사라진다(리뷰 지적). 같은 문을 두 개 내고 하나만
+     * 잠근 셈이다.
+     */
+    if (!confirmLeave()) return
     setSigningOut(true)
     setSignOutError(false)
     try {
