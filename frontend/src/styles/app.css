@@ -509,6 +509,75 @@ select:focus-visible, textarea:focus-visible {
   background: var(--surface); font: inherit; font-size: 13px;
 }
 
+/* 결과 전체의 설명은 한 덩어리로, 물품은 비교하기 쉬운 두 열의 독립 카드로 둔다 */
+.detections-card {
+  padding: 30px 34px 34px;
+  border: 1px solid var(--line);
+}
+.detections-card > .card-head { margin-bottom: 8px; }
+.detections-card > .card-head .card-title { font-size: 20px; }
+.detections-card > .card-sub {
+  margin-bottom: 26px !important;
+  font-size: 14.5px;
+}
+.detection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+}
+.site .detection-grid > .detection-item {
+  min-height: 112px;
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 18px 16px 22px;
+  border: 1px solid var(--line);
+  border-left: 6px solid rgb(33 73 68 / 42%);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+/* 추가 정보가 있어야 판정할 수 있는 항목은 노란 레일로 먼저 드러낸다 */
+.site .detection-grid > .detection-item.is-needs-check {
+  border-left-color: rgb(193 193 119 / 92%);
+}
+.detection-item .row-main { min-width: 0; flex: 1; }
+.detection-item .row-name {
+  font-size: 18px; line-height: 1.5; letter-spacing: -0.025em;
+}
+.detection-qty { font-size: 15px; font-weight: 500; color: var(--text-2); }
+.detection-item .row-sub { margin-top: 3px; font-size: 13.5px; }
+.detection-item .edit-row { width: 100%; }
+.detection-item .detection-actions {
+  width: auto; flex: none;
+  margin-left: auto;
+  flex-wrap: nowrap; justify-content: flex-end;
+}
+.detection-item .detection-auto {
+  padding: 6px 11px; border-radius: 8px;
+}
+.detection-item .detection-delete {
+  color: var(--danger);
+  border-color: rgb(156 59 48 / 55%);
+}
+.detection-item .detection-delete:hover {
+  color: var(--danger); border-color: var(--danger); background: var(--danger-soft);
+}
+
+@media (max-width: 900px) {
+  .detection-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .detections-card { padding: 20px 16px; }
+  .site .detection-grid > .detection-item {
+    min-height: 0; flex-direction: column; align-items: stretch;
+    padding: 18px 16px 16px 18px;
+  }
+  .detection-item .detection-actions {
+    width: 100%; margin: 0; padding-top: 4px;
+    flex-wrap: wrap;
+  }
+  .detection-item .detection-auto { margin-right: auto; }
+}
+
 /* ── 체크리스트 (S-05) ──────────────────────────────────── */
 .notice-warn {
   display: flex; align-items: center; gap: 10px;
