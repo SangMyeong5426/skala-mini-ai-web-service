@@ -29,6 +29,20 @@
 | `04-architecture.png` | 시스템 아키텍처 | DevOps & Integration | [`04-architecture.md`](../04-architecture.md) |
 | `05-erd.png` | ERD | Data Architect | [`05-erd.md`](../05-erd.md) |
 
+### 발표본 (`*-visual.png`)
+
+같은 다이어그램의 **디자인 버전**이다. 발표 자료에 쓰려고 따로 그렸고, 문서에서는
+이쪽을 먼저 보여준다. PlantUML 버전은 접힘 블록 안에 함께 둔다 —
+**둘은 같은 내용이고, 구조를 고칠 때는 `.puml`이 정본이다.**
+
+| 파일 | 크기 | 참조하는 문서 |
+| --- | --- | --- |
+| `02-usecase-visual.png` | 1790 × 879 | [`02-use-case.md`](../02-use-case.md) |
+| `03-userflow-visual.png` | 3795 × 1970 | [`03-wireframe.md`](../03-wireframe.md) |
+| `05-erd-visual.png` | 4800 × 2700 | [`05-erd.md`](../05-erd.md) |
+
+`.puml`을 고쳤으면 발표본도 함께 고친다. 한쪽만 바꾸면 문서와 발표 자료가 갈린다.
+
 ## 내보내는 방법
 
 ### 저장소 다이어그램 재생성

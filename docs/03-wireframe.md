@@ -167,8 +167,16 @@ flowchart TD
 > **2026-09-03 원본·PNG·SVG를 함께 갱신했다.** 위 Mermaid의 자동 등록·추천 채택·완료 경계와
 > 아래 화면 상세의 필수 후보 경고·사진 재확인·재사용·챗봇 경로를 반영했다.
 
-![User Flow](images/03-userflow.png)
+![User Flow](images/03-userflow-visual.png)
 
+<details>
+<summary>PlantUML 원본 버전 (구조 검증용)</summary>
+
+![User Flow — PlantUML](images/03-userflow.png)
+
+</details>
+
+- 발표본: [`images/03-userflow-visual.png`](images/03-userflow-visual.png) — 위 이미지
 - 원본: [`images/03-userflow.puml`](images/03-userflow.puml) (PlantUML)
 - 벡터: [`images/03-userflow.svg`](images/03-userflow.svg)
 - 화면은 사각형, 선택은 마름모, 이동은 화살표로 구분한다.

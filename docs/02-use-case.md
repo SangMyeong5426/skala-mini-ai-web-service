@@ -21,8 +21,16 @@
 > **2026-09-03 PNG·PUML·SVG 개정 반영.** UC-05 추가 추천·선택 채택, UC-04 사진 자동 등록과
 > UC-06 실제 준비 상태를 아래 표와 맞췄다. 로그인 최종 결정에 따라 UC-01을 복원하고 전체 기능의 선행 인증 조건을 표시한다.
 
-![Use-Case 다이어그램](images/02-usecase.png)
+![Use-Case 다이어그램](images/02-usecase-visual.png)
 
+<details>
+<summary>PlantUML 원본 버전 (구조 검증용)</summary>
+
+![Use-Case 다이어그램 — PlantUML](images/02-usecase.png)
+
+</details>
+
+- 발표본: [`images/02-usecase-visual.png`](images/02-usecase-visual.png) — 위 이미지
 - 원본: [`images/02-usecase.puml`](images/02-usecase.puml) (PlantUML)
 - 벡터: [`images/02-usecase.svg`](images/02-usecase.svg) — 발표 슬라이드 권장
 - 수정: `.puml`을 PlantUML 웹 편집기에 붙여넣거나 VS Code PlantUML 확장에서

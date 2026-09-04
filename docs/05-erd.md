@@ -7,8 +7,16 @@
 
 ## ERD 다이어그램
 
-![ERD](images/05-erd.png)
+![ERD](images/05-erd-visual.png)
 
+<details>
+<summary>PlantUML 원본 버전 (구조 검증용)</summary>
+
+![ERD — PlantUML](images/05-erd.png)
+
+</details>
+
+- 발표본: [`images/05-erd-visual.png`](images/05-erd-visual.png) — 위 이미지
 - 원본: [`images/05-erd.puml`](images/05-erd.puml) (PlantUML)
 - 벡터: [`images/05-erd.svg`](images/05-erd.svg) — 발표 슬라이드용
 - **로그인 포함 ERD:** 아래 DSL·`.puml`·PNG·SVG의 `users.login_id`는
